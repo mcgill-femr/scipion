@@ -53,7 +53,7 @@ public:
     ProgVolumeHomogenizer();
 
     void readParams();
-
+    //nothing
     void defineParams();
 
     // Converts a XMIPP MultidimArray to OpenCV matrix
