@@ -856,13 +856,13 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                                 double *ptrOut=(double *)&(DIRECT_A1D_ELEM(VoutFourier, memIdx));
                                                 double *ptrInVol=(double *)&(DIRECT_A1D_ELEM(parent->fftVin, memIdx));
 
-                                                ptrOut[0] += wEffective * (ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0]);
+                                                ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0]) + (ptrIn[1]-ptrInVol[1])*(ptrIn[1]-ptrInVol[1]));
                                                 DIRECT_A1D_ELEM(fourierWeights, memIdx) += w;
-
-                                                if (conjugate)
-                                                    ptrOut[1]-=wEffective * (ptrIn[1]-ptrInVol[1])* (ptrIn[1]-ptrInVol[1]);
-                                                else
-                                                    ptrOut[1]+=wEffective * (ptrIn[1]-ptrInVol[1])* (ptrIn[1]-ptrInVol[1]);
+                                                ptrOut[1] = 0;
+                                                //if (conjugate)
+                                                    //ptrOut[1]-=wEffective * (ptrIn[1]-ptrInVol[1])* (ptrIn[1]-ptrInVol[1]);
+                                                //else
+                                                    //ptrOut[1]+=wEffective * (ptrIn[1]-ptrInVol[1])* (ptrIn[1]-ptrInVol[1]);
                                             }
                                         }
                                     }
@@ -1177,19 +1177,29 @@ void ProgVolVariability::correctWeight()
 
 void ProgVolVariability::finishComputations( const FileName &out_name )
 {
-    //#define DEBUG_VOL
+
 #ifdef DEBUG_VOL
     {
-        VolumeXmipp save;
+    	Image<double> save;
         save().alias( FourierWeights );
         save.write((std::string) fn_out + "Weights.vol");
 
-        FourierVolume save2;
+        Image< std::complex<double> > save2;
         save2().alias( VoutFourier );
         save2.write((std::string) fn_out + "FourierVol.vol");
     }
 #endif
 
+    //JV
+    FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourier)
+    {
+    	if (method == STD)
+            A3D_ELEM(VoutFourier,k,i,j) = std::sqrt(A3D_ELEM(VoutFourier,k,i,j));
+        else if (method == CONFIDENCE)
+        	A3D_ELEM(VoutFourier,k,i,j) = 3.0*std::sqrt(A3D_ELEM(VoutFourier,k,i,j));
+        else if (method == RELATIVE_ERROR)
+        	A3D_ELEM(VoutFourier,k,i,j) = std::sqrt(A3D_ELEM(VoutFourier,k,i,j))/std::abs(A3D_ELEM(fftVin,k,i,j));
+    }
     // Enforce symmetry in the Fourier values as well as the weights
     // Sjors 19aug10 enforceHermitianSymmetry first checks ndim...
     Vout().initZeros(volPadSizeZ,volPadSizeY,volPadSizeX);
@@ -1200,7 +1210,6 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     // Tell threads what to do
     //#define DEBUG_VOL1
 #ifdef DEBUG_VOL1
-
     {
         Image<double> save;
         save().alias( FourierWeights );
