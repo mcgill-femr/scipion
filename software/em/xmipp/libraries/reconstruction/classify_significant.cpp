@@ -290,6 +290,9 @@ void computeWeightedCorrelation(const MultidimArray<double> &I1, const MultidimA
 		double corrW2exp=sumWI2exp/sqrt(sumWI2I2*sumWIexpIexp);
 		double corrN1exp=sumI1exp/sqrt(sumI1I1*sumIexpIexp);
 		double corrN2exp=sumI2exp/sqrt(sumI2I2*sumIexpIexp);
+        corr1exp=corrN1exp;
+        corr2exp=corrN2exp;
+        /*
 		if (corrW1exp>0 && corrN1exp>0)
 			corr1exp=sqrt(corrW1exp*corrN1exp);
 		else
@@ -298,6 +301,7 @@ void computeWeightedCorrelation(const MultidimArray<double> &I1, const MultidimA
 			corr2exp=sqrt(corrW2exp*corrN2exp);
 		else
 			corr2exp=-1;
+        */
 	}
 }
 
