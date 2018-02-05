@@ -405,6 +405,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
             self.runJob('xmipp_resolution_fsc','--ref %s -i %s -o %s --sampling_rate %f'\
                         %(fnVol1,fnVol2,fnFsc,TsCurrent),numberOfMpi=1)
             self.runJob('xmipp_transform_filter','-i %s --fourier fsc %s --sampling %f'%(fnVolAvg,fnFsc,TsCurrent),numberOfMpi=1)
+            self.runJob('xmipp_transform_filter','-i %s --fourier low_pass 0.25'%fnVolAvg,numberOfMpi=1)
             cleanPath(fnVol1)
             cleanPath(fnVol2)
 
