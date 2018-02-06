@@ -416,11 +416,35 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
             else:
                 self.runJob("xmipp_image_operate","-i %s --plus %s"%(fnCentered,fnVolAvg),numberOfMpi=1)
 
-        # Align all volumes
+        # Align all volumes with respect to center
         for i in range(1,self.getNumberOfReconstructedVolumes()+1):
-            fnVolAvg=join(fnDirCurrent,"volume%02d.mrc"%i)
-            self.runJob('xmipp_volume_align','--i1 %s --i2 %s --local --apply'%(fnCentered,fnVolAvg),numberOfMpi=1)
+            fnVoli=join(fnDirCurrent,"volume%02d.mrc"%i)
+            self.runJob('xmipp_volume_align','--i1 %s --i2 %s --local --apply'%(fnCentered,fnVoli),numberOfMpi=1)
         cleanPath(fnCentered)
+        
+        # Align all volumes with respect to the first one taking care of the mirror
+        fnVol1=join(fnDirCurrent,"volume%02d.mrc"%i)
+        I1=xmipp.Image(fnVol1)
+        for i in range(2,self.getNumberOfReconstructedVolumes()+1):
+            fnVoli=join(fnDirCurrent,"volume%02d.mrc"%i)
+            fnVoliAux1=join(fnDirCurrent,"volume%02d_aux1.mrc"%i)
+            copyFile(fnVoli,fnVoliAux1)
+            self.runJob("xmipp_volume_align","--i1 %s --i2 %s --frm --apply"%(fnVol1,fnVoliAux1))
+            Iaux=xmipp.Image(fnVoliAux1)
+            corr1 = I1.correlation(Iaux)
+
+            fnVoliAux2=join(fnDirCurrent,"volume%02d_aux2.mrc"%i)
+            self.runJob("xmipp_transform_mirror","-i %s -o %s --flipX"%(fnVoli,fnVoliAux2))
+            self.runJob("xmipp_volume_align","--i1 %s --i2 %s --frm --apply"%(fnVol1,fnVoliAux2))
+            Iaux=xmipp.Image(fnVoliAux2)
+            corr2 = I1.correlation(Iaux)
+            
+            if corr1>corr2:
+                moveFile(fnVoliAux1,fnVoli)
+            else:
+                moveFile(fnVoliAux2,fnVoli)
+            cleanPath(fnVoliAux1)
+            cleanPath(fnVoliAux2)
         
         # Rewrite the first block of the classes.xmd with the representative
         fnClasses = "classes@"+join(fnDirCurrent,"classes.xmd")
