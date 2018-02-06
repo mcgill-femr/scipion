@@ -429,13 +429,13 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
             fnVoli=join(fnDirCurrent,"volume%02d.mrc"%i)
             fnVoliAux1=join(fnDirCurrent,"volume%02d_aux1.mrc"%i)
             copyFile(fnVoli,fnVoliAux1)
-            self.runJob("xmipp_volume_align","--i1 %s --i2 %s --frm --apply"%(fnVol1,fnVoliAux1))
+            self.runJob("xmipp_volume_align","--i1 %s --i2 %s --frm --apply"%(fnVol1,fnVoliAux1),numberOfMpi=1)
             Iaux=xmipp.Image(fnVoliAux1)
             corr1 = I1.correlation(Iaux)
 
             fnVoliAux2=join(fnDirCurrent,"volume%02d_aux2.mrc"%i)
-            self.runJob("xmipp_transform_mirror","-i %s -o %s --flipX"%(fnVoli,fnVoliAux2))
-            self.runJob("xmipp_volume_align","--i1 %s --i2 %s --frm --apply"%(fnVol1,fnVoliAux2))
+            self.runJob("xmipp_transform_mirror","-i %s -o %s --flipX"%(fnVoli,fnVoliAux2),numberOfMpi=1)
+            self.runJob("xmipp_volume_align","--i1 %s --i2 %s --frm --apply"%(fnVol1,fnVoliAux2),numberOfMpi=1)
             Iaux=xmipp.Image(fnVoliAux2)
             corr2 = I1.correlation(Iaux)
             
