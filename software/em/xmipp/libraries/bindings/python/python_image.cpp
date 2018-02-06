@@ -25,6 +25,7 @@
 
 #include "xmippmodule.h"
 #include <data/ctf.h>
+#include <data/filters.h>
 
 /***************************************************************/
 /*                            Image                         */
@@ -161,6 +162,8 @@ PyMethodDef Image_methods[] =
           "Compute image statistics, return mean, dev, min and max" },
         { "adjustAndSubtract", (PyCFunction) Image_adjustAndSubtract, METH_VARARGS,
           "I1=I1-adjusted(I2)" },
+		{ "correlation", (PyCFunction) Image_correlation, METH_VARARGS,
+		  "correlation(I1,I2)" },
         /* Equivalent methods to inplace operations, but without creating new instances of Image */
         { "inplaceAdd", (PyCFunction) Image_inplaceAdd, METH_VARARGS,
           "Add another image to self (does not create another Image instance)" },
@@ -1245,6 +1248,42 @@ Image_adjustAndSubtract(PyObject *obj, PyObject *args, PyObject *kwargs)
     }
     return (PyObject *)result;
 }//function Image_adjustAndSubtract
+
+/* Return image dimensions as a tuple */
+PyObject *
+Image_correlation(PyObject *obj, PyObject *args, PyObject *kwargs)
+{
+    ImageObject *self = (ImageObject*) obj;
+    if (self != NULL)
+    {
+        try
+        {
+            PyObject *pimg2 = NULL;
+            if (PyArg_ParseTuple(args, "O", &pimg2))
+            {
+	            ImageGeneric *image = self->image;
+	            image->convert2Datatype(DT_Double);
+	            MultidimArray<double> * pImage=NULL;
+	            MULTIDIM_ARRAY_GENERIC(*image).getMultidimArrayPointer(pImage);
+
+	            ImageObject *img2=(ImageObject *)pimg2;
+	            ImageGeneric *image2 = img2->image;
+	            image2->convert2Datatype(DT_Double);
+	            MultidimArray<double> * pImage2=NULL;
+	            MULTIDIM_ARRAY_GENERIC(*image2).getMultidimArrayPointer(pImage2);
+
+	            double corr=correlationIndex(*pImage,*pImage2);
+                return Py_BuildValue("f", corr);
+            }
+        }
+        catch (XmippError &xe)
+        {
+            PyErr_SetString(PyXmippError, xe.msg.c_str());
+        }
+    }
+    return NULL;
+}//function Image_computeStats
+
 
 /* Add two images, operator + */
 PyObject *

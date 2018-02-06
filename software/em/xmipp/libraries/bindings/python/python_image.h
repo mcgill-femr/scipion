@@ -203,6 +203,10 @@ Image_computeStats(PyObject *obj, PyObject *args, PyObject *kwargs);
 PyObject *
 Image_adjustAndSubtract(PyObject *obj, PyObject *args, PyObject *kwargs);
 
+/* corr(I1,I2) */
+PyObject *
+Image_correlation(PyObject *obj, PyObject *args, PyObject *kwargs);
+
 PyObject *
 Image_add(PyObject *obj1, PyObject *obj2);
 PyObject *
