@@ -1,6 +1,7 @@
+# coding: latin-1
 # **************************************************************************
 # *
-# * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
+# * Authors:     J.M. De la Rosa Trevin (jmdelarosa@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -24,26 +25,25 @@
 # *
 # **************************************************************************
 """
-This sub-package contains data and protocol classes
-wrapping ATSAS programs http://www.embl-hamburg.de/biosaxs/software.html
+Bibtex string file for Xmipp package.
 """
-from pyworkflow.utils import commandExists
 
-#_logo = "atsas_logo.gif"
-PRODY = "prody"
-from bibtex import _bibtex # Load bibtex dict with references
-from ProDy import *
-from protocol_ProDy import AtsasProtConvertPdbToSAXS
-from viewer import AtsasViewer
+_bibtexStr = """
 
-def validateInstallation():
-    """ This function will be used to check if ATSAS is properly installed. """
-    missingPaths = []
 
-    if not (commandExists(PRODY)):
-        missingPaths.append("%s not found in the system" % PRODY)
+@article{Kurkcuoglu2016,
+title = "ClustENM: ENM-Based Sampling of Essential Conformational Space at Full Atomic Resolution",
+journal = "J. Chemical Theory and Computation",
+volume = "12",
+issue = "9",
+pages = "4549 - 4562",
+year = "2016",
+doi = "10.1021/acs.jctc.6b00319",
+url = "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5088496/",
+author = "Kurkcuoglu, Z. and Bahar, I. and Doruker, P.",
+}
+"""
 
-    if missingPaths:
-        return ["Missing variables:"] + missingPaths
-    else:
-        return [] # No errors
+from pyworkflow.utils import parseBibTex
+
+_bibtex = parseBibTex(_bibtexStr)
