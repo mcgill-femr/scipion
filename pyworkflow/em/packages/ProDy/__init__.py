@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:     Carlos Oscar Sorzano (coss@cnb.csic.es)
+# * Authors:     Javier Mota (jmota@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -29,12 +29,10 @@ wrapping ATSAS programs http://www.embl-hamburg.de/biosaxs/software.html
 """
 from pyworkflow.utils import commandExists
 
-#_logo = "atsas_logo.gif"
 PRODY = "prody"
 from bibtex import _bibtex # Load bibtex dict with references
-from ProDy import *
-from protocol_ProDy import AtsasProtConvertPdbToSAXS
-from viewer import AtsasViewer
+from protocol_ProDy import ProdyProt
+#from viewer import AtsasViewer
 
 def validateInstallation():
     """ This function will be used to check if ATSAS is properly installed. """

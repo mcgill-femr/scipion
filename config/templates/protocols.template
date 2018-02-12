@@ -244,7 +244,9 @@ HEMNMA = [
 		{"tag": "protocol", "value": "XmippProtConvertToPseudoAtoms", "text": "b2. Convert volume to PDB"}
 	]},
 	{"tag": "section", "text": "2. Normal mode analysis", "children": [
-		{"tag": "protocol", "value": "XmippProtNMA", "text": "Modes analysis & selection"}
+		{"tag": "protocol", "value": "XmippProtNMA", "text": "Modes analysis &
+		selection"}, {"tag": "protocol", "value": "ProdyProt", "text":
+		"default"}
 	]},
 	{"tag": "section", "text": "3. Stop here or continue"},
 	{"tag": "section", "text": "4. Images", "children": [
