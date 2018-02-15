@@ -25,23 +25,24 @@
 # **************************************************************************
 """
 This sub-package contains data and protocol classes
-wrapping ATSAS programs http://www.embl-hamburg.de/biosaxs/software.html
+wrapping Prody programs
 """
-from pyworkflow.utils import commandExists
+import imp
 
-PRODY = "prody"
 from bibtex import _bibtex # Load bibtex dict with references
 from protocol_ProDy import ProdyProt
-#from viewer import AtsasViewer
+from viewer import ProdyViewer
 
 def validateInstallation():
-    """ This function will be used to check if ATSAS is properly installed. """
-    missingPaths = []
+    """ This function will be used to check if Prody is properly installed. """
+    try:
+        imp.find_module('prody')
+        found = True
+    except ImportError:
+        found = False
 
-    if not (commandExists(PRODY)):
-        missingPaths.append("%s not found in the system" % PRODY)
+    errors = []
+    if not found:
+        errors.append("prody not found in the system")
 
-    if missingPaths:
-        return ["Missing variables:"] + missingPaths
-    else:
-        return [] # No errors
+    return errors

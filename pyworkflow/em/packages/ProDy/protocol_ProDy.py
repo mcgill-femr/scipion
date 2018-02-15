@@ -29,12 +29,12 @@ import numpy as np
 
 from pyworkflow.em import *
 from prody import *
-from pyworkflow.em.packages.ProDy import PRODY
 from pyworkflow.utils import *
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.utils.path import createLink
 import commands
 import matplotlib.pyplot as plt
+import time
 
 class ProdyProt(EMProtocol):
 
@@ -47,7 +47,6 @@ class ProdyProt(EMProtocol):
         form.addSection(label = "Prody NMA analysis and molecular dynamics")
         form.addParam('inputStructure', PathParam, label="Input structure",
                       important=True,
-                      #pointerClass='PdbFile',
                       help='The input structure can be an atomic model '
                            '(true PDB) or a pseudoatomic model(an EM volume '
                            'converted into pseudoatoms)')
@@ -80,19 +79,43 @@ class ProdyProt(EMProtocol):
 
     def prodyWrapper(self):
         time.sleep(10)
-        inputStructure = self.inputStructure.get().getFileName()
-        #os.path.abspath(self.inputStructure.get().getFileName())
-        initialTrajectory = self.initTrajectory.get().getFileName()
-        finaltrajectory = self.finTrajectory.get().getFileName()
         #createLink(inputStructure, 'pseudoatoms.pdb')
         #self.runJob(PRODY,"pseudoatoms.pdb")
-        GluA2_sim_ca = parsePDB(inputStructure, subset='ca')
+        self.inputPdb = self.inputStructure.get()
+        self.computeANM()
+        self.computePCA()
 
+    def computeANM(self):
+        GluA2_sim_ca = parsePDB(self.inputPdb, subset = 'ca')
+        GluA2_em_ca = parseCIF('4uqj', subset='ca')
+        self.anm = ANM('GluA2 AMPAR sim model')
+        self.anm.buildHessian(GluA2_sim_ca)
+        self.anm.calcModes()
+        slowest_mode = self.anm[0]
 
-    def _validate(self):
-        errors = []
-        if which('prody') is '':
-            errors.append('You should have the program crysol in the PATH')
-        return errors
+    def computePCA(self):
+        GluA2_sim = parsePDB(self.inputPdb)
+        initialTrajectory = self.initTrajectory.get()
+        finalTrajectory = self.finTrajectory.get()
+        combined_traj = Trajectory(initialTrajectory)
+        combined_traj.setCoords(GluA2_sim)
+        combined_traj.setAtoms(GluA2_sim.ca)
+        combined_traj.addFile(finalTrajectory)
+        self.pca = PCA('AMPAR trajectories')
+        self.pca.buildCovariance(combined_traj)
+        self.pca.calcModes()
 
+        self.ini_traj = Trajectory(initialTrajectory)
+        self.ini_traj.setCoords(
+            GluA2_sim)  # Set the initial structure as the reference
+        self.ini_traj.setAtoms(GluA2_sim.ca)  # A shortcut for .select('ca')
 
+        self.fin_traj = Trajectory(finalTrajectory)
+        self.fin_traj.setCoords(
+            GluA2_sim)  # Set the initial structure as the reference
+        self.fin_traj.setAtoms(GluA2_sim.ca)  # A shortcut for .select('ca')
+
+    def _summary(self):
+        summary=[]
+        showOverlapTable(self.pca, self.anm)
+        printOverlapTable(self.pca[:7], self.anm[:7])
