@@ -66,8 +66,9 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
                       help='Select a set of volumes')
         form.addParam('symmetryGroup', StringParam, default="c1",
                       label='Symmetry group', 
-                      help='See http://xmipp.cnb.uam.es/twiki/bin/view/Xmipp/Symmetry for a description of the symmetry groups format'
-                        'If no symmetry is present, give c1')
+                      help='See http://xmipp.cnb.uam.es/twiki/bin/view/Xmipp/Symmetry for a description of the symmetry groups format. '
+                        'If no symmetry is present, give c1. You can give several symmetries, e.g., c5 c6, meaning that the first '
+                        'volume is c5 and the second c6')
         form.addParam('particleRadius', IntParam, default=-1, 
                      label='Radius of particle (px)',
                      help='This is the radius (in pixels) of the spherical mask covering the particle in the input images')       
@@ -98,6 +99,11 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
     
     def getNumberOfReconstructedVolumes(self):
         return len(self.inputVolumes.get())
+    
+    def parseSymList(self):
+        self.symList = self.symmetryGroup.get().strip().split()
+        if len(self.symList)<self.getNumberOfReconstructedVolumes():
+            self.symList+=self.symList[-1]*(self.getNumberOfReconstructedVolumes()-len(self.symList))
     
     #--------------------------- STEPS functions ---------------------------------------------------
     def _insertAllSteps(self):
@@ -240,6 +246,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
             fnImgsToUse = join(fnDirCurrent,"imagesWiener%02d.xmd"%iteration)
             self.runJob("xmipp_metadata_utilities","-i %s -o %s --operate random_subset %d"%(fnImgs,fnImgsToUse,self.stochasticN),
                         numberOfMpi=1)
+        self.parseSymList()
         for i in range(1,self.getNumberOfReconstructedVolumes()+1):
             fnAngles=join(fnDirCurrent,"angles%02d.xmd"%i)
             if not exists(fnAngles):
@@ -247,7 +254,8 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
                 fnGallery=join(fnDirCurrent,"gallery%02d.stk"%i)
                 fnGalleryXmd=join(fnDirCurrent,"gallery%02d.doc"%i)
                 args="-i %s -o %s --sampling_rate %f --perturb %f --sym %s --min_tilt_angle %f --max_tilt_angle %f"%\
-                     (fnReferenceVol,fnGallery,angleStep,math.sin(angleStep*math.pi/180.0)/4,self.symmetryGroup,self.angularMinTilt.get(),self.angularMaxTilt.get())
+                     (fnReferenceVol,fnGallery,angleStep,math.sin(angleStep*math.pi/180.0)/4,self.symList[i-1],
+                      self.angularMinTilt.get(),self.angularMaxTilt.get())
                 args+=" --compute_neighbors --angular_distance -1 --experimental_images %s"%fnImgs
                 self.runJob("xmipp_angular_project_library",args,numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
                 cleanPath(join(fnDirCurrent,"gallery%02d_sampling.xmd"%i))
@@ -315,13 +323,14 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         fnOut = join(fnDirCurrent,"classes.xmd")
         fnRootVol = join(fnDirCurrent,"class_")
         
+        self.parseSymList()
         for i in range(1,self.getNumberOfReconstructedVolumes()+1):
             self.runJob("xmipp_metadata_split","-i class%06d_images@%s --oroot %s_%06d_"%(i,fnOut,fnRootVol,i),numberOfMpi=1)
             for half in range(1,3):
                 fnOutVol = "%s_%02d_half%d.vol"%(fnRootVol,i,half)
                 fnOutVolPrevious = join(fnDirPrevious,"volume%02d.mrc"%i)
                 args="-i %s_%06d_%06d.xmd -o %s --sym %s --weight --thr %d"%(fnRootVol,i,half,fnOutVol,
-                                                                             self.symmetryGroup,self.numberOfThreads.get())
+                                                                             self.symList[i-1],self.numberOfThreads.get())
                 self.runJob("xmipp_reconstruct_fourier",args,numberOfMpi=self.numberOfMpi.get())
                 cleanPath("%s_%06d_%06d.xmd"%(fnRootVol,i,half))
                 if self.stochastic and iteration<self.numberOfIterations.get():
@@ -471,6 +480,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
             N=self.getNumberOfReconstructedVolumes()
             coocurrence = np.zeros((N, N))
             sizeClasses = np.zeros((N, N))
+            self.parseSymList()
             for i in range(1,N+1):
                 for j in range(1,N+1):
                     fnCurrent = "class%06d_images@%s"%(i,join(fnDirCurrent,"classes.xmd"))
@@ -485,7 +495,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
                     
                     if i==j:
                         self.runJob("xmipp_angular_distance","--ang1 %s --ang2 %s --oroot %s --sym %s --check_mirrors --compute_weights 1 particleId 0.5"%\
-                                    (fnPrevious,fnCurrent,fnAngleDistance,self.symmetryGroup),numberOfMpi=1)
+                                    (fnPrevious,fnCurrent,fnAngleDistance,self.symList[i-1]),numberOfMpi=1)
                         distances = md.MetaData(fnAngleDistance+"_weights.xmd")
                         angDistance=distances.getColumnValues(md.MDL_ANGLE_DIFF)
                         avgAngDistance = reduce(lambda x, y: x + y, angDistance) / len(angDistance)
