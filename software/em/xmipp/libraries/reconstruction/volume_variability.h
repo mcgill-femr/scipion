@@ -76,6 +76,10 @@
 
 #include <reconstruction/directions.h>
 #include <reconstruction/symmetrize.h>
+
+#include <stdlib.h>     /* srand, rand */
+#include <time.h>       /* time */
+
 #define BLOB_TABLE_SIZE 5000
 #define BLOB_TABLE_SIZE_SQRT 10000
 

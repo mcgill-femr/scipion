@@ -255,9 +255,6 @@ void ProgVolVariability::produceSideinfo()
     imgSize=Xdim;
 
     volPadSizeX = volPadSizeY = volPadSizeZ=(int)(Xdim*padding_factor_vol);
-    Vin.read(fn_vol);
-    Vin().setXmippOrigin();
-    Vin().resize(volPadSizeZ,volPadSizeY,volPadSizeX);
 
 #ifdef DEBUG
     Vin().printShape();
@@ -265,8 +262,7 @@ void ProgVolVariability::produceSideinfo()
 
     //use threads for volume inverse fourier transform, plan is created in setReal()
     transformerVol.setThreadsNumber(numThreads);
-    transformerVol.setReal(Vin());
-	transformerVol.FourierTransform(Vin(), fftVin);
+
 
 #ifdef DEBUG
 	std::cout << A3D_ELEM(fftVin, 0, 0, 0) << std::endl;
@@ -359,6 +355,63 @@ void ProgVolVariability::produceSideinfo()
             R_repository.push_back(R);
         }
     }
+
+    //Read the input average map
+    Vin.read(fn_vol);
+    Vin().setXmippOrigin();
+
+    //Distort Vin() by the Fourier Transform of the Blob (see lines starting 1287)
+    double pad_relation= ((double)padding_factor_proj/padding_factor_vol);
+    pad_relation = (pad_relation * pad_relation * pad_relation);
+
+    MultidimArray<double> &mVin=Vin();
+    double ipad_relation=1.0/pad_relation;
+    double meanFactor2=0;
+
+    FOR_ALL_ELEMENTS_IN_ARRAY3D(mVin)
+    {
+        double radius=sqrt((double)(k*k+i*i+j*j));
+        double aux=radius*iDeltaFourier;
+        double factor = Fourier_blob_table(ROUND(aux));
+        double factor2=(pow(Sinc(radius/(2*(imgSize))),2));
+        if (NiterWeight!=0)
+        {
+            A3D_ELEM(mVin,k,i,j) *= (ipad_relation*factor2*factor);
+            meanFactor2+=factor2;
+        }
+        else
+            A3D_ELEM(mVin,k,i,j) *= (ipad_relation*factor);
+    }
+
+    if (NiterWeight!=0)
+    {
+        meanFactor2/=MULTIDIM_SIZE(mVin);
+        FOR_ALL_ELEMENTS_IN_ARRAY3D(mVin)
+        A3D_ELEM(mVin,k,i,j) /= meanFactor2;
+    }
+
+    //Finish here Vin distortion by FT of Blob
+    //Padding of Vin
+    MultidimArray<double> localPaddedVin;
+    localPaddedVin.initZeros(volPadSizeZ,volPadSizeY,volPadSizeX);
+    localPaddedVin.setXmippOrigin();
+
+    FOR_ALL_ELEMENTS_IN_ARRAY3D(mVin)
+    A3D_ELEM(localPaddedVin,k,i,j) = A3D_ELEM(mVin,k,i,j);
+
+
+#ifdef DEBUG
+    Image<double> save;
+    save().alias( localPaddedVin );
+    save.write((std::string)"Vin.vol");
+#endif
+
+    CenterFFT(localPaddedVin,true);
+    transformerVol.FourierTransform(localPaddedVin, fftVin, false);
+    //AQUI
+
+    //CenterFFT(fftVin,false); //No estoy seguro de esto
+
 }
 
 void * ProgVolVariability::processImageThread( void * threadArgs )
@@ -854,15 +907,17 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                                 size_t memIdx=fixSize + ixp;//YXSIZE(VoutFourier)*(izp)+((iyp)*XSIZE(VoutFourier))+(ixp);
 
                                                 double *ptrOut=(double *)&(DIRECT_A1D_ELEM(VoutFourier, memIdx));
-                                                double *ptrInVol=(double *)&(DIRECT_A1D_ELEM(parent->fftVin, memIdx));
+//                                                double *ptrInVol=(double *)&(DIRECT_A1D_ELEM(parent->fftVin, memIdx));
 
-                                                ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0]) + (ptrIn[1]-ptrInVol[1])*(ptrIn[1]-ptrInVol[1]));
+//                                                ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0]));
+                                                ptrOut[0] += wEffective * (ptrIn[0]);
                                                 DIRECT_A1D_ELEM(fourierWeights, memIdx) += w;
-                                                ptrOut[1] = 0;
-                                                //if (conjugate)
-                                                    //ptrOut[1]-=wEffective * (ptrIn[1]-ptrInVol[1])* (ptrIn[1]-ptrInVol[1]);
-                                                //else
-                                                    //ptrOut[1]+=wEffective * (ptrIn[1]-ptrInVol[1])* (ptrIn[1]-ptrInVol[1]);
+                                                if (conjugate)
+                                                	 ptrOut[1]-=wEffective * (ptrIn[1]);
+//                                                    ptrOut[1]-=wEffective * (ptrIn[1]-ptrInVol[1])* (ptrIn[1]-ptrInVol[1]);
+                                               else
+                                            	   ptrOut[1]+=wEffective * (ptrIn[1]);
+//                                                    ptrOut[1]+=wEffective * (ptrIn[1]-ptrInVol[1])* (ptrIn[1]-ptrInVol[1]);
                                             }
                                         }
                                     }
@@ -1190,16 +1245,6 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     }
 #endif
 
-    //JV
-    FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourier)
-    {
-    	if (method == STD)
-            A3D_ELEM(VoutFourier,k,i,j) = std::sqrt(A3D_ELEM(VoutFourier,k,i,j));
-        else if (method == CONFIDENCE)
-        	A3D_ELEM(VoutFourier,k,i,j) = 3.0*std::sqrt(A3D_ELEM(VoutFourier,k,i,j));
-        else if (method == RELATIVE_ERROR)
-        	A3D_ELEM(VoutFourier,k,i,j) = std::sqrt(A3D_ELEM(VoutFourier,k,i,j))/std::abs(A3D_ELEM(fftVin,k,i,j));
-    }
     // Enforce symmetry in the Fourier values as well as the weights
     // Sjors 19aug10 enforceHermitianSymmetry first checks ndim...
     Vout().initZeros(volPadSizeZ,volPadSizeY,volPadSizeX);
@@ -1226,14 +1271,51 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     // Threads are working now, wait for them to finish
     barrier_wait( &barrier );
 
+#ifdef DEBUG
+    FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourier)
+     std::cout << A3D_ELEM(VoutFourier,k,i,j) << " " << A3D_ELEM(fftVin,k,i,j) << std::endl;
+#endif
+
+    //JV
+    //VoutFourierTmp = fftVin;
+    //int numIters = 10;
+    //for (int it = 0; it < numIters; ++it)
+    //FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourier)
+    //{
+    //	std::cout << A3D_ELEM(VoutFourier,k,i,j) << " " << A3D_ELEM(fftVin,k,i,j) << std::endl;
+    //	A3D_ELEM(VoutFourier,k,i,j) = A3D_ELEM(fftVin,k,i,j);
+    	//A3D_ELEM(VoutFourierTmp,k,i,j) += (std::sqrt(A3D_ELEM(VoutFourier,k,i,j)) * (std::rand()/RAND_MAX - 0.5));
+
+    	/*
+    	if (method == STD)
+            A3D_ELEM(VoutFourier,k,i,j) = std::sqrt(A3D_ELEM(VoutFourier,k,i,j));
+        else if (method == CONFIDENCE)
+        	A3D_ELEM(VoutFourier,k,i,j) = 3.0*std::sqrt(A3D_ELEM(VoutFourier,k,i,j));
+        else if (method == RELATIVE_ERROR)
+        	A3D_ELEM(VoutFourier,k,i,j) = std::sqrt(A3D_ELEM(VoutFourier,k,i,j))/std::abs(A3D_ELEM(fftVin,k,i,j));
+        */
+    //}
+
+    //VoutFourier = VoutFourierTmp;
+    //JV
+
     transformerVol.inverseFourierTransform();
     CenterFFT(Vout(),false);
 
     // Correct by the Fourier transform of the blob
     Vout().setXmippOrigin();
+
+#ifdef DEBUG
+    Image< double > save2;
+    save2().alias( Vout() );
+    save2.write((std::string)"Vout.vol");
+#endif
+
+    //Remove the padding
     Vout().selfWindow(FIRST_XMIPP_INDEX(imgSize),FIRST_XMIPP_INDEX(imgSize),
                       FIRST_XMIPP_INDEX(imgSize),LAST_XMIPP_INDEX(imgSize),
                       LAST_XMIPP_INDEX(imgSize),LAST_XMIPP_INDEX(imgSize));
+
     double pad_relation= ((double)padding_factor_proj/padding_factor_vol);
     pad_relation = (pad_relation * pad_relation * pad_relation);
 
@@ -1260,6 +1342,7 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
         FOR_ALL_ELEMENTS_IN_ARRAY3D(mVout)
         A3D_ELEM(mVout,k,i,j) *= meanFactor2;
     }
+
     Vout.write(out_name);
 }
 
