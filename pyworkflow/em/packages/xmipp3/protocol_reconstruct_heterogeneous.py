@@ -23,8 +23,6 @@
 # *  e-mail address 'jmdelarosa@cnb.csic.es'
 # *
 # **************************************************************************
-from pip._vendor.distlib.metadata import Metadata
-from xmipp import MetaData
 """
 Protocol to perform high-resolution reconstructions
 """
@@ -46,6 +44,7 @@ import pyworkflow.em.metadata as md
 import pyworkflow.em as em
 from convert import writeSetOfParticles
 import xmipp
+from xmipp import MetaData
 
 
 class XmippProtReconstructHeterogeneous(ProtClassify3D):
