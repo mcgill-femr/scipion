@@ -277,7 +277,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
 
                 fnLocalStk=join(fnDirCurrent,"anglesCont%02d.stk"%i)
                 args="-i %s -o %s --sampling %f --Rmax %d --padding 2 --ref %s --max_resolution %f"%\
-                   (fnImgsToUse,fnLocalStk,TsCurrent,newXdim/2,fnReferenceVol,2*TsCurrent)
+                   (fnAngles,fnLocalStk,TsCurrent,newXdim/2,fnReferenceVol,2*TsCurrent)
                 args+=" --optimizeShift --max_shift %f"%maxShift
                 args+=" --optimizeAngles --max_angular_change %f"%(2*angleStep)
                 if self.numberOfMpi.get()*self.numberOfThreads.get()>1:
