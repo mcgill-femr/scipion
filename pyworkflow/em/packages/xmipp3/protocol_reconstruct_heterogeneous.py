@@ -23,8 +23,6 @@
 # *  e-mail address 'jmdelarosa@cnb.csic.es'
 # *
 # **************************************************************************
-from pip._vendor.distlib.metadata import Metadata
-from xmipp import MetaData
 """
 Protocol to perform high-resolution reconstructions
 """
@@ -46,6 +44,7 @@ import pyworkflow.em.metadata as md
 import pyworkflow.em as em
 from convert import writeSetOfParticles
 import xmipp
+from xmipp import MetaData
 
 
 class XmippProtReconstructHeterogeneous(ProtClassify3D):
@@ -326,9 +325,10 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         self.parseSymList()
         for i in range(1,self.getNumberOfReconstructedVolumes()+1):
             self.runJob("xmipp_metadata_split","-i class%06d_images@%s --oroot %s_%06d_"%(i,fnOut,fnRootVol,i),numberOfMpi=1)
+            fnOutVolPrevious = join(fnDirPrevious,"volume%02d.mrc"%i)
+            fnOutContPrevious = join(fnDirPrevious,"anglesCont%02d.stk"%i)
             for half in range(1,3):
                 fnOutVol = "%s_%02d_half%d.vol"%(fnRootVol,i,half)
-                fnOutVolPrevious = join(fnDirPrevious,"volume%02d.mrc"%i)
                 args="-i %s_%06d_%06d.xmd -o %s --sym %s --weight --thr %d"%(fnRootVol,i,half,fnOutVol,
                                                                              self.symList[i-1],self.numberOfThreads.get())
                 self.runJob("xmipp_reconstruct_fourier",args,numberOfMpi=self.numberOfMpi.get())
@@ -341,6 +341,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
                     cleanPath(fnAux)
             cleanPath(join(fnDirCurrent,"volumeRef%02d.mrc"%i))
             cleanPath(fnOutVolPrevious)
+            cleanPath(fnOutContPrevious)
 
     def postProcessing(self, iteration):
         fnDirCurrent=self._getExtraPath("Iter%03d"%iteration)
