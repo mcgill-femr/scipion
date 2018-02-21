@@ -34,7 +34,9 @@ from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.utils.path import createLink
 import commands
 import matplotlib.pyplot as plt
+from shutil import copyfile
 import time
+
 
 class ProdyProt(EMProtocol):
 
@@ -78,20 +80,29 @@ class ProdyProt(EMProtocol):
         self._insertFunctionStep('prodyWrapper')
 
     def prodyWrapper(self):
-        time.sleep(10)
-        #createLink(inputStructure, 'pseudoatoms.pdb')
-        #self.runJob(PRODY,"pseudoatoms.pdb")
+        time.sleep(15)
+        file = open(self._getExtraPath("paths.txt"), "w")
+        file.write(self.inputStructure.get() + '\n')
+        file.write(self.initTrajectory.get() + '\n')
+        file.write(self.finTrajectory.get() + '\n')
+        file.close()
+        '''copyFile(self.inputStructure.get(), self._getExtraPath(
+            "initialPdb.pdb"))
+        copyFile(self.initTrajectory.get(),self._getExtraPath("initTraj.dcd"))
+        copyFile(self.finTrajectory.get(), self._getExtraPath("finTraj.dcd"))'''
         self.inputPdb = self.inputStructure.get()
         self.computeANM()
         self.computePCA()
 
     def computeANM(self):
         GluA2_sim_ca = parsePDB(self.inputPdb, subset = 'ca')
-        GluA2_em_ca = parseCIF('4uqj', subset='ca')
+        #GluA2_em_ca = parseCIF('4uqj', subset='ca')
         self.anm = ANM('GluA2 AMPAR sim model')
         self.anm.buildHessian(GluA2_sim_ca)
         self.anm.calcModes()
-        slowest_mode = self.anm[0]
+        fnOutAnm = self._getExtraPath("anmModes")
+        #writeNMD(fnOutAnm, anm, GluA2_sim_ca)
+        saveModel(self.anm, fnOutAnm)
 
     def computePCA(self):
         GluA2_sim = parsePDB(self.inputPdb)
@@ -104,16 +115,8 @@ class ProdyProt(EMProtocol):
         self.pca = PCA('AMPAR trajectories')
         self.pca.buildCovariance(combined_traj)
         self.pca.calcModes()
-
-        self.ini_traj = Trajectory(initialTrajectory)
-        self.ini_traj.setCoords(
-            GluA2_sim)  # Set the initial structure as the reference
-        self.ini_traj.setAtoms(GluA2_sim.ca)  # A shortcut for .select('ca')
-
-        self.fin_traj = Trajectory(finalTrajectory)
-        self.fin_traj.setCoords(
-            GluA2_sim)  # Set the initial structure as the reference
-        self.fin_traj.setAtoms(GluA2_sim.ca)  # A shortcut for .select('ca')
+        fnOutPca = self._getExtraPath("pcaModes")
+        saveModel(self.pca, fnOutPca)
 
     def _summary(self):
         summary=[]

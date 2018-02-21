@@ -35,7 +35,8 @@ from pyworkflow.gui.dialog import showError, showWarning
 from pyworkflow.gui.plotter import Plotter
 import glob
 from protocol_ProDy import ProdyProt
-from prody import showProjection
+from prody import *
+
 
 class ProdyViewer(Viewer):
     """ Wrapper to visualize Pdb to SAXS. """
@@ -48,24 +49,40 @@ class ProdyViewer(Viewer):
     def visualize(self, obj, **args):
 
         cls = type(obj)
+
         if issubclass(cls, ProdyProt):
             #if obj.inputStructure.isempty():
+            paths = open(obj._getExtraPath("paths.txt"), "r")
+            content = paths.readlines()
+            content = [line.rstrip('\n') for line in content]
+    
+            fnAnm = obj._getExtraPath("anmModes.anm.npz")
+            fnPca = obj._getExtraPath("pcaModes.pca.npz")
+            initPdb = content[0]
+            fnInitTraj = content[1]
+            fnFinTraj = content[2]
 
-            '''showProjection(self.ini_traj, self.pca[:2], color='g', new_fig=True)
-            showProjection(self.fin_traj, self.pca[:2], color='r',
-                           new_fig=False)
+            Pdb = parsePDB(initPdb)
 
-            showProjection(self.ini_traj, self.anm[:3], color='g', new_fig=True)
-            showProjection(self.fin_traj, self.anm[:3], color='r',
-                           new_fig=False)'''
-            print "aaa"
-            xplotter = Plotter(windowTitle="ANM & PCA")
-            a = xplotter.createSubPlot('ANM & PCA', 'Angstroms^-1',
-                                       'log(SAXS)', yformat=False)
+            anm = loadModel(fnAnm)
+            pca = loadModel(fnPca)
 
-            a.plot(self.ini_traj, self.pca[:2])
-            a.plot(self.fin_traj, self.pac[:2])
-            xplotter.show()
+            showOverlapTable(pca, anm)
+            printOverlapTable(pca[:7], anm[:7])
+
+            initTraj = Trajectory(fnInitTraj)
+            initTraj.setCoords(Pdb) # Set the initial structure as the reference
+            initTraj.setAtoms(Pdb.ca)  # A shortcut for .select('ca')
+
+            finTraj = Trajectory(fnFinTraj)
+            finTraj.setCoords(Pdb)  # Set the initial structure as the reference
+            finTraj.setAtoms(Pdb.ca)  # A shortcut for .select('ca')
+
+            showProjection(initTraj, pca[:2], color='g', new_fig=True)
+            showProjection(finTraj, pca[:2], color='r',  new_fig=False)
+
+            showProjection(initTraj, anm[:3], color='g', new_fig=True)
+            showProjection(finTraj, anm[:3], color='r',  new_fig=False)
 
 
 
