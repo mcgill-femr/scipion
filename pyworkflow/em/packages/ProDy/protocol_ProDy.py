@@ -87,9 +87,9 @@ class ProdyProt(EMProtocol):
                            'A threshold of 0 implies no atom removal.')
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('_prodyWrapper')
+        self._insertFunctionStep('prodyWrapper')
 
-    def _prodyWrapper(self):
+    def prodyWrapper(self):
         time.sleep(15)
         file = open(self._getExtraPath("paths.txt"), "w")
         print self.Pdb.get()
