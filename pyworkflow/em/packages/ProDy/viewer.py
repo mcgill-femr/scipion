@@ -51,11 +51,10 @@ class ProdyViewer(Viewer):
         cls = type(obj)
 
         if issubclass(cls, ProdyProt):
-            #if obj.inputStructure.isempty():
             paths = open(obj._getExtraPath("paths.txt"), "r")
             content = paths.readlines()
             content = [line.rstrip('\n') for line in content]
-    
+
             fnAnm = obj._getExtraPath("anmModes.anm.npz")
             fnPca = obj._getExtraPath("pcaModes.pca.npz")
             initPdb = content[0]
@@ -68,7 +67,6 @@ class ProdyViewer(Viewer):
             pca = loadModel(fnPca)
 
             showOverlapTable(pca, anm)
-            printOverlapTable(pca[:7], anm[:7])
 
             initTraj = Trajectory(fnInitTraj)
             initTraj.setCoords(Pdb) # Set the initial structure as the reference

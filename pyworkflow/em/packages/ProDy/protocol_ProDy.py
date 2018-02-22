@@ -37,6 +37,8 @@ import matplotlib.pyplot as plt
 from shutil import copyfile
 import time
 
+FILE = 0
+PDB = 1
 
 class ProdyProt(EMProtocol):
 
@@ -47,11 +49,19 @@ class ProdyProt(EMProtocol):
     def _defineParams(self, form):
 
         form.addSection(label = "Prody NMA analysis and molecular dynamics")
+        form.addParam('FilePdb', params.EnumParam, choices=['File','Pdb'],
+                      default=0, important=True,
+                      display=params.EnumParam.DISPLAY_HLIST,
+                      label="Input file or pdb")
         form.addParam('inputStructure', PathParam, label="Input structure",
                       important=True,
+                      condition='FilePdb == %s' % FILE,
                       help='The input structure can be an atomic model '
                            '(true PDB) or a pseudoatomic model(an EM volume '
                            'converted into pseudoatoms)')
+        form.addParam('Pdb', PointerParam, pointerClass='PdbFile',
+                      label='Input Pdb', important=True,
+                      condition='FilePdb == %s' % PDB)
         form.addParam('initTrajectory', PathParam,
                       label="Initial Trajectory",
                       important=True)
@@ -77,12 +87,18 @@ class ProdyProt(EMProtocol):
                            'A threshold of 0 implies no atom removal.')
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('prodyWrapper')
+        self._insertFunctionStep('_prodyWrapper')
 
-    def prodyWrapper(self):
+    def _prodyWrapper(self):
         time.sleep(15)
         file = open(self._getExtraPath("paths.txt"), "w")
-        file.write(self.inputStructure.get() + '\n')
+        print self.Pdb.get()
+        if self.Pdb.get() == None:
+            file.write(self.inputStructure.get() + '\n')
+            self.inputPdb = self.inputStructure.get()
+        else:
+            file.write(self.inputPdb.get().getFileName() + '\n')
+            self.inputPdb = self.Pdb.get().getFileName()
         file.write(self.initTrajectory.get() + '\n')
         file.write(self.finTrajectory.get() + '\n')
         file.close()
@@ -90,21 +106,19 @@ class ProdyProt(EMProtocol):
             "initialPdb.pdb"))
         copyFile(self.initTrajectory.get(),self._getExtraPath("initTraj.dcd"))
         copyFile(self.finTrajectory.get(), self._getExtraPath("finTraj.dcd"))'''
-        self.inputPdb = self.inputStructure.get()
-        self.computeANM()
-        self.computePCA()
+        self._computeANM()
+        self._computePCA()
 
-    def computeANM(self):
+    def _computeANM(self):
         GluA2_sim_ca = parsePDB(self.inputPdb, subset = 'ca')
         #GluA2_em_ca = parseCIF('4uqj', subset='ca')
         self.anm = ANM('GluA2 AMPAR sim model')
         self.anm.buildHessian(GluA2_sim_ca)
         self.anm.calcModes()
         fnOutAnm = self._getExtraPath("anmModes")
-        #writeNMD(fnOutAnm, anm, GluA2_sim_ca)
         saveModel(self.anm, fnOutAnm)
 
-    def computePCA(self):
+    def _computePCA(self):
         GluA2_sim = parsePDB(self.inputPdb)
         initialTrajectory = self.initTrajectory.get()
         finalTrajectory = self.finTrajectory.get()
@@ -119,6 +133,37 @@ class ProdyProt(EMProtocol):
         saveModel(self.pca, fnOutPca)
 
     def _summary(self):
-        summary=[]
-        showOverlapTable(self.pca, self.anm)
-        printOverlapTable(self.pca[:7], self.anm[:7])
+        try:
+            anm = self._getExtraPath("anmModes.anm.npz")
+            pca = self._getExtraPath("pcaModes.pca.npz")
+
+            anm = loadModel(anm)
+            pca = loadModel(pca)
+
+            table = getOverlapTable(pca[:7], anm[:7])
+            return table
+        except:
+            summary = []
+            summary.append("At the end of the process it will be shown an "
+                           "overlap table between anm and pca.")
+            return summary
+
+    def _citations(self):
+        return ['Kurkcuoglu2016']
+
+    '''def _validate(self):
+        errors = []
+        if which('prody') is '':
+            errors.append('You should have the program prody in the PATH')
+        return errors'''
+
+    '''def _warnings(self):
+        warnings = []
+        text = commands.getoutput("prody --version")
+        print text
+        version = text[14:19]
+
+        if version != '1.9.3':
+            warnings.append('Warning: Prody was tested with version 1.9.3 and '
+                            'your version is different.')
+        return warnings'''
