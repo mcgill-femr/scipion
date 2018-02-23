@@ -102,7 +102,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
     def parseSymList(self):
         self.symList = self.symmetryGroup.get().strip().split()
         if len(self.symList)<self.getNumberOfReconstructedVolumes():
-            self.symList+=self.symList[-1]*(self.getNumberOfReconstructedVolumes()-len(self.symList))
+            self.symList+=self.symList*(self.getNumberOfReconstructedVolumes()-len(self.symList))
     
     #--------------------------- STEPS functions ---------------------------------------------------
     def _insertAllSteps(self):
@@ -328,7 +328,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
             fnOutVolPrevious = join(fnDirPrevious,"volume%02d.mrc"%i)
             fnOutContPrevious = join(fnDirPrevious,"anglesCont%02d.stk"%i)
             for half in range(1,3):
-                fnOutVol = "%s_%02d_half%d.vol"%(fnRootVol,i,half)
+                fnOutVol = "%s_%06d_half%d.vol"%(fnRootVol,i,half)
                 args="-i %s_%06d_%06d.xmd -o %s --sym %s --weight --thr %d"%(fnRootVol,i,half,fnOutVol,
                                                                              self.symList[i-1],self.numberOfThreads.get())
                 self.runJob("xmipp_reconstruct_fourier",args,numberOfMpi=self.numberOfMpi.get())
@@ -361,8 +361,8 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         fnCentered = join(fnDirCurrent,"volumeCentered.mrc")
         for i in range(1,self.getNumberOfReconstructedVolumes()+1):
             # Align the two volumes
-            fnVol1="%s_%02d_half1.vol"%(fnRootVol,i)
-            fnVol2="%s_%02d_half2.vol"%(fnRootVol,i)
+            fnVol1="%s_%06d_half1.vol"%(fnRootVol,i)
+            fnVol2="%s_%06d_half2.vol"%(fnRootVol,i)
             fnVolAvg=join(fnDirCurrent,"volume%02d.mrc"%i)
             self.runJob('xmipp_image_operate','-i %s --plus %s -o %s'%(fnVol1,fnVol2,fnVolAvg),numberOfMpi=1)
             self.runJob('xmipp_image_operate','-i %s --mult 0.5'%fnVolAvg,numberOfMpi=1)
@@ -433,7 +433,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         cleanPath(fnCentered)
         
         # Align all volumes with respect to the first one taking care of the mirror
-        fnVol1=join(fnDirCurrent,"volume%02d.mrc"%i)
+        fnVol1=join(fnDirCurrent,"volume%02d.mrc"%i) ######## AJ DUDA
         I1=xmipp.Image(fnVol1)
         for i in range(2,self.getNumberOfReconstructedVolumes()+1):
             fnVoli=join(fnDirCurrent,"volume%02d.mrc"%i)
