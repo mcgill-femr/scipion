@@ -91,6 +91,10 @@ class ProdyProt(EMProtocol):
 
     def prodyWrapper(self):
         time.sleep(15)
+        '''createLink(self.inputStructure.get(), 'inputPdb.pdb')
+        createLink(self.initTrajectory.get(), 'initTraj.dcd')
+        createLink(self.finTrajectory.get(), 'finTraj.dcd')'''
+
         file = open(self._getExtraPath("paths.txt"), "w")
         print self.Pdb.get()
         if self.Pdb.get() == None:
@@ -102,10 +106,7 @@ class ProdyProt(EMProtocol):
         file.write(self.initTrajectory.get() + '\n')
         file.write(self.finTrajectory.get() + '\n')
         file.close()
-        '''copyFile(self.inputStructure.get(), self._getExtraPath(
-            "initialPdb.pdb"))
-        copyFile(self.initTrajectory.get(),self._getExtraPath("initTraj.dcd"))
-        copyFile(self.finTrajectory.get(), self._getExtraPath("finTraj.dcd"))'''
+
         self._computeANM()
         self._computePCA()
 
