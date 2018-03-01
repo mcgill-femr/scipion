@@ -389,8 +389,8 @@ void ProgVolVariability::produceSideinfo()
         FOR_ALL_ELEMENTS_IN_ARRAY3D(mVin)
         A3D_ELEM(mVin,k,i,j) /= meanFactor2;
     }
-
     //Finish here Vin distortion by FT of Blob
+
     //Padding of Vin
     MultidimArray<double> localPaddedVin;
     localPaddedVin.initZeros(volPadSizeZ,volPadSizeY,volPadSizeX);
@@ -407,10 +407,14 @@ void ProgVolVariability::produceSideinfo()
 #endif
 
     CenterFFT(localPaddedVin,true);
-    transformerVol.FourierTransform(localPaddedVin, fftVin, false);
-    //AQUI
+    FourierTransformer transformerVol2;
+    fftVin.initZeros(volPadSizeZ,volPadSizeY,volPadSizeX);
+    transformerVol2.FourierTransform(localPaddedVin, fftVin, true);
+    transformerVol2.clear();
 
-    //CenterFFT(fftVin,false); //No estoy seguro de esto
+    double corr3D_2D=(imgSize* pow(padding_factor_vol,3.)) / pow(padding_factor_proj,2.);
+    FOR_ALL_ELEMENTS_IN_ARRAY3D(fftVin)
+    A3D_ELEM(fftVin,k,i,j)*=corr3D_2D;
 
 }
 
@@ -584,9 +588,14 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                 // Get a first approximation of the reconstruction
                 double corr2D_3D=pow(parent->padding_factor_proj,2.)/
                                  (parent->imgSize* pow(parent->padding_factor_vol,3.));
+
                 // Divide by Zdim because of the
                 // the extra dimension added
                 // and padding differences
+
+                //#ifdef DEBUG // without computing the variability the following should be the same
+                //#endif
+
                 MultidimArray<double> &mFourierWeights=parent->FourierWeights;
                 for (int k=threadParams->myThreadID; k<=FINISHINGZ(mFourierWeights); k+=parent->numThreads)
                     for (int i=STARTINGY(mFourierWeights); i<=FINISHINGY(mFourierWeights); i++)
@@ -601,7 +610,9 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                         			A3D_ELEM(parent->VoutFourier,k,i,j)*=corr2D_3D*A3D_ELEM(mFourierWeights,k,i,j);
                         		else
                         			A3D_ELEM(parent->VoutFourier,k,i,j)=0;
+
                         	}
+
                         }
                 break;
             }
@@ -907,17 +918,20 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                                 size_t memIdx=fixSize + ixp;//YXSIZE(VoutFourier)*(izp)+((iyp)*XSIZE(VoutFourier))+(ixp);
 
                                                 double *ptrOut=(double *)&(DIRECT_A1D_ELEM(VoutFourier, memIdx));
-//                                                double *ptrInVol=(double *)&(DIRECT_A1D_ELEM(parent->fftVin, memIdx));
+                                                double *ptrInVol=(double *)&(DIRECT_A1D_ELEM(parent->fftVin, memIdx));
 
-//                                                ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0]));
-                                                ptrOut[0] += wEffective * (ptrIn[0]);
+                                                ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0]));
+//                                                ptrOut[0] += wEffective * (ptrIn[0]);
+//                                                ptrOut[0] += wEffective * (ptrInVol[0]);
                                                 DIRECT_A1D_ELEM(fourierWeights, memIdx) += w;
-                                                if (conjugate)
-                                                	 ptrOut[1]-=wEffective * (ptrIn[1]);
-//                                                    ptrOut[1]-=wEffective * (ptrIn[1]-ptrInVol[1])* (ptrIn[1]-ptrInVol[1]);
-                                               else
-                                            	   ptrOut[1]+=wEffective * (ptrIn[1]);
-//                                                    ptrOut[1]+=wEffective * (ptrIn[1]-ptrInVol[1])* (ptrIn[1]-ptrInVol[1]);
+//                                                if (conjugate)
+//                                                	 ptrOut[1]-=wEffective * (ptrIn[1]);
+//                                                   ptrOut[1]-=wEffective * (ptrIn[1]-ptrInVol[1])* (ptrIn[1]-ptrInVol[1]);
+//                                                	ptrOut[1]-=wEffective * (ptrInVol[1]);
+//                                               else
+//                                            	   ptrOut[1]+=wEffective * (ptrIn[1]);
+                                                    ptrOut[1]+=wEffective * (ptrIn[1]-ptrInVol[1])* (ptrIn[1]-ptrInVol[1]);
+//                                            	   ptrOut[1]+=wEffective * (ptrInVol[1]);
                                             }
                                         }
                                     }
@@ -1203,8 +1217,10 @@ void ProgVolVariability::correctWeight()
         FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY3D(VoutFourier)
         {
             double *ptrOut=(double *)&(DIRECT_A3D_ELEM(VoutFourier, k,i,j));
+
             if (fabs(A3D_ELEM(FourierWeights,k,i,j))>1e-3)
                 ptrOut[0] = 1.0/DIRECT_A3D_ELEM(FourierWeights, k,i,j);
+
         }
 
         for (int i=1;i<NiterWeight;i++)
@@ -1218,6 +1234,7 @@ void ProgVolVariability::correctWeight()
                 double *ptrOut=(double *)&(DIRECT_A3D_ELEM(VoutFourier, k,i,j));
                 if (fabs(A3D_ELEM(FourierWeights,k,i,j))>1e-3)
                     ptrOut[0] /= A3D_ELEM(FourierWeights,k,i,j);
+
             }
         }
         FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY3D(VoutFourier)
@@ -1271,21 +1288,19 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     // Threads are working now, wait for them to finish
     barrier_wait( &barrier );
 
-#ifdef DEBUG
-    FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourier)
-     std::cout << A3D_ELEM(VoutFourier,k,i,j) << " " << A3D_ELEM(fftVin,k,i,j) << std::endl;
-#endif
-
     //JV
-    //VoutFourierTmp = fftVin;
-    //int numIters = 10;
-    //for (int it = 0; it < numIters; ++it)
-    //FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourier)
-    //{
-    //	std::cout << A3D_ELEM(VoutFourier,k,i,j) << " " << A3D_ELEM(fftVin,k,i,j) << std::endl;
-    //	A3D_ELEM(VoutFourier,k,i,j) = A3D_ELEM(fftVin,k,i,j);
-    	//A3D_ELEM(VoutFourierTmp,k,i,j) += (std::sqrt(A3D_ELEM(VoutFourier,k,i,j)) * (std::rand()/RAND_MAX - 0.5));
-
+    VoutFourierTmp = fftVin;
+    int numIters = 10;
+    srand(time(NULL));
+    double randNum;
+    for (int it = 0; it < numIters; ++it)
+    	FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourier)
+		{
+    	    randNum = (1000.0*(std::rand()/RAND_MAX-0.5));
+    		A3D_ELEM(VoutFourierTmp,k,i,j) += A3D_ELEM(VoutFourier,k,i,j)*randNum;
+    		std::cout << A3D_ELEM(fftVin,k,i,j) << " " << A3D_ELEM(VoutFourierTmp,k,i,j) << " "  << randNum << std::endl;
+    	    std::srand(time(NULL));
+		}
     	/*
     	if (method == STD)
             A3D_ELEM(VoutFourier,k,i,j) = std::sqrt(A3D_ELEM(VoutFourier,k,i,j));
@@ -1296,8 +1311,20 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
         */
     //}
 
-    //VoutFourier = VoutFourierTmp;
+    VoutFourier = VoutFourierTmp;
     //JV
+
+#ifdef DEBUG_VOL1
+    {
+        Image< std::complex<double> > save;
+        save().alias( VoutFourier );
+        save.write((std::string) "FourierVol.vol");
+
+        Image< std::complex<double> > save2;
+        save2().alias( fftVin );
+        save2.write((std::string) "FourierVolIn.vol");
+    }
+#endif
 
     transformerVol.inverseFourierTransform();
     CenterFFT(Vout(),false);
