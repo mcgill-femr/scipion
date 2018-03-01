@@ -100,6 +100,7 @@ class computePdbTrajectories(EMProtocol):
         self._insertFunctionStep('createTrajectories')
 
     def createTrajectories(self):
+        
 
         topo1 = '/home/javiermota/ProDy/files_topo_param/top_all36_prot.rtf'
         topo2 = '/home/javiermota/ProDy/files_topo_param' \
