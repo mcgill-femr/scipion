@@ -31,6 +31,7 @@ import imp
 
 from bibtex import _bibtex # Load bibtex dict with references
 from protocol_ProDy import ProdyProt
+from PdbtoTrajectories import computePdbTrajectories
 from viewer import ProdyViewer
 
 def validateInstallation():

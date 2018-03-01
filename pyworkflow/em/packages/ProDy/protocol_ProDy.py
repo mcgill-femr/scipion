@@ -96,7 +96,6 @@ class ProdyProt(EMProtocol):
         createLink(self.finTrajectory.get(), 'finTraj.dcd')'''
 
         file = open(self._getExtraPath("paths.txt"), "w")
-        print self.Pdb.get()
         if self.Pdb.get() == None:
             file.write(self.inputStructure.get() + '\n')
             self.inputPdb = self.inputStructure.get()
