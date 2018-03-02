@@ -69,7 +69,7 @@
 
 #include <data/args.h>
 #include <data/xmipp_fft.h>
-#include <sys/time.h>
+//#include <sys/time.h>
 
 #include <data/metadata.h>
 #include "recons.h"

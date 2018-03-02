@@ -416,6 +416,8 @@ void ProgVolVariability::produceSideinfo()
     FOR_ALL_ELEMENTS_IN_ARRAY3D(fftVin)
     A3D_ELEM(fftVin,k,i,j)*=corr3D_2D;
 
+    randomize_random_generator();
+
 }
 
 void * ProgVolVariability::processImageThread( void * threadArgs )
@@ -1205,7 +1207,6 @@ void ProgVolVariability::correctWeight()
     {
         FOR_ALL_DIRECT_ELEMENTS_IN_ARRAY3D(FourierWeights)
         DIRECT_A3D_ELEM(FourierWeights, k,i,j)=1;
-
     }
     else
     {
@@ -1290,16 +1291,14 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 
     //JV
     VoutFourierTmp = fftVin;
-    int numIters = 10;
-    srand(time(NULL));
+    int numIters = 1;
     double randNum;
+
     for (int it = 0; it < numIters; ++it)
     	FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourier)
 		{
-    	    randNum = (1000.0*(std::rand()/RAND_MAX-0.5));
+    		randNum = (100000.0*(rand()/(double)RAND_MAX-0.5));
     		A3D_ELEM(VoutFourierTmp,k,i,j) += A3D_ELEM(VoutFourier,k,i,j)*randNum;
-    		std::cout << A3D_ELEM(fftVin,k,i,j) << " " << A3D_ELEM(VoutFourierTmp,k,i,j) << " "  << randNum << std::endl;
-    	    std::srand(time(NULL));
 		}
     	/*
     	if (method == STD)
