@@ -26,6 +26,7 @@
 
 import math
 import numpy as np
+import os
 
 from pyworkflow.em import *
 import pyworkflow.protocol.constants as pwconst
@@ -45,7 +46,7 @@ class computePdbTrajectories(EMProtocol):
     def _defineParams(self, form):
         form.addSection(label="Prody Trajectories")
         form.addParam('initialPdb', PointerParam, pointerClass='PdbFile',
-                      label='Initial Pdb', important=True,
+                      label='Initial Pdb', important=False,
                       help='Choose an initial conformation using a Pdb to '
                            'compute its N trajectories')
         form.addParam('useFinalPdb', params.BooleanParam, default=False,
@@ -60,16 +61,16 @@ class computePdbTrajectories(EMProtocol):
                       condition = 'useFinalPdb == False',
                       important=True, help='Number of cycles to cover a '
                                            'landscape')
-        form.addParam('numTrajectories', params.IntParam, default=5,
+        form.addParam('numTrajectories', params.IntParam, default=1,
                       label='Number of trajectories',
                       important=True, help='Number of trajectories to generate')
-        form.addParam('inputTopology', params.MultiPointerParam,
-                      pointerClass='SetOfVolumes,Volume',
-                      label="Input topology files", important=True,
-                      help='Select topology files')
-        form.addParam('inputParameters', params.MultiPointerParam,
-                      label="Input parameters files", important=True,
-                      help='Select parameters files')
+        #form.addParam('inputTopology', params.MultiPointerParam,
+        #              pointerClass='SetOfVolumes,Volume',
+        #              label="Input topology files", important=True,
+        #              help='Select topology files')
+        #form.addParam('inputParameters', params.MultiPointerParam,
+        #              label="Input parameters files", important=True,
+        #              help='Select parameters files')
         form.addParam('anmCutoff', params.IntParam, default=15,
                       label='ANM Cutoff', expertLevel = pwconst.LEVEL_ADVANCED,
                       help='maximum distance that two residues are in contact.')
@@ -102,25 +103,36 @@ class computePdbTrajectories(EMProtocol):
     def createTrajectories(self):
         
 
-        topo1 = '/home/javiermota/ProDy/files_topo_param/top_all36_prot.rtf'
-        topo2 = '/home/javiermota/ProDy/files_topo_param' \
-                '/toppar_water_ions_mod2.str'
-        param1 = '/home/javiermota/ProDy/files_topo_param/par_all36_prot.prm'
-        param2 = '/home/javiermota/ProDy/files_topo_param/par_all36m_prot.prm'
+        #topo1 = '/home/javiermota/ProDy/files_topo_param/top_all36_prot.rtf'
+        #topo2 = '/home/javiermota/ProDy/files_topo_param' \
+        #        '/toppar_water_ions_mod2.str'
+        #param1 = '/home/javiermota/ProDy/files_topo_param/par_all36_prot.prm'
+        #param2 = '/home/javiermota/ProDy/files_topo_param/par_all36m_prot.prm'
 
-        self._params = {'initPdb': self.initialPdb.get(),
+        self._params = {'initPdb': self.initialPdb.get().getFileName(),
                         'numTraj': self.numTrajectories.get(),
                         'cutoff': self.anmCutoff.get(),
                         'scale': self.scaling.get(),
                         'acceptParam': self.acceptanceParam.get(),
                         'maxSteps': self.maxNumSteps.get(),
-                        'spr': self.spring.get()
+                        'spr': self.spring.get(),
+                        'cycle': self.cycleNumber.get()
                         }
 
         if self.useFinalPdb.get() is True:
-            self._params['finPdb'] = self.finalPdb.get()
+            self._params['finPdb'] = self.finalPdb.get().getFileName()
         else:
-            self._params['cycle'] = self.cycleNumber.get()
+            self._params['finPdb'] = self._params['initPdb']
+
+        os.system("env VMDARGS='text with blanks' vmd -dispdev text -e "
+                  "/home/ajimenez/scipion/software/em/prody/vmd-1.9.3/lib/"
+                  "plugins/noarch/tcl/comd/comd.tcl -args " +
+                  self._getExtraPath() + " 'results' " +
+                  self._params['initPdb'] + " " + self._params['finPdb'] +
+                  " 2>> " + self._getLogsPath('run.stderr') + " 1>> " +
+                  self._getLogsPath('run.stdout'))
+
+        print("hello world!")
 
 
 
