@@ -74,22 +74,23 @@ class computePdbTrajectories(EMProtocol):
         form.addParam('anmCutoff', params.IntParam, default=15,
                       label='ANM Cutoff', expertLevel = pwconst.LEVEL_ADVANCED,
                       help='maximum distance that two residues are in contact.')
-        form.addParam('scaling', params.FloatParam, default=0.1,
-                      label='Scaling (A)', expertLevel =
+        form.addParam('maxDeviation', params.FloatParam, default=1.5,
+                      label='Maximum in deviation per normal mode step (A)',
+                      expertLevel =
                       pwconst.LEVEL_ADVANCED,
-                      help='The scaling factor used when disturbing the '
-                           'protein structure in ANM-MC steps.')
+                      help='The maximum deviation per step when disturbing the '
+                           'protein structure in ANM-MC.')
         form.addParam('acceptanceParam', params.FloatParam, default=0.1,
                       label='Acceptance Parameter', expertLevel =
-                      pwconst.LEVEL_ADVANCED,
+                      pwconst.LEVEL_ADVANCED, condition = 'useFinalPdb==True',
                       help='starting value for the acceptance parameter in '
                            'ANM-MC steps')
         form.addParam('maxNumSteps', params.IntParam, default=1000000,
-                      label='Max number of ANM steps', expertLevel =
+                      label='Max number of ANM steps', expertLevel=
                       pwconst.LEVEL_ADVANCED,
                       help='maximal number of steps in ANM-MC step.')
-        form.addParam('spring', params.IntParam, default=15,
-                      label='Max number of ANM steps', expertLevel=
+        form.addParam('spring', params.IntParam, default=20000,
+                      label='Spring constant in targeted MD', expertLevel=
                       pwconst.LEVEL_ADVANCED,
                       help='In targeted molecular dynamics simulation, '
                            'the target potential is harmonic and the spring '
@@ -112,7 +113,7 @@ class computePdbTrajectories(EMProtocol):
         self._params = {'initPdb': self.initialPdb.get().getFileName(),
                         'numTraj': self.numTrajectories.get(),
                         'cutoff': self.anmCutoff.get(),
-                        'scale': self.scaling.get(),
+                        'maxDev': self.maxDeviation.get(),
                         'acceptParam': self.acceptanceParam.get(),
                         'maxSteps': self.maxNumSteps.get(),
                         'spr': self.spring.get(),
@@ -129,6 +130,8 @@ class computePdbTrajectories(EMProtocol):
                   "plugins/noarch/tcl/comd/comd.tcl -args " +
                   self._getExtraPath() + " 'results' " +
                   self._params['initPdb'] + " " + self._params['finPdb'] +
+                  " " + str(self._params['cycle']) +
+                  " " + str(self._params['maxDev']) +
                   " 2>> " + self._getLogsPath('run.stderr') + " 1>> " +
                   self._getLogsPath('run.stdout'))
 

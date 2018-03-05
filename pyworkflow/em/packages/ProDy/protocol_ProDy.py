@@ -26,6 +26,7 @@
 
 import math
 import numpy as np
+import sys
 
 from pyworkflow.em import *
 from prody import *
@@ -62,11 +63,11 @@ class ProdyProt(EMProtocol):
         form.addParam('Pdb', PointerParam, pointerClass='PdbFile',
                       label='Input Pdb', important=True,
                       condition='FilePdb == %s' % PDB)
-        form.addParam('initTrajectory', PathParam,
-                      label="Initial Trajectory",
-                      important=True)
-        form.addParam('finTrajectory', PathParam, label="Final Trajectory",
-                      important=True)
+        #form.addParam('initTrajectory', PathParam,
+        #          label="Initial Trajectory",
+        #              important=True)
+        #form.addParam('finTrajectory', PathParam, label="Final Trajectory",
+        #              important=True)
 
         form.addSection(label='Animation')
         form.addParam('amplitude', FloatParam, default=50,
@@ -90,41 +91,57 @@ class ProdyProt(EMProtocol):
         self._insertFunctionStep('prodyWrapper')
 
     def prodyWrapper(self):
-        time.sleep(15)
-        '''createLink(self.inputStructure.get(), 'inputPdb.pdb')
-        createLink(self.initTrajectory.get(), 'initTraj.dcd')
-        createLink(self.finTrajectory.get(), 'finTraj.dcd')'''
+        # '''createLink(self.inputStructure.get(), 'inputPdb.pdb')
+        # createLink(self.initTrajectory.get(), 'initTraj.dcd')
+        # createLink(self.finTrajectory.get(), 'finTraj.dcd')'''
+        #
+        # file = open(self._getExtraPath("paths.txt"), "w")
+        # if self.Pdb.get() == None:
+        #     file.write(self.inputStructure.get() + '\n')
+        #     self.inputPdb = self.inputStructure.get()
+        # else:
+        #     file.write(self.inputPdb.get().getFileName() + '\n')
+        #     self.inputPdb = self.Pdb.get().getFileName()
+        # #file.write(self.initTrajectory.get() + '\n')
+        # #file.write(self.finTrajectory.get() + '\n')
+        # file.close()
 
-        file = open(self._getExtraPath("paths.txt"), "w")
-        if self.Pdb.get() == None:
-            file.write(self.inputStructure.get() + '\n')
+        if self.FilePdb == FILE:
+            print('1')
             self.inputPdb = self.inputStructure.get()
         else:
-            file.write(self.inputPdb.get().getFileName() + '\n')
+            print('2')
             self.inputPdb = self.Pdb.get().getFileName()
-        file.write(self.initTrajectory.get() + '\n')
-        file.write(self.finTrajectory.get() + '\n')
-        file.close()
 
+        print self.inputStructure.get()
+        sys.stdout.flush()
+        print self.inputPdb
+        sys.stdout.flush()
         self._computeANM()
-        self._computePCA()
+        #self._computePCA()
 
     def _computeANM(self):
-        GluA2_sim_ca = parsePDB(self.inputPdb, subset = 'ca')
-        #GluA2_em_ca = parseCIF('4uqj', subset='ca')
-        self.anm = ANM('GluA2 AMPAR sim model')
-        self.anm.buildHessian(GluA2_sim_ca)
-        self.anm.calcModes()
-        fnOutAnm = self._getExtraPath("anmModes")
-        saveModel(self.anm, fnOutAnm)
+
+        print("En _computeANM")
+        sys.stdout.flush()
+        pdb_ca = parsePDB(self.inputPdb, subset = 'ca')
+        print("En _computeANM")
+        sys.stdout.flush()
+        print pdb_ca.getTitle()
+        sys.stdout.flush()
+        self.anm = calcANM(pdb_ca)
+        print("En _computeANM")
+        sys.stdout.flush()
+        #fnOutAnm = self._getExtraPath("anmModes")
+        #saveModel(self.anm, fnOutAnm)
 
     def _computePCA(self):
-        GluA2_sim = parsePDB(self.inputPdb)
+        sim = parsePDB(self.inputPdb)
         initialTrajectory = self.initTrajectory.get()
         finalTrajectory = self.finTrajectory.get()
         combined_traj = Trajectory(initialTrajectory)
-        combined_traj.setCoords(GluA2_sim)
-        combined_traj.setAtoms(GluA2_sim.ca)
+        combined_traj.setCoords(sim)
+        combined_traj.setAtoms(sim.ca)
         combined_traj.addFile(finalTrajectory)
         self.pca = PCA('AMPAR trajectories')
         self.pca.buildCovariance(combined_traj)
