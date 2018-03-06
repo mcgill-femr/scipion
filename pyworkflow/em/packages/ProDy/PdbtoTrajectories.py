@@ -24,19 +24,13 @@
 # *
 # **************************************************************************
 
-import math
-import numpy as np
-import os
-
 from pyworkflow.em import *
 import pyworkflow.protocol.constants as pwconst
 from prody import *
 from pyworkflow.utils import *
-from pyworkflow.protocol.constants import LEVEL_ADVANCED
-from pyworkflow.utils.path import createLink
-import commands
-import matplotlib.pyplot as plt
-from shutil import copyfile
+import time
+
+SCIPION_HOME = os.environ['SCIPION_HOME']
 
 class computePdbTrajectories(EMProtocol):
     """ Protocol to execute functions from ProDy software"""
@@ -73,11 +67,10 @@ class computePdbTrajectories(EMProtocol):
         #              help='Select parameters files')
         form.addParam('anmCutoff', params.IntParam, default=15,
                       label='ANM Cutoff', expertLevel = pwconst.LEVEL_ADVANCED,
-                      help='maximum distance that two residues are in contact.')
+                      help='Maximum distance that two residues are in contact.')
         form.addParam('maxDeviation', params.FloatParam, default=1.5,
-                      label='Maximum in deviation per normal mode step (A)',
-                      expertLevel =
-                      pwconst.LEVEL_ADVANCED,
+                      label='Maximum deviation per normal mode (A)',
+                      expertLevel = pwconst.LEVEL_ADVANCED,
                       help='The maximum deviation per step when disturbing the '
                            'protein structure in ANM-MC.')
         form.addParam('acceptanceParam', params.FloatParam, default=0.1,
@@ -88,7 +81,7 @@ class computePdbTrajectories(EMProtocol):
         form.addParam('maxNumSteps', params.IntParam, default=1000000,
                       label='Max number of ANM steps', expertLevel=
                       pwconst.LEVEL_ADVANCED,
-                      help='maximal number of steps in ANM-MC step.')
+                      help='Maximal number of steps in ANM-MC step.')
         form.addParam('spring', params.IntParam, default=20000,
                       label='Spring constant in targeted MD', expertLevel=
                       pwconst.LEVEL_ADVANCED,
@@ -100,15 +93,10 @@ class computePdbTrajectories(EMProtocol):
 
     def _insertAllSteps(self):
         self._insertFunctionStep('createTrajectories')
+        self._insertFunctionStep('createOutputStep')
 
     def createTrajectories(self):
         
-
-        #topo1 = '/home/javiermota/ProDy/files_topo_param/top_all36_prot.rtf'
-        #topo2 = '/home/javiermota/ProDy/files_topo_param' \
-        #        '/toppar_water_ions_mod2.str'
-        #param1 = '/home/javiermota/ProDy/files_topo_param/par_all36_prot.prm'
-        #param2 = '/home/javiermota/ProDy/files_topo_param/par_all36m_prot.prm'
 
         self._params = {'initPdb': self.initialPdb.get().getFileName(),
                         'numTraj': self.numTrajectories.get(),
@@ -125,17 +113,82 @@ class computePdbTrajectories(EMProtocol):
         else:
             self._params['finPdb'] = self._params['initPdb']
 
-        os.system("env VMDARGS='text with blanks' vmd -dispdev text -e "
-                  "/home/ajimenez/scipion/software/em/prody/vmd-1.9.3/lib/"
-                  "plugins/noarch/tcl/comd/comd.tcl -args " +
-                  self._getExtraPath() + " 'results' " +
-                  self._params['initPdb'] + " " + self._params['finPdb'] +
-                  " " + str(self._params['cycle']) +
-                  " " + str(self._params['maxDev']) +
-                  " 2>> " + self._getLogsPath('run.stderr') + " 1>> " +
-                  self._getLogsPath('run.stdout'))
+        for traj in range(self.numTrajectories.get()):
 
-        print("hello world!")
+            os.system("env VMDARGS='text with blanks' vmd -dispdev text -e " +
+                            SCIPION_HOME + "/software/em/prody/vmd-1.9.3/lib/"
+                            "plugins/noarch/tcl/comd/comd.tcl -args "
+                            + os.path.abspath(self._getExtraPath()) + " "
+                            + "results{0}".format(str(traj+1))
+                            + " " + self._params['initPdb']
+                            + " " + self._params['finPdb']
+                            + " " + str(self._params['cycle'])
+                            + " " + str(self._params['maxDev'])
+                            + " 2>> " + self._getLogsPath('run.stderr')
+                            #+ " 1>> " + self._getLogsPath('run.stdout')
+                            + " & ")
+
+            print("Calculating trajectory %d..." %(traj+1))
+            sys.stdout.flush()
+            outputFn = self._getExtraPath('results{0}.log'.format(traj+1))
+            finished = 0
+            while not finished:
+                time.sleep(20)
+                file = open(outputFn, 'r')
+                lines = file.readlines()
+                for line in lines:
+
+                    if line.find("ERROR") != -1:
+                        raise OSError('The job had an error and'
+                                      'could not calculate the '
+                                      'trajectory. Please see '
+                                      'results{0}.log'.format(traj+1))
+
+                    elif line.find("FINISHED") != -1:
+                        finished = 1
+                        print("Trajectory done.")
+                        sys.stdout.flush()
+
+                file.close()
+
+            if self.useFinalPdb.get():
+                w1_start = parsePDB( self._getExtraPath('walker1_ionized.pdb'))
+                w1_traj = parseDCD( self._getExtraPath('walker1_trajectory.dcd'))
+                w1_traj.setCoords(w1_start)
+                w1_traj.setAtoms(w1_start.select('protein and not hydrogen'))
+                writeDCD( self._getExtraPath(
+                    'walker1_trajectory_protein.dcd'), w1_traj)
+
+                w2_start = parsePDB( self._getExtraPath('walker2_ionized.pdb'))
+                w2_traj = parseDCD( self._getExtraPath('walker2_trajectory.dcd'))
+                w2_traj.setCoords(w2_start)
+                w2_traj.setAtoms(w2_start.select('protein and not hydrogen'))
+                writeDCD( self._getExtraPath(
+                    'walker2_trajectory_protein.dcd'), w2_traj)
+
+                combined_traj = parseDCD( self._getExtraPath('walker1_trajectory_protein.dcd'))
+
+                for i in reversed(range(len(w2_traj))):
+                    combined_traj.addCoordset(w2_traj.getConformation(i))
+
+                writeDCD( self._getExtraPath('trajectory.dcd'), combined_traj)
+            else:
+                w1_start = parsePDB( self._getExtraPath('walker1_ionized.pdb'))
+                w1_traj = parseDCD( self._getExtraPath('walker1_trajectory.dcd'))
+                w1_traj.setCoords(w1_start)
+                w1_traj.setAtoms(w1_start.select('protein and not hydrogen'))
+                writeDCD( self._getExtraPath('trajectory.dcd'), w1_traj)
+
+
+            os.system("mv  " + self._getExtraPath("trajectory.dcd") + " " +
+                self._getExtraPath("trajectory%i.dcd" %(traj+1)))
+
+    def createOutputStep(self):
+        print("En createOutputStep")
+        sys.stdout.flush()
+
+
+
 
 
 
