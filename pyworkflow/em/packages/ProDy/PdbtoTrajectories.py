@@ -38,6 +38,8 @@ class computePdbTrajectories(EMProtocol):
     _label = "Generate Trajectories ProDy"
 
     def _defineParams(self, form):
+        self.defaultCycles = 5
+
         form.addSection(label="Prody Trajectories")
         form.addParam('initialPdb', PointerParam, pointerClass='PdbFile',
                       label='Initial Pdb', important=False,
@@ -50,7 +52,8 @@ class computePdbTrajectories(EMProtocol):
                       condition = 'useFinalPdb == True',
                       help='Choose a final conformation using a Pdb to '
                            'compute its N trajectories')
-        form.addParam('cycleNumber', params.IntParam, default=5,
+        form.addParam('cycleNumber', params.IntParam,
+                      default=self.defaultCycles,
                       label='Number of cycles',
                       condition = 'useFinalPdb == False',
                       important=True, help='Number of cycles to cover a '
@@ -110,6 +113,7 @@ class computePdbTrajectories(EMProtocol):
 
         if self.useFinalPdb.get() is True:
             self._params['finPdb'] = self.finalPdb.get().getFileName()
+            self._params['cycle'] = self.defaultCycles
         else:
             self._params['finPdb'] = self._params['initPdb']
 
