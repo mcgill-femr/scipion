@@ -29,6 +29,7 @@ import pyworkflow.protocol.constants as pwconst
 from prody import *
 from pyworkflow.utils import *
 import time
+from shutil import copy
 
 SCIPION_HOME = os.environ['SCIPION_HOME']
 
@@ -147,7 +148,6 @@ class computePdbTrajectories(EMProtocol):
                         'maxDev': self.maxDeviation.get(),
                         'acceptParam': self.acceptanceParam.get(),
                         'maxSteps': self.maxNumSteps.get(),
-                        'spr': self.spring.get(),
                         'cycle': self.cycleNumber.get(),
                         'minLen': self.minLen.get(),
                         'tmdLen': self.tmdLen.get(),
@@ -163,6 +163,8 @@ class computePdbTrajectories(EMProtocol):
         all_trajectories = Trajectory("all trajectories combined")
         t = time.time()
         for traj in range(self.numTrajectories.get()):
+            print("Calculating trajectory %d..." %(traj+1))
+            sys.stdout.flush()
 
             # os.system("env VMDARGS='text with blanks' vmd -dispdev text -e " +
             #                 SCIPION_HOME + "/software/em/ProDy/vmd-1.9.3/lib/"
@@ -182,29 +184,37 @@ class computePdbTrajectories(EMProtocol):
             #                 + " 2>> " + self._getLogsPath('run.stderr')
             #                 #+ " 1>> " + self._getLogsPath('run.stdout')
             #                 + " & ")
-            args = ('-args ' + os.path.abspath(os.environ['SCIPION_HOME'] +
-                    '/software/em/prody/NAMD_2.12_Linux-x86_64-multicore/namd2')
-                    + " " + str(os.path.abspath(self._getExtraPath()))
+            args = ('-args ' + " " + str(os.path.abspath(self._getExtraPath()))
                     + " " + "results{0}".format(str(traj+1))
                     + " " + self._params['initPdb']
                     + " " + self._params['finPdb']
                     + " " + str(self._params['cycle'])
-                    + " " + str(self._params['maxDev'])
-                    + " " + str(self._params['minLen'])
-                    + " " + str(self._params['tmdLen'])
-                    + " " + str(self._params['stepCut'])
-                    + " " + str(self._params['cutoff'])
-                    + " " + str(self._params['maxSteps'])
-                    + " " + str(self._params['acceptParam']))
-                    #+ " 2>> " + self._getLogsPath('run.stderr') + "
-               # & ")
+                    #+ " " + str(self._params['maxDev'])
+                    #+ " " + str(self._params['acceptParam'])
+                    #+ " " + os.path.abspath(os.environ['SCIPION_HOME'] +
+                    #'/software/em/prody/NAMD/namd2')
+                    #+ " " + os.path.abspath(
+                    #os.environ['SCIPION_HOME'] + '/software/bin')
+                    #+ " " + str(self._params['stepCut'])
+                    #+ " " + str(self._params['minLen'])
+                    #+ " " + str(self._params['tmdLen'])
+                    #+ " " + str(self._params['cutoff'])
+                    #+ " " + str(self._params['maxSteps'])
+                    )
 
-            self.runJob("VMDARGS='text with blanks' vmd -dispdev text -e " +
-                        join(os.environ['PRODY_HOME'],'comd.tcl'),
-                        args, env={'COMD_PATH': os.environ['PRODY_HOME']})
+            self.runJob("VMDARGS='text with blanks' "
+                        #"" + os.path.abspath(
+                        #os.environ['SCIPION_HOME'] +
+                        #"/software/em/prody/vmd-1.9.3/bin/
+                        "vmd"
+                        #) +
+                        " -dispdev text -e " +
+                        os.path.abspath(os.environ['SCIPION_HOME'] +
+                        '/software/em/prody/vmd-1.9.3/lib/plugins/noarch/tcl'
+                        '/comd/comd.tcl'),
+                        args)
 
-            print("Calculating trajectory %d..." %(traj+1))
-            sys.stdout.flush()
+
             outputFn = self._getExtraPath('results{0}.log'.format(traj+1))
             finished = 0
             while not finished:
@@ -227,8 +237,8 @@ class computePdbTrajectories(EMProtocol):
                 file.close()
 
             if self.useFinalPdb.get():
-                w1_start = parsePDB( self._getExtraPath('walker1_ionized.pdb'))
-                w1_traj = parseDCD( self._getExtraPath('walker1_trajectory.dcd'))
+                w1_start = parsePDB(self._getExtraPath('walker1_ionized.pdb'))
+                w1_traj = parseDCD(self._getExtraPath('walker1_trajectory.dcd'))
                 w1_traj.setCoords(w1_start)
                 w1_traj.setAtoms(w1_start.select('protein and not hydrogen'))
                 writeDCD( self._getExtraPath(
@@ -324,12 +334,23 @@ class computePdbTrajectories(EMProtocol):
         print("En createOutputStep")
         sys.stdout.flush()
 
+
+        setOfPDBs = self._createSetOfPDBs()
         for n in range(self.numTrajectories.get()):
             ens = parseDCD(self._getExtraPath("trajectory%i.dcd" %(n+1)))
+            atoms = parsePDB(self._getExtraPath('walker1_ionized.pdb'))
+            protein = atoms.select('protein and not hydrogen').copy()
+            ens.setCoords(protein)
+            ens.setAtoms(protein)
             for i, conformation in enumerate(ens):
-                writePDB(self._getExtraPath("trajectory%i_pdb%i" %(n+1, i+1)),
-                         conformation)
+                fnPdb = self._getExtraPath("trajectory%i_conformation%i" %(
+                        n+1, i+1))
+                writePDB(fnPdb, ens.getConformation(i))
+                pdb = PdbFile(fnPdb)
+                setOfPDBs.append(pdb)
 
+        self._defineOutputs(outputPDBs=setOfPDBs)
+        self._defineSourceRelation(self.initialPdb.get(), setOfPDBs)
 
 
 
