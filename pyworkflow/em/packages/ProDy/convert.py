@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:     Javier Mota (jmota@cnb.csic.es)
+# * Authors:     Javier Mota Garcia (jmota@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -23,27 +23,18 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-"""
-This sub-package contains data and protocol classes
-wrapping Prody programs
-"""
-import imp
 
-from bibtex import _bibtex # Load bibtex dict with references
-from protocol_ProDy import ProdyProt
-from pdbtoTrajectories import computePdbTrajectories
-from viewer import ProdyViewer
+import os
+from collections import OrderedDict
 
-def validateInstallation():
-    """ This function will be used to check if Prody is properly installed. """
-    try:
-        imp.find_module('ProDy')
-        found = True
-    except ImportError:
-        found = False
+from pyworkflow.utils import Environ
+from pyworkflow.em.data import NormalMode
+from pyworkflow.em.packages.xmipp3.convert import rowToObject, objectToRow
+import xmipp
 
-    errors = []
-    if not found:
-        errors.append("ProDy not found in the system")
-
-    return errors
+def getNMAEnviron():
+    """ Create the needed environment for NMA programs. """
+    from pyworkflow.em.packages.xmipp3 import getEnviron
+    environ = getEnviron()
+    environ.update({'PATH': os.environ['NMA_HOME']}, position=Environ.BEGIN)
+    return environ

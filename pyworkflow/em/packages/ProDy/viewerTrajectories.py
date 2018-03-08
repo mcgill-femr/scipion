@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:     Javier Mota (jmota@cnb.csic.es)
+# * Authors:     Javier Mota Garcia (jmota@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -24,26 +24,35 @@
 # *
 # **************************************************************************
 """
-This sub-package contains data and protocol classes
-wrapping Prody programs
+This module implement the wrappers around ProDy protocol
+visualization program.
 """
-import imp
 
-from bibtex import _bibtex # Load bibtex dict with references
-from protocol_ProDy import ProdyProt
+from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO
+from pyworkflow.em import *
+from pyworkflow.gui.project import ProjectWindow
 from pdbtoTrajectories import computePdbTrajectories
-from viewer import ProdyViewer
+from prody import *
+from pyworkflow.em.packages.xmipp3.nma import viewer_nma
 
-def validateInstallation():
-    """ This function will be used to check if Prody is properly installed. """
-    try:
-        imp.find_module('ProDy')
-        found = True
-    except ImportError:
-        found = False
+OBJCMD_NMA_VMD = "Display VMD animation"
 
-    errors = []
-    if not found:
-        errors.append("ProDy not found in the system")
+class ProdyTrajectoriesViewer(viewer_nma):
 
-    return errors
+    _targets = [computePdbTrajectories]
+    _environments = [DESKTOP_TKINTER, WEB_DJANGO]
+
+    def _defineParams(self, form):
+        self.viewer_nma._defineParams(form)
+
+    def _getVisualizeDict(self):
+        return {'displayModes': self._viewParam,
+                'displayVmd': self._viewSingleMode,
+                }
+
+    def _viewSingleModes(self):
+        self.viewer_nma._viewSingleModes(self._getVisualizeDict())
+
+
+ProjectWindow.registerObjectCommand(OBJCMD_NMA_VMD,
+                                    viewer_nma.showVmdView)

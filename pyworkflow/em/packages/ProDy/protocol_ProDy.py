@@ -170,13 +170,13 @@ class ProdyProt(EMProtocol):
 
     '''def _validate(self):
         errors = []
-        if which('prody') is '':
-            errors.append('You should have the program prody in the PATH')
+        if which('ProDy') is '':
+            errors.append('You should have the program ProDy in the PATH')
         return errors'''
 
     '''def _warnings(self):
         warnings = []
-        text = commands.getoutput("prody --version")
+        text = commands.getoutput("ProDy --version")
         print text
         version = text[14:19]
 

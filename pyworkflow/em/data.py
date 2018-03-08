@@ -813,6 +813,19 @@ class PdbFile(EMFile):
     def setOrigin(self, newOrigin):
         self._origin = newOrigin
 
+class TrajectoryPdb(EMFile):
+
+    def __init__(self, filename=None, **kwargs):
+        EMFile.__init__(self, filename, **kwargs)
+        self._Pdb = None
+        self._trajectory = None
+
+    def getTrajectory(self):
+        return self._trajectory.get()
+
+    def getPdb(self):
+        return self._Pdb
+
 
 class EMSet(Set, EMObject):
 
@@ -1236,6 +1249,10 @@ class SetOfDefocusGroup(EMSet):
 class SetOfPDBs(EMSet):
     """ Set containing PDB items. """
     ITEM_TYPE = PdbFile
+
+class SetOfTrajectories(EMSet):
+    """Set containing trajectory items"""
+    ITEM_TYPE = TrajectoryPdb
 
 
 class Coordinate(EMObject):
