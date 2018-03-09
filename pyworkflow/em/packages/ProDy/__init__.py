@@ -32,7 +32,10 @@ import imp
 from bibtex import _bibtex # Load bibtex dict with references
 from protocol_ProDy import ProdyProt
 from pdbtoTrajectories import computePdbTrajectories
+from computePCATrajectory import computeModesPcaPdb
 from viewer import ProdyViewer
+from viewerPCA import ProdyViewerPca
+#from viewerTrajectories import ProdyTrajectoriesViewer
 
 def validateInstallation():
     """ This function will be used to check if Prody is properly installed. """

@@ -63,29 +63,11 @@ class ProdyProt(EMProtocol):
         form.addParam('Pdb', PointerParam, pointerClass='PdbFile',
                       label='Input Pdb', important=True,
                       condition='FilePdb == %s' % PDB)
-        #form.addParam('initTrajectory', PathParam,
-        #          label="Initial Trajectory",
-        #              important=True)
-        #form.addParam('finTrajectory', PathParam, label="Final Trajectory",
-        #              important=True)
-
-        form.addSection(label='Animation')
-        form.addParam('amplitude', FloatParam, default=50,
-                      label="Amplitude")
-        form.addParam('nframes', IntParam, default=10,
-                      expertLevel=LEVEL_ADVANCED,
-                      label='Number of frames')
-        form.addParam('downsample', FloatParam, default=1,
-                      expertLevel=LEVEL_ADVANCED,
-                      label='Downsample pseudoatomic structure',
-                      help='Downsample factor 2 means removing one half of '
-                           'the atoms or pseudoatoms.')
-        form.addParam('pseudoAtomThreshold', FloatParam, default=0,
-                      expertLevel=LEVEL_ADVANCED,
-                      label='Pseudoatom mass threshold',
-                      help='Remove pseudoatoms whose mass is below this '
-                           'threshold. This value should be between 0 and 1.\n'
-                           'A threshold of 0 implies no atom removal.')
+        form.addParam('initTrajectory', PathParam,
+                     label="Initial Trajectory",
+                      important=True)
+        form.addParam('finTrajectory', PathParam, label="Final Trajectory",
+                      important=True)
 
     def _insertAllSteps(self):
         self._insertFunctionStep('prodyWrapper')
@@ -95,16 +77,16 @@ class ProdyProt(EMProtocol):
         # createLink(self.initTrajectory.get(), 'initTraj.dcd')
         # createLink(self.finTrajectory.get(), 'finTraj.dcd')'''
         #
-        # file = open(self._getExtraPath("paths.txt"), "w")
-        # if self.Pdb.get() == None:
-        #     file.write(self.inputStructure.get() + '\n')
-        #     self.inputPdb = self.inputStructure.get()
-        # else:
-        #     file.write(self.inputPdb.get().getFileName() + '\n')
-        #     self.inputPdb = self.Pdb.get().getFileName()
-        # #file.write(self.initTrajectory.get() + '\n')
-        # #file.write(self.finTrajectory.get() + '\n')
-        # file.close()
+        file = open(self._getExtraPath("paths.txt"), "w")
+        if self.Pdb.get() == None:
+            file.write(self.inputStructure.get() + '\n')
+            self.inputPdb = self.inputStructure.get()
+        else:
+            file.write(self.inputPdb.get().getFileName() + '\n')
+            self.inputPdb = self.Pdb.get().getFileName()
+        #file.write(self.initTrajectory.get() + '\n')
+        #file.write(self.finTrajectory.get() + '\n')
+        file.close()
 
         if self.FilePdb == FILE:
             print('1')
@@ -118,7 +100,7 @@ class ProdyProt(EMProtocol):
         print self.inputPdb
         sys.stdout.flush()
         self._computeANM()
-        #self._computePCA()
+        self._computePCA()
 
     def _computeANM(self):
 
@@ -132,8 +114,8 @@ class ProdyProt(EMProtocol):
         self.anm = calcANM(pdb_ca)
         print("En _computeANM")
         sys.stdout.flush()
-        #fnOutAnm = self._getExtraPath("anmModes")
-        #saveModel(self.anm, fnOutAnm)
+        fnOutAnm = self._getExtraPath("anmModes")
+        saveModel(self.anm, fnOutAnm)
 
     def _computePCA(self):
         sim = parsePDB(self.inputPdb)
@@ -149,7 +131,7 @@ class ProdyProt(EMProtocol):
         fnOutPca = self._getExtraPath("pcaModes")
         saveModel(self.pca, fnOutPca)
 
-    def _summary(self):
+    '''def _summary(self):
         try:
             anm = self._getExtraPath("anmModes.anm.npz")
             pca = self._getExtraPath("pcaModes.pca.npz")
@@ -163,7 +145,7 @@ class ProdyProt(EMProtocol):
             summary = []
             summary.append("At the end of the process it will be shown an "
                            "overlap table between anm and pca.")
-            return summary
+            return summary'''
 
     def _citations(self):
         return ['Kurkcuoglu2016']

@@ -28,34 +28,40 @@ This module implement the wrappers around ProDy protocol
 visualization program.
 """
 
-from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO
+from pyworkflow.viewer import ProtocolViewer, DESKTOP_TKINTER, WEB_DJANGO
 from pyworkflow.em import *
-from pyworkflow.gui.project import ProjectWindow
-from pdbtoTrajectories import computePdbTrajectories
+from computePCATrajectory import computeModesPcaPdb
 from prody import *
-from pyworkflow.em.packages.xmipp3.nma import viewer_nma
 
-OBJCMD_NMA_VMD = "Display VMD animation"
 
-class ProdyTrajectoriesViewer(viewer_nma):
-
-    _targets = [computePdbTrajectories]
+class ProdyViewerPca(Viewer):
+    """ Wrapper to visualize Pdb to SAXS. """
+    _targets = [computeModesPcaPdb]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def __init__(self, **args):
         Viewer.__init__(self, **args)
 
-    def _defineParams(self, form):
-        self.viewer_nma._defineParams(form)
+    def visualize(self, obj, **args):
 
-    def _getVisualizeDict(self):
-        return {'displayModes': self._viewParam,
-                'displayVmd': self._viewSingleMode,
-                }
+        cls = type(obj)
 
-    def _viewSingleModes(self):
-        self.viewer_nma._viewSingleModes(self._getVisualizeDict())
+        if issubclass(cls, computeModesPcaPdb):
+            fnPca = obj._getExtraPath("pcaModes.pca.npz")
+            initPdb = obj._getExtraPath("initPdb.pdb")
+            fnInitTraj = obj._getExtraPath("initTraj.dcd")
+            print type(initPdb)
+            sys.stdout.flush()
+            Pdb = parsePDB(initPdb)
+
+            pca = loadModel(fnPca)
+
+            initTraj = Trajectory(fnInitTraj)
+            initTraj.setCoords(Pdb) # Set the initial structure as the reference
+            initTraj.setAtoms(Pdb.ca)  # A shortcut for .select('ca')
+
+            showProjection(initTraj, pca[:2], color='g', new_fig=True)
 
 
-ProjectWindow.registerObjectCommand(OBJCMD_NMA_VMD,
-                                    viewer_nma.showVmdView)
+
+

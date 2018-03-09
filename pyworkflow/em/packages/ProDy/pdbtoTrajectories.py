@@ -29,6 +29,7 @@ import pyworkflow.protocol.constants as pwconst
 from prody import *
 from pyworkflow.utils import *
 import time
+from shutil import copy
 
 SCIPION_HOME = os.environ['SCIPION_HOME']
 
@@ -147,7 +148,7 @@ class computePdbTrajectories(EMProtocol):
                         'maxDev': self.maxDeviation.get(),
                         'acceptParam': self.acceptanceParam.get(),
                         'maxSteps': self.maxNumSteps.get(),
-                        'spr': self.spring.get(),
+                        # 'spr': self.spring.get(),
                         'cycle': self.cycleNumber.get(),
                         'minLen': self.minLen.get(),
                         'tmdLen': self.tmdLen.get(),
@@ -195,7 +196,7 @@ class computePdbTrajectories(EMProtocol):
                     + " " + str(self._params['stepCut'])
                     + " " + str(self._params['cutoff'])
                     + " " + str(self._params['maxSteps'])
-                    + " " + str(self._params['acceptParam']))
+                    + " " + str(self._params['acceptParam']) + " & ")
                     #+ " 2>> " + self._getLogsPath('run.stderr') + "
                # & ")
 
@@ -208,7 +209,7 @@ class computePdbTrajectories(EMProtocol):
             outputFn = self._getExtraPath('results{0}.log'.format(traj+1))
             finished = 0
             while not finished:
-                time.sleep(20)
+                time.sleep(10)
                 file = open(outputFn, 'r')
                 lines = file.readlines()
                 for line in lines:
@@ -323,12 +324,30 @@ class computePdbTrajectories(EMProtocol):
     def createOutputStep(self):
         print("En createOutputStep")
         sys.stdout.flush()
+        time.sleep(10)
+
+        copy('/home/javiermota/ProDy/trajectoriesDCD/trajectory1.dcd',
+             self._getExtraPath('trajectory1.dcd'))
+        copy('/home/javiermota/ProDy/trajectoriesDCD/trajectory2.dcd',
+             self._getExtraPath('trajectory2.dcd'))
+
+        setOfPDBs = self._createSetOfPDBs()
 
         for n in range(self.numTrajectories.get()):
             ens = parseDCD(self._getExtraPath("trajectory%i.dcd" %(n+1)))
             for i, conformation in enumerate(ens):
                 writePDB(self._getExtraPath("trajectory%i_pdb%i" %(n+1, i+1)),
                          conformation)
+
+                if exists(self._getExtraPath("trajectory%i_pdb%i" %(n+1, i+1))):
+                    pdb = PdbFile(self._getExtraPath("trajectory%i_pdb%i" %(n+1,
+                                                                        i+1)))
+                    setOfPDBs.append(pdb)
+
+        self._defineOutputs(outputPDBs=setOfPDBs)
+        self._defineSourceRelation(self.initialPdb.get(), setOfPDBs)
+        if self.useFinalPdb:
+            self._defineSourceRelation(self.finalPdb.get(), setOfPDBs)
 
 
 
