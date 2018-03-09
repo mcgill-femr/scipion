@@ -183,8 +183,7 @@ class computePdbTrajectories(EMProtocol):
             self.runJob("VMDARGS='text with blanks' vmd -dispdev text -e " +
                         os.path.abspath(os.environ['SCIPION_HOME'] +
                         '/software/em/prody/vmd-1.9.3/lib/plugins/noarch/tcl'
-                        '/comd/comd.tcl'),
-                        args)
+                        '/comd/comd.tcl'),args)
 
             outputFn = self._getExtraPath('results{0}.log'.format(traj+1))
             finished = 0
