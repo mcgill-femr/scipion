@@ -154,7 +154,6 @@ class computePdbTrajectories(EMProtocol):
                         'tmdLen': self.tmdLen.get(),
                         'stepCut': self.stepCut.get()
                         }
-
         if self.useFinalPdb.get() is True:
             self._params['finPdb'] = self.finalPdb.get().getFileName()
             self._params['cycle'] = self.defaultCycles
@@ -173,12 +172,13 @@ class computePdbTrajectories(EMProtocol):
                     + " " + self._params['finPdb']
                     + " " + str(self._params['cycle'])
                     + " " + str(self._params['maxDev'])
-                    + " " + str(self._params['minLen'])
+                    + " " + str(self._params['acceptParam'])
                     + " " + str(self._params['stepCut'])
+                    + " " + str(self._params['minLen'])
                     + " " + str(self._params['tmdLen'])
                     + " " + str(self._params['cutoff'])
                     + " " + str(self._params['maxSteps'])
-                    + " " + str(self._params['acceptParam']) + " & ")
+                    + " & ")
 
             self.runJob("VMDARGS='text with blanks' vmd -dispdev text -e " +
                         os.path.abspath(os.environ['SCIPION_HOME'] +
@@ -312,12 +312,9 @@ class computePdbTrajectories(EMProtocol):
             ens.setCoords(protein)
             ens.setAtoms(protein)
             for i, conformation in enumerate(ens):
-                writePDB(self._getExtraPath("trajectory%i_pdb%i" % (n + 1, i + 1)),
-                                             conformation)
-
-            if exists(self._getExtraPath("trajectory%i_pdb%i" % (n + 1, i + 1))):
-                pdb = PdbFile(self._getExtraPath("trajectory%i_pdb%i" %(n+1,
-                                                                        i+1)))
+                fnPdb = self._getExtraPath("trajectory%i_pdb%i" % (n + 1,i + 1))
+                writePDB(fnPdb, ens.getConformation(i))
+                pdb = PdbFile(fnPdb)
                 setOfPDBs.append(pdb)
 
         self._defineOutputs(outputPDBs=setOfPDBs)

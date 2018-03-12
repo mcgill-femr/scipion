@@ -72,12 +72,14 @@ class computeModesPcaPdb(EMProtocol):
         createLink(self.initTrajectory.get(), self._getExtraPath(
             'initTraj.dcd'))
         print type(self.inputStructure.get())
+        time.sleep(10)
         sim = parsePDB(self.inputStructure.get())
+        protein = sim.select('protein and not hydrogen').copy()
         #initialTrajectory = self.initTrajectory.get()
         #finalTrajectory = self.finTrajectory.get()
         combined_traj = Trajectory(self.initTrajectory.get())
-        combined_traj.setCoords(sim)
-        combined_traj.setAtoms(sim.ca)
+        combined_traj.setCoords(protein)
+        combined_traj.setAtoms(protein)
         '''combined_traj.addFile(finalTrajectory)'''
         self.pca = PCA('AMPAR trajectories')
         self.pca.buildCovariance(combined_traj)

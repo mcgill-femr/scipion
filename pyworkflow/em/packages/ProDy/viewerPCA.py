@@ -48,17 +48,18 @@ class ProdyViewerPca(Viewer):
 
         if issubclass(cls, computeModesPcaPdb):
             fnPca = obj._getExtraPath("pcaModes.pca.npz")
-            initPdb = obj._getExtraPath("initPdb.pdb")
+            initPdb = obj._getExtraPath("inputPdb.pdb")
             fnInitTraj = obj._getExtraPath("initTraj.dcd")
-            print type(initPdb)
-            sys.stdout.flush()
+
             Pdb = parsePDB(initPdb)
+            protein = Pdb.select('protein and not hydrogen').copy()
 
             pca = loadModel(fnPca)
 
             initTraj = Trajectory(fnInitTraj)
-            initTraj.setCoords(Pdb) # Set the initial structure as the reference
-            initTraj.setAtoms(Pdb.ca)  # A shortcut for .select('ca')
+            initTraj.setCoords(protein) # Set the initial structure as the
+            # reference
+            initTraj.setAtoms(protein)  # A shortcut for .select('ca')
 
             showProjection(initTraj, pca[:2], color='g', new_fig=True)
 
