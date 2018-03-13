@@ -38,6 +38,7 @@ import pyworkflow.utils as pwutils
 from constants import *
 from convert import ImageHandler
 import numpy as np
+from prody import *
 # import xmipp
 
 
@@ -813,18 +814,22 @@ class PdbFile(EMFile):
     def setOrigin(self, newOrigin):
         self._origin = newOrigin
 
-class TrajectoryPdb(EMFile):
+class TrajectoryDcd(EMFile):
 
     def __init__(self, filename=None, **kwargs):
         EMFile.__init__(self, filename, **kwargs)
-        self._Pdb = None
-        self._trajectory = None
+        fnPdb = kwargs.get('fnPdb', None)
+        if fnPdb is None:
+            self._pdb = None
+        else:
+            self._pdb = parsePDB(fnPdb)
+        self._trajectory = parseDCD(filename)
 
     def getTrajectory(self):
         return self._trajectory.get()
 
     def getPdb(self):
-        return self._Pdb
+        return self._pdb
 
 
 class EMSet(Set, EMObject):
@@ -1252,7 +1257,7 @@ class SetOfPDBs(EMSet):
 
 class SetOfTrajectories(EMSet):
     """Set containing trajectory items"""
-    ITEM_TYPE = TrajectoryPdb
+    ITEM_TYPE = TrajectoryDcd
 
 
 class Coordinate(EMObject):

@@ -49,14 +49,14 @@ class computeModesPcaPdb(EMProtocol):
                       important=True,
                       condition='FilePdb == %s' % FILE,
                       help='The input structure can be an atomic model '
-                           '(true PDB) or a pseudoatomic model(an EM volume '
+                           '(true PDB) or a pseudoatomic model (an EM volume '
                            'converted into pseudoatoms)')
         form.addParam('Pdb', PointerParam, pointerClass='PdbFile',
                       label='Input Pdb', important=True,
                       condition='FilePdb == %s' % PDB)
 
         form.addParam('initTrajectory', PathParam,
-                  label="Initial Trajectory",
+                      label="Initial Trajectory",
                       important=True)
 
         #form.addParam('finTrajectory', PathParam, label="Final Trajectory",
@@ -74,7 +74,7 @@ class computeModesPcaPdb(EMProtocol):
         print type(self.inputStructure.get())
         time.sleep(10)
         sim = parsePDB(self.inputStructure.get())
-        protein = sim.select('protein and not hydrogen').copy()
+        protein = sim.select('name CA').copy()
         #initialTrajectory = self.initTrajectory.get()
         #finalTrajectory = self.finTrajectory.get()
         combined_traj = Trajectory(self.initTrajectory.get())
