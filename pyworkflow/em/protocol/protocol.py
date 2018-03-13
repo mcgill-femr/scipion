@@ -143,6 +143,9 @@ class EMProtocol(Protocol):
     def _createSetOfPDBs(self, suffix=''):
         return self.__createSet(SetOfPDBs, 'pdbs%s.sqlite', suffix)
 
+    def _createSetOfTrajectories(self, suffix=''):
+        return self.__createSet(SetOfTrajectories, 'dcds%s.sqlite', suffix)
+
     def _defineSourceRelation(self, srcObj, dstObj):
         """ Add a DATASOURCE relation between srcObj and dstObj """
         self._defineRelation(RELATION_SOURCE, srcObj, dstObj)

@@ -244,8 +244,6 @@ class computePdbTrajectories(EMProtocol):
         writeDCD(self._getExtraPath("combined_all_trajectories.dcd"),
                                all_trajectories)
 
-        #tr = TrajectoryPdb(self._getExtraPath('trajectory.dcd'))
-        #print tr
         '''self._insertFunctionStep('animateModesStep', n,
                                  self.amplitude.get(), self.nframes.get(),
                                  self.downsample.get(),
@@ -302,20 +300,29 @@ class computePdbTrajectories(EMProtocol):
         sys.stdout.flush()
 
         setOfPDBs = self._createSetOfPDBs()
+        setOfTrajectories = self._createSetOfTrajectories()
         for n in range(self.numTrajectories.get()):
-            ens = parseDCD(self._getExtraPath('trajectory{:02d}.dcd'.format(n+1)))
+            fnDcd = self._getExtraPath('trajectory{:02d}.dcd'.format(n+1))
+            ens = parseDCD(fnDcd)
             atoms = parsePDB(self._getExtraPath('walker1_ionized.pdb'))
             protein = atoms.select('protein and not hydrogen').copy()
             ens.setCoords(protein)
             ens.setAtoms(protein)
+            fnPdb = []
             for i, conformation in enumerate(ens):
-                fnPdb = self._getExtraPath('trajectory{:02d}_pdb{:02d}'.format(n + 1,i + 1))
-                writePDB(fnPdb, ens.getConformation(i))
-                pdb = PdbFile(fnPdb)
+                fnPdb.append(self._getExtraPath('trajectory{:02d}_pdb{:02d}'.format(n + 1,i + 1)))
+                writePDB(fnPdb[i], ens.getConformation(i))
+                pdb = PdbFile(fnPdb[i])
                 setOfPDBs.append(pdb)
+
+            traj = TrajectoryDcd(fnDcd, fnPdb=fnPdb[0])
+            setOfTrajectories.append(traj)
 
         self._defineOutputs(outputPDBs=setOfPDBs)
         self._defineSourceRelation(self.initialPdb.get(), setOfPDBs)
+
+        self._defineOutputs(outputTrajs=setOfTrajectories)
+        self._defineSourceRelation(self.initialPdb.get(), setOfTrajectories)
 
         print("Finished createOutputStep")
         sys.stdout.flush()

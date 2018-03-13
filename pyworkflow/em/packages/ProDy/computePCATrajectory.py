@@ -49,7 +49,7 @@ class computeModesPcaPdb(EMProtocol):
                       important=True,
                       condition='FilePdb == %s' % FILE,
                       help='The input structure can be an atomic model '
-                           '(true PDB) or a pseudoatomic model(an EM volume '
+                           '(true PDB) or a pseudoatomic model (an EM volume '
                            'converted into pseudoatoms)')
         form.addParam('Pdb', PointerParam, pointerClass='PdbFile',
                       label='Input Pdb', important=True,
