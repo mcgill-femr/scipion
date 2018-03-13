@@ -51,7 +51,7 @@ def createVmdView(protocol):
     pdbs = protocol.outputPDBs
     mystring = ''
     for p in pdbs:
-        mystring += str(p._filename)+".pdb"+" "
+        mystring += str(p._filename) + " "
     return VmdView("%s" % mystring)
 
 def showVmdView(protocol):

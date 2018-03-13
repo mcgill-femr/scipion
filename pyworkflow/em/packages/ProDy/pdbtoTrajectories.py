@@ -211,33 +211,42 @@ class computePdbTrajectories(EMProtocol):
                 w1_traj = parseDCD(self._getExtraPath('walker1_trajectory.dcd'))
                 w1_traj.setCoords(w1_start)
                 w1_traj.setAtoms(w1_start.select('protein and not hydrogen'))
-                writeDCD( self._getExtraPath(
-                    'walker1_trajectory_protein.dcd'), w1_traj)
+                writeDCD(self._getExtraPath(
+                         'walker1_trajectory{:02d}_protein.dcd'.format(traj+1)),
+                         w1_traj)
 
                 w2_start = parsePDB( self._getExtraPath('walker2_ionized.pdb'))
                 w2_traj = parseDCD( self._getExtraPath('walker2_trajectory.dcd'))
                 w2_traj.setCoords(w2_start)
                 w2_traj.setAtoms(w2_start.select('protein and not hydrogen'))
-                writeDCD( self._getExtraPath(
-                    'walker2_trajectory_protein.dcd'), w2_traj)
+                writeDCD(self._getExtraPath(
+                         'walker2_trajectory{:02d}_protein.dcd'.format(traj+1)),
+                         w2_traj)
 
-                combined_traj = parseDCD( self._getExtraPath(
-                                            'walker1_trajectory_protein.dcd'))
+                combined_traj = parseDCD(self._getExtraPath(
+                                         'walker1_trajectory{:02d}_protein.dcd'
+                                         .format(traj+1)))
 
                 for i in reversed(range(len(w2_traj))):
                     combined_traj.addCoordset(w2_traj.getConformation(i))
 
                 writeDCD( self._getExtraPath('trajectory{:02d}.dcd'.format(traj+1)),
                           combined_traj)
+                os.system('mv walker2_trajectory.dcd walker2_trajectory{:02d}'
+                          '.dcd'.format(traj + 1))
             else:
                 w1_start = parsePDB( self._getExtraPath('walker1_ionized.pdb'))
                 w1_traj = parseDCD( self._getExtraPath('walker1_trajectory.dcd'))
                 w1_traj.setCoords(w1_start)
                 w1_traj.setAtoms(w1_start.select('protein and not hydrogen'))
-                writeDCD( self._getExtraPath('trajectory{:02d}.dcd'.format(traj+1)),
-                          w1_traj)
+                writeDCD(self._getExtraPath('trajectory{:02d}.dcd'.format(traj+1)),
+                         w1_traj)
 
-            all_trajectories.addFile(self._getExtraPath('trajectory{:02d}.dcd'.format(traj+1)))
+            all_trajectories.addFile(self._getExtraPath('trajectory{:02d}.dcd'.
+                                                        format(traj+1)))
+            os.system('mv walker1_trajectory.dcd walker1_trajectory{:02d}.dcd'.
+                      format(traj+1))
+
 
         elapsed = time.time()-t
         print elapsed
