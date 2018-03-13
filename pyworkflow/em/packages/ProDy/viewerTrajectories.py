@@ -34,10 +34,9 @@ from pyworkflow.gui.project import ProjectWindow
 from pdbtoTrajectories import computePdbTrajectories
 from prody import *
 from pyworkflow.em.packages.xmipp3.nma import viewer_nma
+import xmipp
 
-OBJCMD_NMA_VMD = "Display VMD animation"
-
-class ProdyTrajectoriesViewer(viewer_nma):
+class ProdyTrajectoriesViewer(Viewer):
 
     _targets = [computePdbTrajectories]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
@@ -45,17 +44,15 @@ class ProdyTrajectoriesViewer(viewer_nma):
     def __init__(self, **args):
         Viewer.__init__(self, **args)
 
-    def _defineParams(self, form):
-        self.viewer_nma._defineParams(form)
+    def visualize(self, obj, **args):
+        showVmdView(self.protocol)
 
-    def _getVisualizeDict(self):
-        return {'displayModes': self._viewParam,
-                'displayVmd': self._viewSingleMode,
-                }
+def createVmdView(protocol):
+    pdbs = protocol.outputPDBs
+    mystring = ''
+    for p in pdbs:
+        mystring += str(p._filename)+".pdb"+" "
+    return VmdView("%s" % mystring)
 
-    def _viewSingleModes(self):
-        self.viewer_nma._viewSingleModes(self._getVisualizeDict())
-
-
-ProjectWindow.registerObjectCommand(OBJCMD_NMA_VMD,
-                                    viewer_nma.showVmdView)
+def showVmdView(protocol):
+    createVmdView(protocol).show()
