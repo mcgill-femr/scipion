@@ -227,20 +227,17 @@ class computePdbTrajectories(EMProtocol):
                 for i in reversed(range(len(w2_traj))):
                     combined_traj.addCoordset(w2_traj.getConformation(i))
 
-                writeDCD( self._getExtraPath('trajectory%i.dcd'%(traj+1)),
+                writeDCD( self._getExtraPath('trajectory{:02d}.dcd'.format(traj+1)),
                           combined_traj)
             else:
                 w1_start = parsePDB( self._getExtraPath('walker1_ionized.pdb'))
                 w1_traj = parseDCD( self._getExtraPath('walker1_trajectory.dcd'))
                 w1_traj.setCoords(w1_start)
                 w1_traj.setAtoms(w1_start.select('protein and not hydrogen'))
-                writeDCD( self._getExtraPath('trajectory%i.dcd'%(traj+1)),
+                writeDCD( self._getExtraPath('trajectory{:02d}.dcd'.format(traj+1)),
                           w1_traj)
 
-            all_trajectories.addFile(self._getExtraPath("trajectory%i.dcd"%(
-                traj+1)))
-            #os.system("mv  " + self._getExtraPath("trajectory.dcd") + " " +
-                #self._getExtraPath("trajectory%i.dcd" %(traj+1)))
+            all_trajectories.addFile(self._getExtraPath('trajectory{:02d}.dcd'.format(traj+1)))
 
         elapsed = time.time()-t
         print elapsed
@@ -306,13 +303,13 @@ class computePdbTrajectories(EMProtocol):
 
         setOfPDBs = self._createSetOfPDBs()
         for n in range(self.numTrajectories.get()):
-            ens = parseDCD(self._getExtraPath("trajectory%i.dcd" %(n+1)))
+            ens = parseDCD(self._getExtraPath('trajectory{:02d}.dcd'.format(n+1)))
             atoms = parsePDB(self._getExtraPath('walker1_ionized.pdb'))
             protein = atoms.select('protein and not hydrogen').copy()
             ens.setCoords(protein)
             ens.setAtoms(protein)
             for i, conformation in enumerate(ens):
-                fnPdb = self._getExtraPath("trajectory%i_pdb%i" % (n + 1,i + 1))
+                fnPdb = self._getExtraPath('trajectory{:02d}_pdb{:02d}'.format(n + 1,i + 1))
                 writePDB(fnPdb, ens.getConformation(i))
                 pdb = PdbFile(fnPdb)
                 setOfPDBs.append(pdb)
