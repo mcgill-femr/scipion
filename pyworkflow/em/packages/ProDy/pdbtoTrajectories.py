@@ -194,10 +194,7 @@ class computePdbTrajectories(EMProtocol):
                 for line in lines:
 
                     if line.find("ERROR") != -1:
-                        raise OSError('The job had an error and'
-                                      'could not calculate the '
-                                      'trajectory. Please see '
-                                      'results{0}.log'.format(traj+1))
+                        raise OSError(line)
 
                     elif line.find("FINISHED") != -1:
                         finished = 1
