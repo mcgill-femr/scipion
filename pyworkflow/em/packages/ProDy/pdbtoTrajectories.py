@@ -310,7 +310,7 @@ class computePdbTrajectories(EMProtocol):
             ens.setAtoms(protein)
             fnPdb = []
             for i, conformation in enumerate(ens):
-                fnPdb.append(self._getExtraPath('trajectory{:02d}_pdb{:02d}'.format(n + 1,i + 1)))
+                fnPdb.append(self._getExtraPath('trajectory{:02d}_pdb{:02d}.pdb'.format(n + 1,i + 1)))
                 writePDB(fnPdb[i], ens.getConformation(i))
                 pdb = PdbFile(fnPdb[i])
                 setOfPDBs.append(pdb)
