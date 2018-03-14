@@ -32,13 +32,14 @@ from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO
 from pyworkflow.em import *
 from pyworkflow.gui.project import ProjectWindow
 from pdbtoTrajectories import computePdbTrajectories
+from protocol_import import ProtImportTrajectores
 from prody import *
 from pyworkflow.em.packages.xmipp3.nma import viewer_nma
 import xmipp
 
 class ProdyTrajectoriesViewer(Viewer):
 
-    _targets = [computePdbTrajectories]
+    _targets = [computePdbTrajectories, ProtImportTrajectores]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def __init__(self, **args):
@@ -54,8 +55,14 @@ def createVmdView(protocol):
     trajectories = protocol.outputTrajs
     for i, trajectory in enumerate(trajectories):
         fname = str(trajectory._filename)
-        prefix = '.'.join(fname.split('.')[:-1])
-        fhCmd.write("mol new " + prefix + "_pdb01.pdb\n")
+
+        initPdb = trajectory.getInitialPdb()
+        if initPdb == None:
+            prefix = '.'.join(fname.split('.')[:-1])
+            fhCmd.write("mol new " + prefix + "_pdb01.pdb\n")
+        else:
+            fhCmd.write("mol new " + str(initPdb) + "\n")
+
         fhCmd.write("mol addfile " + fname + "\n")
         fhCmd.write("animate delete  beg 0 end 0 skip 0 %d\n" %i)
     # pdbs = protocol.outputPDBs

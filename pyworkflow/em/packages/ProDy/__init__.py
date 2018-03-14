@@ -36,6 +36,7 @@ from computePCATrajectory import computeModesPcaPdb
 from viewer import ProdyViewer
 from viewerPCA import ProdyViewerPca
 from viewerTrajectories import ProdyTrajectoriesViewer
+from protocol_import import ProtImportTrajectores
 
 def validateInstallation():
     """ This function will be used to check if Prody is properly installed. """

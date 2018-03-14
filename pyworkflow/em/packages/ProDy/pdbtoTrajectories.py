@@ -324,7 +324,8 @@ class computePdbTrajectories(EMProtocol):
                 pdb = PdbFile(fnPdb[i])
                 setOfPDBs.append(pdb)
 
-            traj = TrajectoryDcd(fnDcd, fnPdb=fnPdb[0])
+            traj = TrajectoryDcd(fnDcd,
+                   self._getExtraPath('trajectory{:02d}_pdb01.pdb'.format(n+1)))
             setOfTrajectories.append(traj)
 
         self._defineOutputs(outputPDBs=setOfPDBs)
