@@ -35,7 +35,7 @@ from prody import *
 import glob
 
 
-class ProtImportTrajectores(ProtImportFiles):
+class ProtImportTrajectories(ProtImportFiles):
     """ Protocol to import trajectories for Prody protocols """
     _label = 'import trajectories'
     
