@@ -38,7 +38,7 @@ import pyworkflow.utils as pwutils
 from constants import *
 from convert import ImageHandler
 import numpy as np
-from prody import *
+#from prody import *
 # import xmipp
 
 
@@ -769,7 +769,7 @@ class PdbFile(EMFile):
         # origin stores a matrix that using as input the point (0,0,0)
         # provides  the position of the actual origin in the system of
         # coordinates of the default origin.
-        # _origin is an object of the class Transformor shifts
+        # _origin is an object of the class Transform shifts
         # units are Angstroms (in Image units are A)
         self._origin = None
 
@@ -818,18 +818,18 @@ class TrajectoryDcd(EMFile):
 
     def __init__(self, filename=None, **kwargs):
         EMFile.__init__(self, filename, **kwargs)
-        fnPdb = kwargs.get('fnPdb', None)
-        if fnPdb is None:
-            self._pdb = None
-        else:
-            self._pdb = parsePDB(fnPdb)
-        self._trajectory = parseDCD(filename)
-
-    def getTrajectory(self):
-        return self._trajectory.get()
-
-    def getPdb(self):
-        return self._pdb
+    #     fnPdb = kwargs.get('fnPdb', None)
+    #     if fnPdb is None:
+    #         self._pdb = None
+    #     else:
+    #         self._pdb = parsePDB(fnPdb)
+    #     self._trajectory = parseDCD(filename)
+    #
+    # def getTrajectory(self):
+    #     return self._trajectory.get()
+    #
+    # def getPdb(self):
+    #     return self._pdb
 
 
 class EMSet(Set, EMObject):

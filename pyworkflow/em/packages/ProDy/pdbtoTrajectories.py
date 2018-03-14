@@ -160,7 +160,7 @@ class computePdbTrajectories(EMProtocol):
         else:
             self._params['finPdb'] = self._params['initPdb']
 
-        all_trajectories = Trajectory("all trajectories combined")
+        # all_trajectories = Trajectory("all trajectories combined")
         t = time.time()
         for traj in range(self.numTrajectories.get()):
             print("Calculating trajectory %d..." %(traj+1))
@@ -194,10 +194,7 @@ class computePdbTrajectories(EMProtocol):
                 for line in lines:
 
                     if line.find("ERROR") != -1:
-                        raise OSError('The job had an error and'
-                                      'could not calculate the '
-                                      'trajectory. Please see '
-                                      'results{0}.log'.format(traj+1))
+                        raise OSError(line)
 
                     elif line.find("FINISHED") != -1:
                         finished = 1
@@ -242,16 +239,16 @@ class computePdbTrajectories(EMProtocol):
                 writeDCD(self._getExtraPath('trajectory{:02d}.dcd'.format(traj+1)),
                          w1_traj)
 
-            all_trajectories.addFile(self._getExtraPath('trajectory{:02d}.dcd'.
-                                                        format(traj+1)))
+            # all_trajectories.addFile(self._getExtraPath('trajectory{:02d}.dcd'.
+            #                                             format(traj+1)))
             os.system('mv walker1_trajectory.dcd walker1_trajectory{:02d}.dcd'.
                       format(traj+1))
 
 
         elapsed = time.time()-t
         print elapsed
-        writeDCD(self._getExtraPath("combined_all_trajectories.dcd"),
-                               all_trajectories)
+        # writeDCD(self._getExtraPath("combined_all_trajectories.dcd"),
+        #                        all_trajectories)
 
         '''self._insertFunctionStep('animateModesStep', n,
                                  self.amplitude.get(), self.nframes.get(),
