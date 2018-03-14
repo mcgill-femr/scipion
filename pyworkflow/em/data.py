@@ -819,18 +819,6 @@ class TrajectoryDcd(EMFile):
     def __init__(self, filename=None, initialPdb=None, **kwargs):
         EMFile.__init__(self, filename, **kwargs)
         self._initialPdb = String(initialPdb)
-    #     fnPdb = kwargs.get('fnPdb', None)
-    #     if fnPdb is None:
-    #         self._pdb = None
-    #     else:
-    #         self._pdb = parsePDB(fnPdb)
-    #     self._trajectory = parseDCD(filename)
-    #
-    # def getTrajectory(self):
-    #     return self._trajectory.get()
-    #
-    # def getPdb(self):
-    #     return self._pdb
 
     def setInitialPdb(self, initialPdb):
         self._initialPdb = initialPdb

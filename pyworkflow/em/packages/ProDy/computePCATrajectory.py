@@ -41,48 +41,65 @@ class computeModesPcaPdb(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label="Prody PCA Analysis")
+        form.addParam('usePdb', params.BooleanParam, default=False,
+                      label="Use a separate PDB")
         form.addParam('FilePdb', params.EnumParam, choices=['File', 'Pdb'],
                       default=0, important=True,
                       display=params.EnumParam.DISPLAY_HLIST,
+                      condition='usePdb == True',
                       label="Input file or pdb")
         form.addParam('inputStructure', PathParam, label="Input structure",
                       important=True,
-                      condition='FilePdb == %s' % FILE,
+                      condition='FilePdb == %s and usePdb == True' % FILE,
                       help='The input structure can be an atomic model '
                            '(true PDB) or a pseudoatomic model (an EM volume '
                            'converted into pseudoatoms)')
         form.addParam('Pdb', PointerParam, pointerClass='PdbFile',
                       label='Input Pdb', important=True,
-                      condition='FilePdb == %s' % PDB)
-        form.addParam('initTrajectory', PathParam,
-                      label="Initial Trajectory",
+                      condition='FilePdb == %s and usePdb == True' % PDB)
+        form.addParam('setOfTrajectories', PointerParam,
+                      pointerClass='SetOfTrajectories',
+                      label="Set of Trajectories",
                       important=True)
-
-        #form.addParam('finTrajectory', PathParam, label="Final Trajectory",
-                      #important=True)
 
 
     def _insertAllSteps(self):
         self._insertFunctionStep('_calcPCA')
 
     def _calcPCA(self):
-        createLink(self.inputStructure.get(), self._getExtraPath(
-            'inputPdb.pdb'))
-        createLink(self.initTrajectory.get(), self._getExtraPath(
-            'initTraj.dcd'))
-        print type(self.inputStructure.get())
         time.sleep(10)
-        sim = parsePDB(self.inputStructure.get())
-        protein = sim.select('name CA').copy()
-        #initialTrajectory = self.initTrajectory.get()
-        #finalTrajectory = self.finTrajectory.get()
-        combined_traj = Trajectory(self.initTrajectory.get())
-        combined_traj.setCoords(protein)
-        combined_traj.setAtoms(protein)
-        '''combined_traj.addFile(finalTrajectory)'''
-        self.pca = PCA('AMPAR trajectories')
+
+        if self.inputStructure.get() is not None:
+            pdbFileName = self.inputStructure.get()
+
+        elif self.Pdb.get() is not None:
+            pdbFileName = self.Pdb.get().getFileName()
+
+        else:
+            foundPdb = False
+            for traj in self.setOfTrajectories.get():
+                if traj._initialPdb.get() is not None:
+                    foundPdb = True
+                    pdbFileName = traj._initialPdb.get()
+                    break
+
+            if not foundPdb:
+                raise ValueError("There needs to be at least one PDB associated "
+                                 "with a trajectory or provided separately.")
+
+
+        pdb = parsePDB(pdbFileName)
+        combined_traj = Trajectory("combined traj for PCA")
+        for traj in self.setOfTrajectories.get():
+            combined_traj.addFile(traj.getFileName())
+
+        combined_traj.setCoords(pdb)
+        combined_traj.setAtoms(pdb.ca)
+
+        self.pca = PCA('all trajectories')
         self.pca.buildCovariance(combined_traj)
         self.pca.calcModes()
+
         fnOutPca = self._getExtraPath("pcaModes")
         saveModel(self.pca, fnOutPca)
 
