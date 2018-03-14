@@ -54,7 +54,6 @@ class computeModesPcaPdb(EMProtocol):
         form.addParam('Pdb', PointerParam, pointerClass='PdbFile',
                       label='Input Pdb', important=True,
                       condition='FilePdb == %s' % PDB)
-
         form.addParam('initTrajectory', PathParam,
                       label="Initial Trajectory",
                       important=True)
