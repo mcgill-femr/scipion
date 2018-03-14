@@ -33,6 +33,7 @@ from bibtex import _bibtex # Load bibtex dict with references
 from protocol_ProDy import ProdyProt
 from pdbtoTrajectories import computePdbTrajectories
 from computePCATrajectory import computeModesPcaPdb
+from joinTrajectories import joinTrajectoriesFiles
 from viewer import ProdyViewer
 from viewerPCA import ProdyViewerPca
 from viewerTrajectories import ProdyTrajectoriesViewer
