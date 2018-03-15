@@ -816,20 +816,15 @@ class PdbFile(EMFile):
 
 class TrajectoryDcd(EMFile):
 
-    def __init__(self, filename=None, **kwargs):
+    def __init__(self, filename=None, initialPdb=None, **kwargs):
         EMFile.__init__(self, filename, **kwargs)
-    #     fnPdb = kwargs.get('fnPdb', None)
-    #     if fnPdb is None:
-    #         self._pdb = None
-    #     else:
-    #         self._pdb = parsePDB(fnPdb)
-    #     self._trajectory = parseDCD(filename)
-    #
-    # def getTrajectory(self):
-    #     return self._trajectory.get()
-    #
-    # def getPdb(self):
-    #     return self._pdb
+        self._initialPdb = String(initialPdb)
+
+    def setInitialPdb(self, initialPdb):
+        self._initialPdb = initialPdb
+
+    def getInitialPdb(self):
+        return self._initialPdb
 
 
 class EMSet(Set, EMObject):

@@ -24,48 +24,12 @@
 # *
 # **************************************************************************
 
-from pyworkflow.em import *
-import pyworkflow.protocol.constants as pwconst
-from prody import *
-from pyworkflow.utils import *
-import time
-import glob
-
-class joinTrajectoriesFiles(EMProtocol):
+from pyworkflow.em.protocol.protocol_sets import ProtUnionSet
 
 
-    def _defineParams(self, form):
+class joinTrajectorySets(ProtUnionSet):
+    _label = "Join Trajectories ProDy"
 
-        form.addSection("Trajectories")
-        form.addParam('trajFile', params.FileParam, label='Files directory',
-                      help='Choose the trajectory files directory')
-        form.addParam('pattern', params.StringParam, label = 'Pattern',
-                      help = 'The pattern must be end by .dcd. If there are '
-                             'more .dcd files in your directory try to put'
-                             'yourword*.dcd')
-
-    def _insertAllSteps(self):
-        self._insertFunctionStep('joinFiles')
-
-    def joinFiles(self):
-        time.sleep(15)
-        filesPath = self.trajFile.get('').strip()
-        filesPattern = self.pattern.get('').strip()
-
-        if filesPattern:
-            fullPattern = join(filesPath, filesPattern)
-        else:
-            fullPattern = filesPath
-
-        pattern = expandPattern(fullPattern.replace("$", ""))
-        files = glob.glob(pattern)
-        setOfTrajectories = self._createSetOfTrajectories()
-        all_trajectories = Trajectory("all trajectories combined")
-        for f in files:
-            all_trajectories.addFile(f)
-            setOfTrajectories.append(f)
-        writeDCD(self._getExtraPath("trajectories_combined.dcd"),
-                 all_trajectories)
-        self._defineOutputs(outputTrajs=setOfTrajectories)
-        self._defineSourceRelation(self.initialPdb.get(), setOfTrajectories)
-
+    def createOutputStep(self):
+        ProtUnionSet.createOutputStep(self)
+        self._defineOutputs(outputTrajs=self.outputSet)

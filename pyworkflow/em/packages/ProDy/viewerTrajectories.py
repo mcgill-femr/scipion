@@ -32,13 +32,15 @@ from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO
 from pyworkflow.em import *
 from pyworkflow.gui.project import ProjectWindow
 from pdbtoTrajectories import computePdbTrajectories
+from joinTrajectories import joinTrajectorySets
+from protocol_import import ProtImportTrajectories
 from prody import *
 from pyworkflow.em.packages.xmipp3.nma import viewer_nma
 import xmipp
 
 class ProdyTrajectoriesViewer(Viewer):
 
-    _targets = [computePdbTrajectories]
+    _targets = [computePdbTrajectories, ProtImportTrajectories, joinTrajectorySets]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def __init__(self, **args):
@@ -52,17 +54,28 @@ def createVmdView(protocol):
     fhCmd = open("viewTrajectories.vmd", 'w')
 
     trajectories = protocol.outputTrajs
+    longestLength = 0
+    longestTrajID = len(trajectories)
     for i, trajectory in enumerate(trajectories):
         fname = str(trajectory._filename)
-        prefix = '.'.join(fname.split('.')[:-1])
-        fhCmd.write("mol new " + prefix + "_pdb01.pdb\n")
+
+        initPdb = trajectory.getInitialPdb()
+        if initPdb == None:
+            prefix = '.'.join(fname.split('.')[:-1])
+            fhCmd.write("mol new " + prefix + "_pdb01.pdb\n")
+        else:
+            fhCmd.write("mol new " + str(initPdb) + "\n")
+
         fhCmd.write("mol addfile " + fname + "\n")
         fhCmd.write("animate delete  beg 0 end 0 skip 0 %d\n" %i)
-    # pdbs = protocol.outputPDBs
-    # mystring = ''
-    # for p in pdbs:
-    #     mystring += str(p._filename) + " "
+
+        if len(Trajectory(fname)) > longestLength:
+            longestLength = len(Trajectory(fname))
+            longestTrajID = i
+
+    fhCmd.write("mol top {0}\n".format(longestTrajID))
     fhCmd.close()
+
     return VmdView("%s" % mystring)
 
 def showVmdView(protocol):

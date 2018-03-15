@@ -244,6 +244,8 @@ class computePdbTrajectories(EMProtocol):
             os.system('mv walker1_trajectory.dcd walker1_trajectory{:02d}.dcd'.
                       format(traj+1))
 
+            os.system('mv rmsd.txt trajectory{:02d}_rmsd.txt'.format(traj + 1))
+
 
         elapsed = time.time()-t
         print elapsed
@@ -321,7 +323,8 @@ class computePdbTrajectories(EMProtocol):
                 pdb = PdbFile(fnPdb[i])
                 setOfPDBs.append(pdb)
 
-            traj = TrajectoryDcd(fnDcd, fnPdb=fnPdb[0])
+            traj = TrajectoryDcd(fnDcd,
+                   self._getExtraPath('trajectory{:02d}_pdb01.pdb'.format(n+1)))
             setOfTrajectories.append(traj)
 
         self._defineOutputs(outputPDBs=setOfPDBs)
