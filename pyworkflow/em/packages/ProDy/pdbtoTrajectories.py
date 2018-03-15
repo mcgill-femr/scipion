@@ -113,28 +113,6 @@ class computePdbTrajectories(EMProtocol):
                            'constant term shows the force applied to a given '
                            'structure to reach the target structure')'''
 
-        form.addSection(label='Animation')
-        form.addParam('amplitude', FloatParam, default=50,
-                      label="Amplitude")
-        form.addParam('nframes', IntParam, default=10,
-                      expertLevel=LEVEL_ADVANCED,
-                      label='Number of frames')
-        form.addParam('downsample', FloatParam, default=1,
-                      expertLevel=LEVEL_ADVANCED,
-                      # condition=isEm
-                      label='Downsample pseudoatomic structure',
-                      help='Downsample factor 2 means removing one half of the '
-                           'atoms or pseudoatoms.')
-        form.addParam('pseudoAtomThreshold', FloatParam, default=0,
-                      expertLevel=LEVEL_ADVANCED,
-                      # cond
-                      label='Pseudoatom mass threshold',
-                      help='Remove pseudoatoms whose mass is below this '
-                           'threshold. '
-                           'This value should be between 0 and 1.\n'
-                           'A threshold of 0 implies no atom removal.')
-
-
     def _insertAllSteps(self):
         self._insertFunctionStep('createTrajectories')
         self._insertFunctionStep('createOutputStep')
@@ -245,63 +223,6 @@ class computePdbTrajectories(EMProtocol):
                       format(traj+1))
 
             os.system('mv rmsd.txt trajectory{:02d}_rmsd.txt'.format(traj + 1))
-
-
-        elapsed = time.time()-t
-        print elapsed
-        # writeDCD(self._getExtraPath("combined_all_trajectories.dcd"),
-        #                        all_trajectories)
-
-        '''self._insertFunctionStep('animateModesStep', n,
-                                 self.amplitude.get(), self.nframes.get(),
-                                 self.downsample.get(),
-                                 self.pseudoAtomThreshold.get(),
-                                 self.pseudoAtomRadius)'''
-
-        self._insertFunctionStep('createOutputStep')
-
-    '''def animateModesStep(self, numberOfModes, amplitude, nFrames, downsample,
-                             pseudoAtomThreshold, pseudoAtomRadius):
-            makePath(self._getExtraPath('animations'))
-            self._enterWorkingDir()
-
-            if self.structureEM:
-                fn = "pseudoatoms.pdb"
-                self.runJob("nma_animate_pseudoatoms.py",
-                            "%s extra/vec_ani.pkl 7 %d "
-                            "%f extra/animations/"
-                            "animated_mode %d %d %f" % \
-                            (fn, numberOfModes, amplitude, nFrames, downsample,
-                             pseudoAtomThreshold), env=getNMAEnviron())
-            else:
-                fn = "atoms.pdb"
-                self.runJob("nma_animate_atoms.py", "%s extra/vec_ani.pkl 7 %d %f "
-                                                    "extra/animations/animated_mode "
-                                                    "%d" % \
-                            (fn, numberOfModes, amplitude, nFrames),
-                            env=getNMAEnviron())
-
-            for mode in range(7, numberOfModes + 1):
-                fnAnimation = join("extra", "animations", "animated_mode_%03d"
-                                   % mode)
-                fhCmd = open(fnAnimation + ".vmd", 'w')
-                fhCmd.write("mol new %s.pdb\n" % self._getPath(fnAnimation))
-                fhCmd.write("animate style Loop\n")
-                fhCmd.write("display projection Orthographic\n")
-                if self.structureEM:
-                    fhCmd.write("mol modcolor 0 0 Beta\n")
-                    fhCmd.write("mol modstyle 0 0 Beads %f 8.000000\n"
-                                % (pseudoAtomRadius))
-                else:
-                    fhCmd.write("mol modcolor 0 0 Index\n")
-                    # fhCmd.write("mol modstyle 0 0 Beads 1.000000 8.000000\n")
-                    fhCmd.write("mol modstyle 0 0 NewRibbons 1.800000 6.000000 "
-                                "2.600000 0\n")
-                fhCmd.write("animate speed 0.5\n")
-                fhCmd.write("animate forward\n")
-                fhCmd.close();
-
-            self._leaveWorkingDir()'''
 
     def createOutputStep(self):
         print("Starting createOutputStep")
