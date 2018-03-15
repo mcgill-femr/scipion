@@ -25,12 +25,9 @@
 # **************************************************************************
 
 from pyworkflow.em import *
-import pyworkflow.protocol.constants as pwconst
 from prody import *
-from protocol_ProDy import ProdyProt
-from pyworkflow.utils import *
+from numpy import zeros, sqrt
 import time
-from shutil import copy
 
 FILE = 0
 PDB = 1
@@ -65,41 +62,77 @@ class computeModesPcaPdb(EMProtocol):
 
     def _insertAllSteps(self):
         self._insertFunctionStep('_calcPCA')
+        self._insertFunctionStep('_createOutputStep')
 
     def _calcPCA(self):
         time.sleep(10)
 
         if self.inputStructure.get() is not None:
-            pdbFileName = self.inputStructure.get()
+            self.pdbFileName = self.inputStructure.get()
 
         elif self.Pdb.get() is not None:
-            pdbFileName = self.Pdb.get().getFileName()
+            self.pdbFileName = self.Pdb.get().getFileName()
 
         else:
             foundPdb = False
             for traj in self.setOfTrajectories.get():
                 if traj._initialPdb.get() is not None:
                     foundPdb = True
-                    pdbFileName = traj._initialPdb.get()
+                    self.pdbFileName = traj._initialPdb.get()
                     break
 
             if not foundPdb:
+                self.pdbFileName = None
                 raise ValueError("There needs to be at least one PDB associated "
                                  "with a trajectory or provided separately.")
 
 
-        pdb = parsePDB(pdbFileName)
+        pdb = parsePDB(self.pdbFileName)
         combined_traj = Trajectory("combined traj for PCA")
         for traj in self.setOfTrajectories.get():
             combined_traj.addFile(traj.getFileName())
 
         combined_traj.setCoords(pdb)
-        combined_traj.setAtoms(pdb.ca)
+
+        self.ens = Ensemble(combined_traj)
+        self.ens.setCoords(pdb)
+
+        for i, coordset in enumerate(combined_traj.getCoordsets()):
+            self.ens.addCoordset(coordset)
+
+        self.ens.setAtoms(pdb.ca)
+        self.ens.superpose()
 
         self.pca = PCA('all trajectories')
-        self.pca.buildCovariance(combined_traj)
+        self.pca.buildCovariance(self.ens)
         self.pca.calcModes()
 
         fnOutPca = self._getExtraPath("pcaModes")
         saveModel(self.pca, fnOutPca)
+
+
+    def _createOutputStep(self):
+        n = 2
+        projection = calcProjection(self.ens, self.pca[:n])
+        self.distanceMatrix = zeros((len(self.ens),len(self.ens)))
+
+        for i in range(len(self.ens)):
+            for j in range(len(self.ens)):
+                for k in range(n):
+                    self.distanceMatrix[i][j] += \
+                    (projection[i][k] - projection[j][k])**2
+
+                self.distanceMatrix[i][j] = sqrt(self.distanceMatrix[i][j])
+
+        writeArray(self._getExtraPath('distance_matrix.txt'),
+                   self.distanceMatrix,'%.18e','\t')
+        myFile = EMFile(self._getExtraPath('distance_matrix.txt'))
+        self._defineOutputs(distanceMatrix=myFile)
+
+        writeDCD(self._getExtraPath('combined_trajectory.dcd'),self.ens)
+        setOfTrajectories = self._createSetOfTrajectories()
+        trajectory = TrajectoryDcd(self._getExtraPath('combined_trajectory.dcd')
+                                   , self.pdbFileName)
+        setOfTrajectories.append(trajectory)
+        self._defineOutputs(combinedTrajectory=setOfTrajectories)
 

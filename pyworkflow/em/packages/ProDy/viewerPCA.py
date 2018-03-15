@@ -49,23 +49,52 @@ class ProdyViewerPca(Viewer):
 
         if issubclass(cls, computeModesPcaPdb):
             fnPca = obj._getExtraPath("pcaModes.pca.npz")
+            setOfTraj = obj.setOfTrajectories.get()
+
+            for i, traj in enumerate(setOfTraj):
+                Pdb = parsePDB(str(traj._initialPdb))
+                break
+
+            protein = Pdb.select('protein and not hydrogen').copy()
+
             pca = loadModel(fnPca)
-            pdb = parsePDB(obj._getExtraPath("inputPdb.pdb"))
 
-            lenTraj = len(obj.Trajectory.get())
+            combinedTrajSet = obj.combinedTrajectory
+            for combinedTraj in combinedTrajSet:
+                combinedEns = parseDCD(str(combinedTraj.getFileName()))
 
-            for i, traj in enumerate(obj.Trajectory.get()):
-                trajectory = Trajectory(traj.getFileName())
-                trajectory.setCoords(pdb)
-                trajectory.setAtoms(pdb.ca)
+            combinedEns.setCoords(protein.ca.copy())
+            combinedEns.setAtoms(protein.ca)
 
-                c = str(float(i) / float(lenTraj))
-                if i == 0:
-                    showProjection(trajectory, pca[:2], new_fig=True,
-                                   color=[c]*len(trajectory))
-                else:
-                    showProjection(trajectory, pca[:2], new_fig=False,
-                                   color=[c]*len(trajectory))
+            colors = []
+            for i, traj in enumerate(obj.setOfTrajectories.get()):
+
+                c = (random.random(), random.random(), random.random())
+
+                ens = parseDCD(str(traj._filename))
+                ens.setCoords(protein)
+                ens.setAtoms(protein.ca)
+
+                for j in range(len(ens)):
+                    if j == 0:
+                        colors.append((1,0,0))
+                    else:
+                        colors.append(c)
+
+            show, fig, ax = showProjection(combinedEns, pca[:2],
+                                           new_fig=True,
+                                           color=colors, markeredgewidth=0,
+                                           returnAx=True)
+
+            projection = calcProjection(combinedEns, pca[:2])
+            for n, point in enumerate(projection):
+                ax.annotate(str(n), (point[0], point[1]))
+
+            distanceMatrix = parseArray(str(obj.distanceMatrix
+                                            .getFileName()),'\t')
+            plt.figure()
+            showMatrix(distanceMatrix)
+            plt.show()
 
 
 

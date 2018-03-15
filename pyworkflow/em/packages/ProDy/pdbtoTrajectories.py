@@ -41,7 +41,7 @@ class computePdbTrajectories(EMProtocol):
     def _defineParams(self, form):
         self.defaultCycles = 5
 
-        form.addSection(label="Prody Trajectories")
+        form.addSection(label="ProDy Generate Trajectories")
         form.addParam('initialPdb', PointerParam, pointerClass='PdbFile',
                       label='Initial Pdb', important=False,
                       help='Choose an initial conformation using a Pdb to '
@@ -240,7 +240,7 @@ class computePdbTrajectories(EMProtocol):
             fnPdb = []
             for i, conformation in enumerate(ens):
                 fnPdb.append(self._getExtraPath('trajectory{:02d}_pdb{:02d}.pdb'.format(n + 1,i + 1)))
-                writePDB(fnPdb[i], ens.getConformation(i))
+                writePDB(fnPdb[i], conformation)
                 pdb = PdbFile(fnPdb[i])
                 setOfPDBs.append(pdb)
 
