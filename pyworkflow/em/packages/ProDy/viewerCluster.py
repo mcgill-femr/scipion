@@ -30,14 +30,17 @@ visualization program.
 
 from pyworkflow.viewer import ProtocolViewer, DESKTOP_TKINTER, WEB_DJANGO
 from pyworkflow.em import *
-from computePCATrajectory import computeModesPcaPdb
+from protocol_cluster import clusterPdbTrajectories
 from prody import *
 import matplotlib.pyplot as plt
+from Bio import Phylo
+from numpy import array, where
+from matplotlib.pyplot import gca
 
 
-class ProdyViewerPca(Viewer):
+class ProdyViewerCluster(Viewer):
     """ Wrapper to visualize Pdb to SAXS. """
-    _targets = [computeModesPcaPdb]
+    _targets = [clusterPdbTrajectories]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def __init__(self, **args):
@@ -47,53 +50,60 @@ class ProdyViewerPca(Viewer):
 
         cls = type(obj)
 
-        if issubclass(cls, computeModesPcaPdb):
-            fnPca = obj._getExtraPath("pcaModes.pca.npz")
-            setOfTraj = obj.setOfTrajectories.get()
+        if issubclass(cls, clusterPdbTrajectories):
 
-            for i, traj in enumerate(setOfTraj):
+            tree = Phylo.read(str(obj.ClusteringTree.getFileName()),
+                              'newick')
+
+            distMatrix = parseArray(str(obj.distanceMatrixFile.get().getFileName()))
+
+            subgroup_color_dict = {}
+            labels = []
+            for group in findSubgroups(tree, float(obj.subgroupCutoff.get())):
+                c = (random.random(), random.random(), random.random())
+                for label in group:
+                    subgroup_color_dict[label] = c
+                    labels.append(label)
+
+            labels = array(labels)
+
+            showTree(tree, format='plt', label_colors=subgroup_color_dict)
+
+            plt.figure()
+            reordered_matrix, indices = reorderMatrix(distMatrix, tree)
+            showMatrix(reordered_matrix, ticklabels=indices, origin='upper',
+                       allticks=True)
+
+            pca = loadModel(str(obj.pcaNpzFile.get().getFileName()) +
+                            '.pca.npz')
+
+            combinedTrajSet = obj.setOfTrajectories.get()
+            for i, traj in enumerate(combinedTrajSet):
                 Pdb = parsePDB(str(traj._initialPdb))
                 break
 
             protein = Pdb.select('protein and not hydrogen').copy()
 
-            pca = loadModel(fnPca)
-
-            combinedTrajSet = obj.combinedTrajectory
             for combinedTraj in combinedTrajSet:
                 combinedEns = parseDCD(str(combinedTraj.getFileName()))
-
-            combinedEns.setCoords(protein.ca.copy())
-            combinedEns.setAtoms(protein.ca)
+                combinedEns.setCoords(protein.ca.copy())
+                combinedEns.setAtoms(protein.ca)
 
             colors = []
-            for i, traj in enumerate(obj.setOfTrajectories.get()):
+            for i in range(len(labels)):
+                colors.append(subgroup_color_dict[labels[where(labels == str(i)
+                                                               )[0][0]]])
 
-                c = (random.random(), random.random(), random.random())
+            plt.figure()
+            show = showProjection(combinedEns, pca[:2],
+                                  color=colors, markeredgewidth=0)
 
-                ens = parseDCD(str(traj._filename))
-                ens.setCoords(protein)
-                ens.setAtoms(protein.ca)
-
-                for j in range(len(ens)):
-                    if j == 0:
-                        colors.append((1,0,0))
-                    else:
-                        colors.append(c)
-
-            show, fig, ax = showProjection(combinedEns, pca[:2],
-                                           new_fig=True,
-                                           color=colors, markeredgewidth=0,
-                                           returnAx=True)
+            ax = gca()
 
             projection = calcProjection(combinedEns, pca[:2])
             for n, point in enumerate(projection):
                 ax.annotate(str(n), (point[0], point[1]))
 
-            distanceMatrix = parseArray(str(obj.distanceMatrix
-                                            .getFileName()),'\t')
-            plt.figure()
-            showMatrix(distanceMatrix)
             plt.show()
 
 

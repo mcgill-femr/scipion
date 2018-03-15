@@ -33,6 +33,7 @@ from pyworkflow.em import *
 from computePCATrajectory import computeModesPcaPdb
 from prody import *
 import matplotlib.pyplot as plt
+from matplotlib.pyplot import gca
 
 
 class ProdyViewerPca(Viewer):
@@ -48,7 +49,8 @@ class ProdyViewerPca(Viewer):
         cls = type(obj)
 
         if issubclass(cls, computeModesPcaPdb):
-            fnPca = obj._getExtraPath("pcaModes.pca.npz")
+            pca = loadModel(str(obj.pcaNpzFile.getFileName()) + '.pca.npz')
+
             setOfTraj = obj.setOfTrajectories.get()
 
             for i, traj in enumerate(setOfTraj):
@@ -56,8 +58,6 @@ class ProdyViewerPca(Viewer):
                 break
 
             protein = Pdb.select('protein and not hydrogen').copy()
-
-            pca = loadModel(fnPca)
 
             combinedTrajSet = obj.combinedTrajectory
             for combinedTraj in combinedTrajSet:
@@ -81,10 +81,10 @@ class ProdyViewerPca(Viewer):
                     else:
                         colors.append(c)
 
-            show, fig, ax = showProjection(combinedEns, pca[:2],
-                                           new_fig=True,
-                                           color=colors, markeredgewidth=0,
-                                           returnAx=True)
+            show = showProjection(combinedEns, pca[:2],
+                                  color=colors, markeredgewidth=0)
+
+            ax = gca()
 
             projection = calcProjection(combinedEns, pca[:2])
             for n, point in enumerate(projection):

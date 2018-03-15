@@ -39,6 +39,7 @@ from viewerPCA import ProdyViewerPca
 from viewerTrajectories import ProdyTrajectoriesViewer
 from protocol_import import ProtImportTrajectories
 from protocol_cluster import clusterPdbTrajectories
+from viewerCluster import ProdyViewerCluster
 
 def validateInstallation():
     """ This function will be used to check if Prody is properly installed. """

@@ -107,10 +107,6 @@ class computeModesPcaPdb(EMProtocol):
         self.pca.buildCovariance(self.ens)
         self.pca.calcModes()
 
-        fnOutPca = self._getExtraPath("pcaModes")
-        saveModel(self.pca, fnOutPca)
-
-
     def _createOutputStep(self):
         n = 2
         projection = calcProjection(self.ens, self.pca[:n])
@@ -135,4 +131,9 @@ class computeModesPcaPdb(EMProtocol):
                                    , self.pdbFileName)
         setOfTrajectories.append(trajectory)
         self._defineOutputs(combinedTrajectory=setOfTrajectories)
+
+        fnOutPca = self._getExtraPath("pcaModes")
+        saveModel(self.pca, fnOutPca)
+        myFile = EMFile(fnOutPca)
+        self._defineOutputs(pcaNpzFile=myFile)
 

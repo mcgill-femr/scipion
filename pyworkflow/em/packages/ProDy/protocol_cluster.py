@@ -59,6 +59,10 @@ class clusterPdbTrajectories(EMProtocol):
                       default=0,
                       display=params.EnumParam.DISPLAY_HLIST,
                       label="Method to use for tree construction")
+        form.addParam('pcaNpzFile', PointerParam,
+                      pointerClass='EMFile',
+                      label="PCA NPZ File",
+                      important=True)
 
     def _insertAllSteps(self):
         self._insertFunctionStep('clusterTrajectories')
