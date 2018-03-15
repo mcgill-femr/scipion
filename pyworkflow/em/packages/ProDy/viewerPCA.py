@@ -32,6 +32,7 @@ from pyworkflow.viewer import ProtocolViewer, DESKTOP_TKINTER, WEB_DJANGO
 from pyworkflow.em import *
 from computePCATrajectory import computeModesPcaPdb
 from prody import *
+import matplotlib.pyplot as plt
 
 
 class ProdyViewerPca(Viewer):
@@ -48,20 +49,24 @@ class ProdyViewerPca(Viewer):
 
         if issubclass(cls, computeModesPcaPdb):
             fnPca = obj._getExtraPath("pcaModes.pca.npz")
-            initPdb = obj._getExtraPath("inputPdb.pdb")
-            fnInitTraj = obj._getExtraPath("initTraj.dcd")
-
-            Pdb = parsePDB(initPdb)
-            protein = Pdb.select('protein and not hydrogen').copy()
-
             pca = loadModel(fnPca)
+            pdb = parsePDB(obj._getExtraPath("inputPdb.pdb"))
 
-            initTraj = Trajectory(fnInitTraj)
-            initTraj.setCoords(protein) # Set the initial structure as the
-            # reference
-            initTraj.setAtoms(protein)  # A shortcut for .select('ca')
+            lenTraj = len(obj.Trajectory.get())
 
-            showProjection(initTraj, pca[:2], color='g', new_fig=True)
+            for i, traj in enumerate(obj.Trajectory.get()):
+                trajectory = Trajectory(traj.getFileName())
+                trajectory.setCoords(pdb)
+                trajectory.setAtoms(pdb.ca)
+
+                c = str(float(i) / float(lenTraj))
+                if i == 0:
+                    showProjection(trajectory, pca[:2], new_fig=True,
+                                   color=[c]*len(trajectory))
+                else:
+                    showProjection(trajectory, pca[:2], new_fig=False,
+                                   color=[c]*len(trajectory))
+
 
 
 
