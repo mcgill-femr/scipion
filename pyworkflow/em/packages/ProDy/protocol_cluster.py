@@ -110,6 +110,7 @@ class clusterPdbTrajectories(EMProtocol):
         for subgroup in self.subgroups:
             print subgroup
 
+            minDist = self.subgroupCutoff.get()
             repName = subgroup[0]
             for i in subgroup:
                 distList = i, mean([distanceMatrix[int(i)][int(j)]
