@@ -100,7 +100,6 @@ class ProdyViewerCluster(Viewer):
                 colors.append(subgroup_color_dict[labels[where(labels == str(i)
                                                                )[0][0]]])
 
-            plt.figure()
             show = showProjection(combinedEns, pca[:2],
                                   color=colors, markeredgewidth=0,
                                   norm=False)
