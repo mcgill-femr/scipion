@@ -82,11 +82,14 @@ class ProdyViewerPca(Viewer):
                         colors.append(c)
 
             show = showProjection(combinedEns, pca[:2],
-                                  color=colors, markeredgewidth=0)
+                                  color=colors, markeredgewidth=0,
+                                  norm=False)
 
             ax = gca()
 
-            projection = calcProjection(combinedEns, pca[:2])
+            projection = calcProjection(combinedEns, pca[:2],
+                                        norm=False)
+
             for n, point in enumerate(projection):
                 ax.annotate(str(n), (point[0], point[1]))
 

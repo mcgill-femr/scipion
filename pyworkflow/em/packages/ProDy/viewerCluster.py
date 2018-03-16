@@ -71,8 +71,14 @@ class ProdyViewerCluster(Viewer):
 
             plt.figure()
             reordered_matrix, indices = reorderMatrix(distMatrix, tree)
+
+            if len(indices) < 15:
+                all_ticks = True
+            else:
+                all_ticks = False
+
             showMatrix(reordered_matrix, ticklabels=indices, origin='upper',
-                       allticks=True)
+                       allticks=all_ticks)
 
             pca = loadModel(str(obj.pcaNpzFile.get().getFileName()) +
                             '.pca.npz')
@@ -96,11 +102,13 @@ class ProdyViewerCluster(Viewer):
 
             plt.figure()
             show = showProjection(combinedEns, pca[:2],
-                                  color=colors, markeredgewidth=0)
+                                  color=colors, markeredgewidth=0,
+                                  norm=False)
 
             ax = gca()
 
-            projection = calcProjection(combinedEns, pca[:2])
+            projection = calcProjection(combinedEns, pca[:2],
+                                        norm=False)
             for n, point in enumerate(projection):
                 ax.annotate(str(n), (point[0], point[1]))
 
