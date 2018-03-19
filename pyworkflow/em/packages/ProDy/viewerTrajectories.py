@@ -32,15 +32,12 @@ from pyworkflow.viewer import DESKTOP_TKINTER, WEB_DJANGO
 from pyworkflow.em import *
 from pyworkflow.gui.project import ProjectWindow
 from pdbtoTrajectories import computePdbTrajectories
-from joinTrajectories import joinTrajectorySets
 from protocol_import import ProtImportTrajectories
 from prody import *
-from pyworkflow.em.packages.xmipp3.nma import viewer_nma
-import xmipp
 
 class ProdyTrajectoriesViewer(Viewer):
 
-    _targets = [computePdbTrajectories, ProtImportTrajectories, joinTrajectorySets]
+    _targets = [computePdbTrajectories, ProtImportTrajectories]
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
 
     def __init__(self, **args):

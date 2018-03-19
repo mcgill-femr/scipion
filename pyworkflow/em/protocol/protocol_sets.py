@@ -54,7 +54,7 @@ class ProtUnionSet(ProtSets):
                    'Micrographs', 
                    'CTFs', 
                    'Volumes', 
-                   'Averages', 
+                   'Averages',
                    'All']
     
     def __init__(self, **kwargs):
@@ -74,6 +74,7 @@ class ProtUnionSet(ProtSets):
             # For relatively small set we usually want to include
             # the single element type, this will allow, for example
             # to union SetOfVolumes and Volumes in the final set
+
             if inputText in ['Volumes']:
                 pointerClass += ',%s' % inputText[:-1] # remove last 's'
             elif inputText in ['CTFs']:
@@ -131,6 +132,7 @@ class ProtUnionSet(ProtSets):
     
     #--------------------------- STEPS functions -------------------------------
     def createOutputStep(self):
+
         set1 = self.inputSets[0].get()  # 1st set (we use it many times)
 
         # Read ClassName and create the corresponding EMSet (SetOfParticles...)

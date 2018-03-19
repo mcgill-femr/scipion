@@ -24,12 +24,28 @@
 # *
 # **************************************************************************
 
-from pyworkflow.em.protocol.protocol_sets import ProtUnionSet
+from pyworkflow.em.protocol.protocol import EMProtocol
+import pyworkflow.protocol as pwprot
 
+class joinPDBs(EMProtocol):
+    _label = "Join PDBs ProDy"
 
-class joinTrajectorySets(ProtUnionSet):
-    _label = "Join Trajectories ProDy"
+    # --------------------------- DEFINE param functions ------------------------
+    def _defineParams(self, form):
+        form.addSection(label='Input')
+
+        form.addParam('inputPDBs', pwprot.params.MultiPointerParam,
+                      label="Input PDBs", important=True,
+                      pointerClass='SetOfPDBs,PdbFile',
+                      minNumObjects=2, maxNumObjects=0,
+                      help='Select two or more PDBs to be united into a set.')
+
+    def _insertAllSteps(self):
+        self._insertFunctionStep('createOutputStep')
 
     def createOutputStep(self):
-        ProtUnionSet.createOutputStep(self)
-        self._defineOutputs(outputTrajs=self.outputSet)
+        self.outputSet = self._createSetOfPDBs()
+        for Pdb in self.inputPDBs:
+            self.outputSet.append(Pdb.get())
+
+        self._defineOutputs(SetOfPDBs=self.outputSet)
