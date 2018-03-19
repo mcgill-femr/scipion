@@ -30,6 +30,7 @@ from prody import *
 from pyworkflow.utils import *
 import time
 from Bio import Phylo
+from numpy import mean
 
 class clusterPdbTrajectories(EMProtocol):
     """ Protocol to execute functions from ProDy software"""
@@ -98,8 +99,8 @@ class clusterPdbTrajectories(EMProtocol):
             setOfPDBs.append(pdb)
             numbers.append(str(i))
 
-        distanceMatrix = parseArray(str(self.distanceMatrixFile.get(
-        ).getFileName()))
+        distanceMatrix = parseArray(str(self.distanceMatrixFile
+                                        .get().getFileName()))
 
         self.tree = calcTree(names=numbers, distance_matrix=distanceMatrix,
                              method=treeMethod)
@@ -108,10 +109,22 @@ class clusterPdbTrajectories(EMProtocol):
         self.setOfRepresentatives = self._createSetOfPDBs()
         for subgroup in self.subgroups:
             print subgroup
-            memberName = subgroup[0]
-            Pdb = PdbFile(self._getExtraPath('pdb{:02d}.pdb'.format(
-                int(memberName))))
-            self.setOfRepresentatives.append(Pdb)
+
+            minDist = self.subgroupCutoff.get()
+            repName = subgroup[0]
+            for i in subgroup:
+                distList = i, mean([distanceMatrix[int(i)][int(j)]
+                                    for j in subgroup])
+                if distList[-1] < minDist:
+                    minDist = distList[-1]
+                    repName = distList[0]
+
+            print repName, minDist
+
+            repPdb = PdbFile(self._getExtraPath('pdb{:02d}.pdb'
+                                             .format(int(repName))))
+
+            self.setOfRepresentatives.append(repPdb)
 
     def createOutputStep(self):
         Phylo.write(self.tree, self._getExtraPath('clustering_tree.nwk'),

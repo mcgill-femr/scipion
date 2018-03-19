@@ -154,7 +154,8 @@ class computeModesPcaPdb(EMProtocol):
 
     def _createOutputStep(self):
         n = 2
-        projection = calcProjection(self.ens, self.pca[:n])
+        projection = calcProjection(self.ens, self.pca[:n],
+                                    norm=False)
         self.distanceMatrix = zeros((len(self.ens),len(self.ens)))
 
         for i in range(len(self.ens)):
