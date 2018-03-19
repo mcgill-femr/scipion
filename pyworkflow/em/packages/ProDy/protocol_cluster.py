@@ -119,4 +119,4 @@ class clusterPdbTrajectories(EMProtocol):
         myFile = EMFile(self._getExtraPath('clustering_tree.nwk'))
         self._defineOutputs(ClusteringTree=myFile)
 
-        self._defineOutputs(representivePDBs=self.setOfRepresentatives)
+        self._defineOutputs(representativePDBs=self.setOfRepresentatives)
