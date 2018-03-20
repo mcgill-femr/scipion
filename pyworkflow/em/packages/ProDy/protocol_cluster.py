@@ -84,7 +84,15 @@ class clusterPdbTrajectories(EMProtocol):
             break
 
         ens = parseDCD(str(fileName))
-        pdb = parsePDB(str(trajectory._initialPdb))
+
+        if str(trajectory._initialPdb).endswith('.pdb'):
+            pdb = parsePDB(str(trajectory._initialPdb))
+        elif str(trajectory._initialPdb).endswith('.cif'):
+            pdb = parseCIF(str(trajectory._initialPdb))
+        else:
+            raise ValueError('The initial PDB should have a filename '
+                             'ending in .pdb or .cif')
+
         ca = pdb.ca.copy()
         ens.setCoords(ca)
         ens.setAtoms(ca)

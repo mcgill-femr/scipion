@@ -94,7 +94,7 @@ class ProdyViewerCluster(ProtocolViewer):
         mystring = ""
 
         if self.doShowPdb.get() == PDB_ALL:
-            for pdb in obj.representivePDBs:
+            for pdb in obj.representativePDBs:
                 mystring += "%s " %pdb.getFileName()
 
         if self.doShowPdb.get() == PDB_SEL:
@@ -105,7 +105,7 @@ class ProdyViewerCluster(ProtocolViewer):
                 end = listNum[1]
             else:
                 end = ini
-            for i, pdb in enumerate(obj.representivePDBs):
+            for i, pdb in enumerate(obj.representativePDBs):
                 if i>=int(ini) and i<=int(end):
                     mystring += "%s " % pdb.getFileName()
 
@@ -153,10 +153,9 @@ class ProdyViewerCluster(ProtocolViewer):
             distMatrix = \
                 parseArray(str(obj.distanceMatrixFile.get().getFileName()))
             reordered_matrix, indices = reorderMatrix(distMatrix, tree)
-            # plt.figure()
+            plt.figure()
             show = showMatrix(reordered_matrix, ticklabels=indices,
-                            origin='upper',
-                       allticks=True)
+                              origin='upper', allticks=True)
             plt.show()
 
         return show
@@ -176,7 +175,13 @@ class ProdyViewerCluster(ProtocolViewer):
 
             combinedTrajSet = obj.setOfTrajectories.get()
             for i, traj in enumerate(combinedTrajSet):
-                Pdb = parsePDB(str(traj._initialPdb))
+                if str(traj._initialPdb).endswith('.pdb'):
+                    Pdb = parsePDB(str(traj._initialPdb))
+                elif str(traj._initialPdb).endswith('.cif'):
+                    Pdb = parseCIF(str(traj._initialPdb))
+                else:
+                    raise ValueError('The initial PDB should have a filename '
+                                     'ending in .pdb or .cif')
                 break
 
             protein = Pdb.select('protein and not hydrogen').copy()

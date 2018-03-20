@@ -133,17 +133,23 @@ class ProtUnionSet(ProtSets):
     #--------------------------- STEPS functions -------------------------------
     def createOutputStep(self):
 
+        import time
+        time.sleep(10)
+
         set1 = self.inputSets[0].get()  # 1st set (we use it many times)
 
         # Read ClassName and create the corresponding EMSet (SetOfParticles...)
-        outputSet = getattr(self, "_create%s" % set1.getClassName())()
+        if set1.getClassName()=='Volume':
+            outputSet = self._createSetOfVolumes()
+        else:
+            outputSet = getattr(self, "_create%s" % set1.getClassName())()
 
-        # Copy info from input sets (sampling rate, etc).
-        outputSet.copyInfo(set1)  # all sets must have the same info as set1!
+            # Copy info from input sets (sampling rate, etc).
+            outputSet.copyInfo(set1)  # all sets must have the same info as set1!
 
-        # Renumber from the beginning if either the renumber option is selected
-        # or we find duplicated ids in the sets
-        cleanIds = self.renumber.get() or self.duplicatedIds()
+            # Renumber from the beginning if either the renumber option is selected
+            # or we find duplicated ids in the sets
+            cleanIds = self.renumber.get() or self.duplicatedIds()
 
         #TODO ROB remove ignoreExtraAttributes condition
         #or implement it. But this will be for Scipion 1.2
@@ -152,18 +158,25 @@ class ProtUnionSet(ProtSets):
             commonAttrs = list(self.commonAttributes())
 
         for itemSet in self.inputSets:
-            for obj in itemSet.get():
-                if self.ignoreExtraAttributes:
-                    newObj = itemSet.get().ITEM_TYPE()
-                    newObj.copyAttributes(obj, *commonAttrs)
-                    if not cleanIds:
-                        newObj.setObjId(obj.getObjId())
-                else:
-                    newObj = obj
+            if set1.getClassName() == 'Volume':
+                newObj = itemSet.get()
+                newObj.setSamplingRate(itemSet.get().getSamplingRate())
+                outputSet.setSamplingRate(itemSet.get().getSamplingRate())
+            else:
+                for obj in itemSet.get():
+                    if self.ignoreExtraAttributes:
+                        newObj = itemSet.get().ITEM_TYPE()
+                        newObj.copyAttributes(obj, *commonAttrs)
+                        if not cleanIds:
+                            newObj.setObjId(obj.getObjId())
+                    else:
+                        newObj = obj
 
                 if cleanIds:
                     newObj.cleanObjId()
-                outputSet.append(newObj)
+
+            outputSet.append(newObj)
+
 
         self._defineOutputs(outputSet=outputSet)
         for itemSet in self.inputSets:
@@ -190,7 +203,11 @@ class ProtUnionSet(ProtSets):
         commonAttrs = None
 
         for itemSet in self.inputSets:
-            obj = itemSet.get().getFirstItem()
+            if itemSet.get().getClassName()=='Volume':
+                obj = itemSet.get()
+            else:
+                obj = itemSet.get().getFirstItem()
+
             attrSet = {a for a, _ in obj.getAttributesToStore()}
 
             if commonAttrs is None: # first time
