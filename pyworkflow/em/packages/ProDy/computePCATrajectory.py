@@ -137,7 +137,13 @@ class computeModesPcaPdb(EMProtocol):
             for traj in self.setOfTrajectories.get():
                 combined_traj.addFile(traj.getFileName())
 
+            #AJ
+            pdb = pdb.select('protein and not hydrogen').copy()
             combined_traj.setCoords(pdb)
+            combined_traj.setAtoms(pdb)
+            #END AJ
+
+            # combined_traj.setCoords(pdb)
 
             self.ens = Ensemble(combined_traj)
             self.ens.setCoords(pdb)

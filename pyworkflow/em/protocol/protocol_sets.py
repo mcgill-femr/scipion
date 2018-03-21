@@ -133,9 +133,6 @@ class ProtUnionSet(ProtSets):
     #--------------------------- STEPS functions -------------------------------
     def createOutputStep(self):
 
-        import time
-        time.sleep(10)
-
         set1 = self.inputSets[0].get()  # 1st set (we use it many times)
 
         # Read ClassName and create the corresponding EMSet (SetOfParticles...)
