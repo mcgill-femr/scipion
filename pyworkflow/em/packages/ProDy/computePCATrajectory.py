@@ -81,7 +81,7 @@ class computeModesPcaPdb(EMProtocol):
 
         else:
             foundPdb = False
-            if self.setType == 'setOfTrajectories':
+            if self.setType == 0:
                 for traj in self.setOfTrajectories.get():
                     if traj._initialPdb.get() is not None:
                         foundPdb = True
