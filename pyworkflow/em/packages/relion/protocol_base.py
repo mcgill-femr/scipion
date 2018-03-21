@@ -994,12 +994,15 @@ class ProtRelionBase(EMProtocol):
         if self.IS_3D:
             if not self.IS_3D_INIT:
                 if self.useMultipleVolumes:
-                    starFile = open(self._getExtraPath('references.star'))
+                    starFile = open(self._getExtraPath('references.star'),'w')
                     starFile.write('data_references\n')
                     starFile.write('loop_\n')
                     starFile.write('_rlnReferenceImage #1\n')
-                    for volume in self.referenceVolumeSet:
-                        starFile.write(volume.getFileName() + '\n')
+                    for volume in self.referenceVolumeSet.get():
+                        newFn = convertBinaryVol(volume, self._getExtraPath())
+                        starFile.write(str(newFn) + '\n')
+                    starFile.close()
+
                     args['--ref'] = str(self._getExtraPath('references.star'))
                 else:
                     args['--ref'] = convertBinaryVol(self.referenceVolume.get(),
