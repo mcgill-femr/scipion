@@ -131,7 +131,7 @@ class ProdyViewerCluster(ProtocolViewer):
                     subgroup_color_dict[label] = c
                     labels.append(label)
 
-            # plt.figure()
+            plt.figure()
             show = showTree(tree, format='plt',
                             label_colors=subgroup_color_dict)
 
