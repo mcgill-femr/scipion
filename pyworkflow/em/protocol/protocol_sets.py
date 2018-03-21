@@ -162,6 +162,7 @@ class ProtUnionSet(ProtSets):
                 newObj = itemSet.get()
                 newObj.setSamplingRate(itemSet.get().getSamplingRate())
                 outputSet.setSamplingRate(itemSet.get().getSamplingRate())
+                outputSet.append(newObj)
             else:
                 for obj in itemSet.get():
                     if self.ignoreExtraAttributes:
@@ -172,10 +173,10 @@ class ProtUnionSet(ProtSets):
                     else:
                         newObj = obj
 
-                if cleanIds:
-                    newObj.cleanObjId()
+                    if cleanIds:
+                        newObj.cleanObjId()
 
-            outputSet.append(newObj)
+                    outputSet.append(newObj)
 
 
         self._defineOutputs(outputSet=outputSet)
