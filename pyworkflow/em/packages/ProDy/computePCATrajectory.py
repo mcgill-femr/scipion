@@ -102,9 +102,9 @@ class computeModesPcaPdb(EMProtocol):
                                  "provided separately.")
 
         if self.pdbFileName.endswith('.pdb'):
-            pdb = parsePDB(self.pdbFileName,subset='ca')
+            pdb = parsePDB(self.pdbFileName)
         elif self.pdbFileName.endswith('.cif'):
-            pdb = parseCIF(self.pdbFileName,subset='ca')
+            pdb = parseCIF(self.pdbFileName)
         else:
             raise ValueError('The starting PDB filename needs to end in '
                              '.pdb or .cif')

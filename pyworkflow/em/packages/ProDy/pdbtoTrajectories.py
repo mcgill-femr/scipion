@@ -215,7 +215,7 @@ class computePdbTrajectories(EMProtocol):
                     file.close()
 
             if self.useFinalPdb.get():
-                w1_start = parsePDB(self._getExtraPath('walker1_initial.pdb'))
+                w1_start = parsePDB(self._getExtraPath('walker1_ionized.pdb'))
                 w1_traj = parseDCD(self._getExtraPath('walker1_trajectory.dcd'))
                 w1_traj.setCoords(w1_start)
                 w1_traj.setAtoms(w1_start.select('protein and not hydrogen'))
@@ -223,7 +223,7 @@ class computePdbTrajectories(EMProtocol):
                          'walker1_trajectory{:02d}_protein.dcd'.format(traj+1)),
                          w1_traj)
 
-                w2_start = parsePDB( self._getExtraPath('walker2_initial.pdb'))
+                w2_start = parsePDB( self._getExtraPath('walker2_ionized.pdb'))
                 w2_traj = parseDCD( self._getExtraPath('walker2_trajectory.dcd'))
                 w2_traj.setCoords(w2_start)
                 w2_traj.setAtoms(w2_start.select('protein and not hydrogen'))
@@ -243,7 +243,7 @@ class computePdbTrajectories(EMProtocol):
                 os.system('mv walker2_trajectory.dcd walker2_trajectory{:02d}'
                           '.dcd'.format(traj + 1))
             else:
-                w1_start = parsePDB(self._getExtraPath('walker1_initial.pdb'))
+                w1_start = parsePDB(self._getExtraPath('walker1_ionized.pdb'))
                 w1_traj = parseDCD(self._getExtraPath('walker1_trajectory.dcd'))
                 w1_traj.setCoords(w1_start)
                 w1_traj.setAtoms(w1_start.select('protein and not hydrogen'))
@@ -266,7 +266,7 @@ class computePdbTrajectories(EMProtocol):
         for n in range(self.numTrajectories.get()):
             fnDcd = self._getExtraPath('trajectory{:02d}.dcd'.format(n+1))
             ens = parseDCD(fnDcd)
-            atoms = parsePDB(self._getExtraPath('walker1_initial.pdb'))
+            atoms = parsePDB(self._getExtraPath('walker1_ionized.pdb'))
             protein = atoms.select('protein and not hydrogen').copy()
             ens.setCoords(protein)
             ens.setAtoms(protein)
