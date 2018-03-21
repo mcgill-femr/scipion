@@ -51,14 +51,40 @@ class ProdyViewerPca(Viewer):
         if issubclass(cls, computeModesPcaPdb):
             pca = loadModel(str(obj.pcaNpzFile.getFileName()) + '.pca.npz')
 
-            setOfTraj = obj.setOfTrajectories.get()
 
-            for i, traj in enumerate(setOfTraj):
-                Pdb = parsePDB(str(traj._initialPdb))
-                break
+            setOfTraj = obj.setOfTrajectories.get()
+            inputType = 0
+
+            if setOfTraj is None:
+                setOfTraj = obj.setOfPDBs.get()
+                inputType = 1
+
+
+            if inputType == 0:
+
+                for traj in setOfTraj:
+                    if str(traj._initialPdb).endswith('.pdb'):
+                        Pdb = parsePDB(str(traj._initialPdb))
+                    elif str(traj._initialPdb).endswith('.cif'):
+                        Pdb = parseCIF(str(traj._initialPdb))
+                    else:
+                        raise ValueError('The initial PDB should have a filename '
+                                         'ending in .pdb or .cif')
+                    break
+
+            else:
+                for pdb in setOfTraj:
+                    if str(pdb.getFileName()).endswith('.pdb'):
+                        Pdb = parsePDB(str(pdb.getFileName()))
+                    elif str(pdb.getFileName()).endswith('.cif'):
+                        Pdb = parseCIF(str(pdb.getFileName()))
+                    else:
+                        raise ValueError(
+                            'The initial PDB should have a filename '
+                            'ending in .pdb or .cif')
+                    break
 
             protein = Pdb.select('protein and not hydrogen').copy()
-
             combinedTrajSet = obj.combinedTrajectory
             for combinedTraj in combinedTrajSet:
                 combinedEns = parseDCD(str(combinedTraj.getFileName()))
@@ -67,20 +93,25 @@ class ProdyViewerPca(Viewer):
             combinedEns.setAtoms(protein.ca)
 
             colors = []
-            for i, traj in enumerate(obj.setOfTrajectories.get()):
+            for i, traj in enumerate(setOfTraj):
 
                 c = (random.random(), random.random(), random.random())
 
-                ens = parseDCD(str(traj._filename))
-                ens.setCoords(protein)
-                ens.setAtoms(protein.ca)
+                if inputType == 0:
+                    ens = parseDCD(str(traj._filename))
+                    ens.setCoords(protein)
+                    ens.setAtoms(protein.ca)
 
-                for j in range(len(ens)):
-                    if j == 0:
-                        colors.append((1,0,0))
-                    else:
+                    for j in range(len(ens)):
+                        if j == 0:
+                            colors.append((1, 0, 0))
+                        else:
+                            colors.append(c)
+                else:
+                    if i > 0:
                         colors.append(c)
 
+            plt.figure()
             show = showProjection(combinedEns, pca[:2],
                                   color=colors, markeredgewidth=0,
                                   norm=False)
@@ -94,12 +125,7 @@ class ProdyViewerPca(Viewer):
                 ax.annotate(str(n), (point[0], point[1]))
 
             distanceMatrix = parseArray(str(obj.distanceMatrix
-                                            .getFileName()),'\t')
+                                            .getFileName()), '\t')
             plt.figure()
-            showMatrix(distanceMatrix)
+            showMatrix(distanceMatrix, origin='upper')
             plt.show()
-
-
-
-
-

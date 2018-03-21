@@ -199,19 +199,20 @@ class computePdbTrajectories(EMProtocol):
             finished = 0
             while not finished:
                 time.sleep(10)
-                file = open(outputFn, 'r')
-                lines = file.readlines()
-                for line in lines:
+                if exists(outputFn):
+                    file = open(outputFn, 'r')
+                    lines = file.readlines()
+                    for line in lines:
 
-                    if line.find("ERROR") != -1:
-                        raise OSError(line)
+                        if line.find("ERROR") != -1:
+                            raise OSError(line)
 
-                    elif line.find("FINISHED") != -1:
-                        finished = 1
-                        print("Trajectory done.")
-                        sys.stdout.flush()
+                        elif line.find("FINISHED") != -1:
+                            finished = 1
+                            print("Trajectory done.")
+                            sys.stdout.flush()
 
-                file.close()
+                    file.close()
 
             if self.useFinalPdb.get():
                 w1_start = parsePDB(self._getExtraPath('walker1_initial.pdb'))

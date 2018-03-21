@@ -29,9 +29,6 @@ from prody import *
 from numpy import zeros, sqrt
 import time
 
-FILE = 0
-PDB = 1
-
 class computeModesPcaPdb(EMProtocol):
 
     _label = "Compute PCA Pdb trajectories"
@@ -47,18 +44,27 @@ class computeModesPcaPdb(EMProtocol):
                       label="Input file or pdb")
         form.addParam('inputStructure', PathParam, label="Input structure",
                       important=True,
-                      condition='FilePdb == %s and usePdb == True' % FILE,
+                      condition='FilePdb == 0 and usePdb == True',
                       help='The input structure can be an atomic model '
                            '(true PDB) or a pseudoatomic model (an EM volume '
                            'converted into pseudoatoms)')
         form.addParam('Pdb', PointerParam, pointerClass='PdbFile',
                       label='Input Pdb', important=True,
-                      condition='FilePdb == %s and usePdb == True' % PDB)
+                      condition='FilePdb == 1 and usePdb == True')
+        form.addParam('setType', params.EnumParam,
+                      choices=['setOfTrajectories', 'setOfPDBs'],
+                      default=0,
+                      label="Input structures format")
         form.addParam('setOfTrajectories', PointerParam,
                       pointerClass='SetOfTrajectories',
                       label="Set of Trajectories",
+                      condition='setType == 0',
                       important=True)
-
+        form.addParam('setOfPDBs', PointerParam,
+                      pointerClass='SetOfPDBs',
+                      label="Set of PDBs",
+                      condition='setType == 1',
+                      important=True)
 
     def _insertAllSteps(self):
         self._insertFunctionStep('_calcPCA')
@@ -75,30 +81,69 @@ class computeModesPcaPdb(EMProtocol):
 
         else:
             foundPdb = False
-            for traj in self.setOfTrajectories.get():
-                if traj._initialPdb.get() is not None:
-                    foundPdb = True
-                    self.pdbFileName = traj._initialPdb.get()
-                    break
+            if self.setType == 'setOfTrajectories':
+                for traj in self.setOfTrajectories.get():
+                    if traj._initialPdb.get() is not None:
+                        foundPdb = True
+                        self.pdbFileName = traj._initialPdb.get()
+                        break
+            else:
+                pdbFileNames = []
+                for i, pdb in enumerate(self.setOfPDBs.get()):
+                    if i == 0:
+                        foundPdb = True
+                        self.pdbFileName = str(pdb.getFileName())
+                    pdbFileNames.append(str(pdb.getFileName()))
 
             if not foundPdb:
                 self.pdbFileName = None
-                raise ValueError("There needs to be at least one PDB associated "
-                                 "with a trajectory or provided separately.")
+                raise ValueError("There needs to be at least one PDB associated"
+                                 " with the setOfTrajectories or setOfPDBs or "
+                                 "provided separately.")
 
+        if self.pdbFileName.endswith('.pdb'):
+            pdb = parsePDB(self.pdbFileName,subset='ca')
+        elif self.pdbFileName.endswith('.cif'):
+            pdb = parseCIF(self.pdbFileName,subset='ca')
+        else:
+            raise ValueError('The starting PDB filename needs to end in '
+                             '.pdb or .cif')
 
-        pdb = parsePDB(self.pdbFileName)
-        combined_traj = Trajectory("combined traj for PCA")
-        for traj in self.setOfTrajectories.get():
-            combined_traj.addFile(traj.getFileName())
+        if self.setType == 1:
 
-        combined_traj.setCoords(pdb)
+            pdbs = []
+            for pdbFn in pdbFileNames:
+                if pdbFn.endswith('.pdb'):
+                    pdbs.append(parsePDB(pdbFn,subset='ca'))
+                elif pdbFn.endswith('.cif'):
+                    pdbs.append(parseCIF(pdbFn,subset='ca'))
+                else:
+                    raise ValueError('All PDB filenames should end in'
+                                     ' .pdb or .cif')
 
-        self.ens = Ensemble(combined_traj)
-        self.ens.setCoords(pdb)
+            for i, pdb in enumerate(pdbs):
+                if pdb.numAtoms() != pdbs[0].numAtoms():
+                    pdbs.pop(i)
+                    print("Scipion can only use sets of PDBs where all "
+                          "members have the same number of atoms. Therefore"
+                          " %s was removed as it does not have the same "
+                          "number of atoms as the reference PDB."
+                          %pdb.getTitle())
 
-        for i, coordset in enumerate(combined_traj.getCoordsets()):
-            self.ens.addCoordset(coordset)
+            self.ens = buildPDBEnsemble(pdb,pdbs,mapping_func=mapChainByChain)
+
+        else:
+            combined_traj = Trajectory("combined traj for PCA")
+            for traj in self.setOfTrajectories.get():
+                combined_traj.addFile(traj.getFileName())
+
+            combined_traj.setCoords(pdb)
+
+            self.ens = Ensemble(combined_traj)
+            self.ens.setCoords(pdb)
+
+            for i, coordset in enumerate(combined_traj.getCoordsets()):
+                self.ens.addCoordset(coordset)
 
         self.ens.setAtoms(pdb.ca)
         self.ens.superpose()
