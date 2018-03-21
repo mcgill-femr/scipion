@@ -100,9 +100,10 @@ class ProdyViewerCluster(Viewer):
                 colors.append(subgroup_color_dict[labels[where(labels == str(i)
                                                                )[0][0]]])
 
+            plt.figure()
             show = showProjection(combinedEns, pca[:2],
                                   color=colors, markeredgewidth=0,
-                                  norm=False)
+                                  markersize=6, norm=False)
 
             ax = gca()
 
@@ -110,6 +111,14 @@ class ProdyViewerCluster(Viewer):
                                         norm=False)
             for n, point in enumerate(projection):
                 ax.annotate(str(n), (point[0], point[1]))
+
+            show = showProjection(Conformation(combinedEns,0), pca[:2],
+                                  color=[colors[0]], markeredgewidth=0,
+                                  markersize=12, norm=False)
+
+            show = showProjection(Conformation(combinedEns,-1), pca[:2],
+                                  color=[colors[-1]], markeredgewidth=0,
+                                  markersize=12, norm=False)
 
             plt.show()
 

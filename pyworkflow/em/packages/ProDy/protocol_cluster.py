@@ -107,17 +107,25 @@ class clusterPdbTrajectories(EMProtocol):
         self.subgroups = findSubgroups(self.tree, self.subgroupCutoff.get())
 
         self.setOfRepresentatives = self._createSetOfPDBs()
+
+        print(len(distanceMatrix)-1)
+
         for subgroup in self.subgroups:
             print subgroup
 
-            minDist = self.subgroupCutoff.get()
-            repName = subgroup[0]
-            for i in subgroup:
-                distList = i, mean([distanceMatrix[int(i)][int(j)]
-                                    for j in subgroup])
-                if distList[-1] < minDist:
-                    minDist = distList[-1]
-                    repName = distList[0]
+            if '0' in subgroup:
+                repName = '0'
+            elif str(len(distanceMatrix) - 1) in subgroup:
+                repName = str(len(distanceMatrix) - 1)
+            else:
+                minDist = self.subgroupCutoff.get()
+                repName = subgroup[0]
+                for i in subgroup:
+                    distList = i, mean([distanceMatrix[int(i)][int(j)]
+                                        for j in subgroup])
+                    if distList[-1] < minDist:
+                        minDist = distList[-1]
+                        repName = distList[0]
 
             print repName, minDist
 

@@ -31,6 +31,9 @@ from pyworkflow.utils import *
 import time
 from shutil import copy
 
+FILE = 0
+PDB = 1
+
 SCIPION_HOME = os.environ['SCIPION_HOME']
 
 class computePdbTrajectories(EMProtocol):
@@ -42,17 +45,36 @@ class computePdbTrajectories(EMProtocol):
         self.defaultCycles = 5
 
         form.addSection(label="ProDy Generate Trajectories")
+        form.addParam('FilePdb', params.EnumParam, choices=['File', 'Pdb'],
+                      default=0, important=True,
+                      display=params.EnumParam.DISPLAY_HLIST,
+                      label="Input file or pdb")
+        form.addParam('initialStructure', PathParam, label="Initial structure",
+                      important=True,
+                      condition='FilePdb == %s' % FILE,
+                      help='The initial structure can be an atomic model '
+                           '(true PDB) or a pseudoatomic model (an EM volume '
+                           'converted into pseudoatoms)')
+        form.addParam('usingPseudoatoms', params.BooleanParam, default=False,
+                      label="Tell us whether you are using Pseudoatoms")
         form.addParam('initialPdb', PointerParam, pointerClass='PdbFile',
                       label='Initial Pdb', important=False,
                       help='Choose an initial conformation using a Pdb to '
-                           'compute its N trajectories')
+                           'compute its N trajectories',
+                      condition='FilePdb == %s' % PDB)
         form.addParam('useFinalPdb', params.BooleanParam, default=False,
                       label="Use final conformation")
         form.addParam('finalPdb', PointerParam, pointerClass='PdbFile',
                       label='Final Pdb', important=True,
-                      condition = 'useFinalPdb == True',
+                      condition='useFinalPdb == True and FilePdb == %s' % PDB,
                       help='Choose a final conformation using a Pdb to '
                            'compute its N trajectories')
+        form.addParam('finalStructure', PathParam, label="Final structure",
+                      important=True,
+                      condition='useFinalPdb == True and FilePdb == %s' % FILE,
+                      help='The final structure can be an atomic model '
+                           '(true PDB) or a pseudoatomic model (an EM volume '
+                           'converted into pseudoatoms)')
         form.addParam('cycleNumber', params.IntParam,
                       default=self.defaultCycles,
                       label='Number of cycles',
@@ -62,13 +84,6 @@ class computePdbTrajectories(EMProtocol):
         form.addParam('numTrajectories', params.IntParam, default=1,
                       label='Number of trajectories',
                       important=True, help='Number of trajectories to generate')
-        #form.addParam('inputTopology', params.MultiPointerParam,
-        #              pointerClass='SetOfVolumes,Volume',
-        #              label="Input topology files", important=True,
-        #              help='Select topology files')
-        #form.addParam('inputParameters', params.MultiPointerParam,
-        #              label="Input parameters files", important=True,
-        #              help='Select parameters files')
         form.addParam('anmCutoff', params.IntParam, default=15,
                       label='ANM Cutoff', expertLevel = pwconst.LEVEL_ADVANCED,
                       help='Maximum distance that two residues are in contact.')
@@ -96,11 +111,13 @@ class computePdbTrajectories(EMProtocol):
         form.addParam('minLen', params.FloatParam, default=1,
                       label='Minimisation length  (ps)',
                       expertLevel=pwconst.LEVEL_ADVANCED,
+                      condition='usingPseudoatoms == False',
                       help='This value is given in ps to be comparable to TMD '
                            'length. Each ps is equivalent to 500 steps.')
         form.addParam('tmdLen', params.FloatParam, default=10,
                       label='Targeted MD length (ps)',
                       expertLevel=pwconst.LEVEL_ADVANCED,
+                      condition='usingPseudoatoms == False',
                       help='This length depends on the size of the protein '
                            'with bigger proteins needing longer. As an '
                            'indication, 10 ps was used for the leucine '
@@ -119,8 +136,17 @@ class computePdbTrajectories(EMProtocol):
 
     def createTrajectories(self):
 
+        if self.usingPseudoatoms.get() is True:
+            usingPseudoatoms = 1
+        else:
+            usingPseudoatoms = 0
 
-        self._params = {'initPdb': self.initialPdb.get().getFileName(),
+        if self.initialStructure.get() is not None:
+            self.initialFileName = self.initialStructure.get()
+        else:
+            self.initialFileName = self.initialPdb.get().getFileName()
+
+        self._params = {'initPdb': self.initialFileName,
                         'numTraj': self.numTrajectories.get(),
                         'cutoff': self.anmCutoff.get(),
                         'maxDev': self.maxDeviation.get(),
@@ -130,15 +156,20 @@ class computePdbTrajectories(EMProtocol):
                         'cycle': self.cycleNumber.get(),
                         'minLen': self.minLen.get(),
                         'tmdLen': self.tmdLen.get(),
-                        'stepCut': self.stepCut.get()
+                        'stepCut': self.stepCut.get(),
+                        'usingPseudoatoms': usingPseudoatoms,
                         }
+
         if self.useFinalPdb.get() is True:
-            self._params['finPdb'] = self.finalPdb.get().getFileName()
+            if self.finalStructure.get() is not None:
+                self._params['finPdb'] = self.finalStructure.get()
+            else:
+                self._params['finPdb'] = self.finalPdb.get().getFileName()
+
             self._params['cycle'] = self.defaultCycles
         else:
             self._params['finPdb'] = self._params['initPdb']
 
-        # all_trajectories = Trajectory("all trajectories combined")
         t = time.time()
         for traj in range(self.numTrajectories.get()):
             print("Calculating trajectory %d..." %(traj+1))
@@ -156,6 +187,7 @@ class computePdbTrajectories(EMProtocol):
                     + " " + str(self._params['tmdLen'])
                     + " " + str(self._params['cutoff'])
                     + " " + str(self._params['maxSteps'])
+                    + " " + str(self._params['usingPseudoatoms'])
                     + " & ")
 
             self.runJob("VMDARGS='text with blanks' vmd -dispdev text -e " +
@@ -182,7 +214,7 @@ class computePdbTrajectories(EMProtocol):
                 file.close()
 
             if self.useFinalPdb.get():
-                w1_start = parsePDB(self._getExtraPath('walker1_ionized.pdb'))
+                w1_start = parsePDB(self._getExtraPath('walker1_initial.pdb'))
                 w1_traj = parseDCD(self._getExtraPath('walker1_trajectory.dcd'))
                 w1_traj.setCoords(w1_start)
                 w1_traj.setAtoms(w1_start.select('protein and not hydrogen'))
@@ -190,7 +222,7 @@ class computePdbTrajectories(EMProtocol):
                          'walker1_trajectory{:02d}_protein.dcd'.format(traj+1)),
                          w1_traj)
 
-                w2_start = parsePDB( self._getExtraPath('walker2_ionized.pdb'))
+                w2_start = parsePDB( self._getExtraPath('walker2_initial.pdb'))
                 w2_traj = parseDCD( self._getExtraPath('walker2_trajectory.dcd'))
                 w2_traj.setCoords(w2_start)
                 w2_traj.setAtoms(w2_start.select('protein and not hydrogen'))
@@ -210,8 +242,8 @@ class computePdbTrajectories(EMProtocol):
                 os.system('mv walker2_trajectory.dcd walker2_trajectory{:02d}'
                           '.dcd'.format(traj + 1))
             else:
-                w1_start = parsePDB( self._getExtraPath('walker1_ionized.pdb'))
-                w1_traj = parseDCD( self._getExtraPath('walker1_trajectory.dcd'))
+                w1_start = parsePDB(self._getExtraPath('walker1_initial.pdb'))
+                w1_traj = parseDCD(self._getExtraPath('walker1_trajectory.dcd'))
                 w1_traj.setCoords(w1_start)
                 w1_traj.setAtoms(w1_start.select('protein and not hydrogen'))
                 writeDCD(self._getExtraPath('trajectory{:02d}.dcd'.format(traj+1)),
@@ -233,7 +265,7 @@ class computePdbTrajectories(EMProtocol):
         for n in range(self.numTrajectories.get()):
             fnDcd = self._getExtraPath('trajectory{:02d}.dcd'.format(n+1))
             ens = parseDCD(fnDcd)
-            atoms = parsePDB(self._getExtraPath('walker1_ionized.pdb'))
+            atoms = parsePDB(self._getExtraPath('walker1_initial.pdb'))
             protein = atoms.select('protein and not hydrogen').copy()
             ens.setCoords(protein)
             ens.setAtoms(protein)
