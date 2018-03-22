@@ -135,7 +135,8 @@ class clusterPdbTrajectories(EMProtocol):
                         minDist = distList[-1]
                         repName = distList[0]
 
-            print repName, minDist
+                print repName, minDist
+            print repName
 
             repPdb = PdbFile(self._getExtraPath('pdb{:02d}.pdb'
                                              .format(int(repName))))
