@@ -31,6 +31,7 @@ from pyworkflow.utils import *
 import time
 from Bio import Phylo
 from numpy import mean
+from numpy import zeros, sqrt
 
 class clusterPdbTrajectories(EMProtocol):
     """ Protocol to execute functions from ProDy software"""
@@ -38,16 +39,11 @@ class clusterPdbTrajectories(EMProtocol):
     _label = "Cluster Trajectories ProDy"
 
     def _defineParams(self, form):
-        self.defaultCycles = 5
 
         form.addSection(label="ProDy Cluster Trajectories")
         form.addParam('setOfTrajectories', PointerParam,
                       pointerClass='SetOfTrajectories',
                       label="Set of Trajectories",
-                      important=True)
-        form.addParam('distanceMatrixFile', PointerParam,
-                      pointerClass='EMFile',
-                      label="Distance Matrix File",
                       important=True)
         form.addParam('subgroupCutoff', params.FloatParam, default=0.01,
                       label='Distance cutoff for defining clusters',
@@ -64,6 +60,18 @@ class clusterPdbTrajectories(EMProtocol):
                       pointerClass='EMFile',
                       label="PCA NPZ File",
                       important=True)
+        form.addParam('distanceType', params.EnumParam,
+                      choices=['PCA', 'RMSD'],
+                      default=0,
+                      label="Type of distance measure used for clustering")
+        form.addParam('numModes', params.IntParam, default=2,
+                      label='Number of modes',
+                      help='Number of modes for visualizing '
+                           '(2 or 3). This number would also '
+                           'be used for distance calculations '
+                           'if PCA is selected as distance '
+                           'measure.',
+                      condition='distanceType == 0')
 
     def _insertAllSteps(self):
         self._insertFunctionStep('clusterTrajectories')
@@ -83,7 +91,7 @@ class clusterPdbTrajectories(EMProtocol):
             fileName = trajectory.getFileName()
             break
 
-        ens = parseDCD(str(fileName))
+        self.ens = parseDCD(str(fileName))
 
         if str(trajectory._initialPdb).endswith('.pdb'):
             pdb = parsePDB(str(trajectory._initialPdb))
@@ -94,42 +102,59 @@ class clusterPdbTrajectories(EMProtocol):
                              'ending in .pdb or .cif')
 
         ca = pdb.ca.copy()
-        ens.setCoords(ca)
-        ens.setAtoms(ca)
+        self.ens.setCoords(ca)
+        self.ens.setAtoms(ca)
 
         fnPdb = []
         setOfPDBs = self._createSetOfPDBs()
         numbers = []
-        for i, conformation in enumerate(ens):
+        for i, conformation in enumerate(self.ens):
             fnPdb.append(self._getExtraPath('pdb{:02d}.pdb'.format(i)))
             writePDB(fnPdb[i], conformation)
             pdb = PdbFile(fnPdb[i])
             setOfPDBs.append(pdb)
             numbers.append(str(i))
 
-        distanceMatrix = parseArray(str(self.distanceMatrixFile
-                                        .get().getFileName()))
+        self.pca = loadModel(str(self.pcaNpzFile.get().getFileName())
+                             + '.pca.npz')
 
-        self.tree = calcTree(names=numbers, distance_matrix=distanceMatrix,
+        projection = calcProjection(self.ens, self.pca[:int(
+            self.numModes.get())], norm=False)
+
+        self.distanceMatrix = zeros((len(self.ens),len(self.ens)))
+
+        for i in range(len(self.ens)):
+            for j in range(len(self.ens)):
+                if self.distanceType.get() == 0:
+                    for k in range(int(self.numModes.get())):
+                        self.distanceMatrix[i][j] += \
+                        (projection[i][k] - projection[j][k])**2
+
+                    self.distanceMatrix[i][j] = sqrt(self.distanceMatrix[i][j])
+                else:
+                    self.distanceMatrix[i][j] = calcRMSD(self.ens[i],
+                                                         self.ens[j])
+
+        self.tree = calcTree(names=numbers, distance_matrix=self.distanceMatrix,
                              method=treeMethod)
         self.subgroups = findSubgroups(self.tree, self.subgroupCutoff.get())
 
         self.setOfRepresentatives = self._createSetOfPDBs()
 
-        print(len(distanceMatrix)-1)
+        print(len(self.distanceMatrix)-1)
 
         for subgroup in self.subgroups:
             print subgroup
 
             if '0' in subgroup:
                 repName = '0'
-            elif str(len(distanceMatrix) - 1) in subgroup:
-                repName = str(len(distanceMatrix) - 1)
+            elif str(len(self.distanceMatrix) - 1) in subgroup:
+                repName = str(len(self.distanceMatrix) - 1)
             else:
                 minDist = self.subgroupCutoff.get()
                 repName = subgroup[0]
                 for i in subgroup:
-                    distList = i, mean([distanceMatrix[int(i)][int(j)]
+                    distList = i, mean([self.distanceMatrix[int(i)][int(j)]
                                         for j in subgroup])
                     if distList[-1] < minDist:
                         minDist = distList[-1]
@@ -144,6 +169,12 @@ class clusterPdbTrajectories(EMProtocol):
             self.setOfRepresentatives.append(repPdb)
 
     def createOutputStep(self):
+
+        writeArray(self._getExtraPath('distance_matrix.txt'),
+                   self.distanceMatrix,'%.18e','\t')
+        myFile = EMFile(self._getExtraPath('distance_matrix.txt'))
+        self._defineOutputs(distanceMatrixFile=myFile)
+
         Phylo.write(self.tree, self._getExtraPath('clustering_tree.nwk'),
         'newick')
         myFile = EMFile(self._getExtraPath('clustering_tree.nwk'))

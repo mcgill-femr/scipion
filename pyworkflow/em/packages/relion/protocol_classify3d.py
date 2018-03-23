@@ -93,6 +93,9 @@ class ProtRelionClassify3D(ProtClassify3D, ProtRelionBase):
         self._defineSourceRelation(self.inputParticles, volumes)
         
         if not self.doContinue:
+            if self.useMultipleVolumes:
+                self.referenceVolume = self.referenceVolumeSet
+
             self._defineSourceRelation(self.referenceVolume, classes3D)
             self._defineSourceRelation(self.referenceVolume, volumes)
     
