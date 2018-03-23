@@ -56,7 +56,7 @@ class computePdbTrajectories(EMProtocol):
                            '(true PDB) or a pseudoatomic model (an EM volume '
                            'converted into pseudoatoms)')
         form.addParam('usingPseudoatoms', params.BooleanParam, default=False,
-                      label="Tell us whether you are using Pseudoatoms")
+                      label="Using Pseudoatoms?")
         form.addParam('initialPdb', PointerParam, pointerClass='PdbFile',
                       label='Initial Pdb', important=False,
                       help='Choose an initial conformation using a Pdb to '
@@ -135,12 +135,7 @@ class computePdbTrajectories(EMProtocol):
         self._insertFunctionStep('createOutputStep')
 
     def createTrajectories(self):
-
-        if self.usingPseudoatoms.get() is True:
-            usingPseudoatoms = 1
-        else:
-            usingPseudoatoms = 0
-
+        time.sleep(10)
         if self.initialStructure.get() is not None:
             self.initialFileName = self.initialStructure.get()
         else:
@@ -157,7 +152,7 @@ class computePdbTrajectories(EMProtocol):
                         'minLen': self.minLen.get(),
                         'tmdLen': self.tmdLen.get(),
                         'stepCut': self.stepCut.get(),
-                        'usingPseudoatoms': usingPseudoatoms,
+                        # 'usingPseudoatoms': usingPseudoatoms,
                         }
 
         if self.useFinalPdb.get() is True:
@@ -170,66 +165,203 @@ class computePdbTrajectories(EMProtocol):
         else:
             self._params['finPdb'] = self._params['initPdb']
 
-        t = time.time()
         for traj in range(self.numTrajectories.get()):
-            print("Calculating trajectory %d..." %(traj+1))
-            sys.stdout.flush()
+            if self.usingPseudoatoms.get() is True:
+                print("Calculating pseudoatoms trajectory %d..."%(traj+1))
+                finished = False
+                i = 0
+                while not finished:
 
-            args = ('-args ' + " " + str(os.path.abspath(self._getExtraPath()))
-                    + " " + "results{0}".format(str(traj+1))
-                    + " " + self._params['initPdb']
-                    + " " + self._params['finPdb']
-                    + " " + str(self._params['cycle'])
-                    + " " + str(self._params['maxDev'])
-                    + " " + str(self._params['acceptParam'])
-                    + " " + str(self._params['stepCut'])
-                    + " " + str(self._params['minLen'])
-                    + " " + str(self._params['tmdLen'])
-                    + " " + str(self._params['cutoff'])
-                    + " " + str(self._params['maxSteps'])
-                    + " " + str(self._params['usingPseudoatoms'])
-                    + " & ")
+                    if self.useFinalPdb.get() is True:
+                        n = 2
+                    else:
+                        n = 1
 
-            self.runJob("VMDARGS='text with blanks' vmd -dispdev text -e " +
-                        os.path.abspath(os.environ['SCIPION_HOME'] +
-                        '/software/em/prody/vmd-1.9.3/lib/plugins/noarch/tcl'
-                        '/comd/comd.tcl'),args)
+                    for sim in range(n):
+                        if sim == 0:
+                            if i == 0:
+                                currIniPdb = self._params['initPdb']
+                                currFinPdb = self._params['finPdb']
+                            else:
+                                currIniDcd = parseDCD(str(self._getExtraPath(
+                                    'ini_cycle{0}.dcd'.format(i - 1))))
+                                initPdb = parsePDB(str(self._params['initPdb']))
+                                currIniDcd.setCoords(initPdb)
+                                currIniDcd.setAtoms(initPdb)
+                                writePDB(str(self._getExtraPath(
+                                    'ini_cycle{0}.pdb'.format(i - 1))),
+                                    currIniDcd)
+                                currIniPdb = self._getExtraPath(
+                                    'ini_cycle{0}.pdb'.format(i - 1))
 
-            outputFn = self._getExtraPath('results{0}.log'.format(traj+1))
-            finished = 0
-            while not finished:
-                time.sleep(10)
-                if exists(outputFn):
-                    file = open(outputFn, 'r')
-                    lines = file.readlines()
-                    for line in lines:
+                                if self.useFinalPdb.get() is True:
+                                    currFinDcd = parseDCD(str(self._getExtraPath(
+                                        'fin_cycle{0}.dcd'.format(i - 1))))
+                                    finPdb = parsePDB(str(self._params['finPdb']))
+                                    currFinDcd.setCoords(finPdb)
+                                    currFinDcd.setAtoms(finPdb)
+                                    writePDB(str(self._getExtraPath(
+                                        'fin_cycle{0}.pdb'.format(i - 1))),
+                                        currFinDcd)
+                                    currFinPdb = self._getExtraPath(
+                                        'fin_cycle{0}.pdb'.format(i - 1))
 
-                        if line.find("ERROR") != -1:
-                            raise OSError(line)
+                            outputDcdName = str(self._getExtraPath(
+                                'ini_cycle{0}.dcd'.format(i)))
+                        else:
+                            if i == 0:
+                                currIniPdb = self._params['finPdb']
+                                currFinPdb = self._params['initPdb']
+                            else:
+                                currIniDcd = parseDCD(str(self._getExtraPath(
+                                    'fin_cycle{0}.dcd'.format(i-1))))
+                                initPdb = parsePDB(str(self._params['finPdb']))
+                                currIniDcd.setCoords(initPdb)
+                                currIniDcd.setAtoms(initPdb)
+                                writePDB(str(self._getExtraPath(
+                                    'fin_cycle{0}.pdb'.format(i-1))), currIniDcd)
+                                currIniPdb = self._getExtraPath(
+                                    'fin_cycle{0}.pdb'.format(i-1))
 
-                        elif line.find("FINISHED") != -1:
-                            finished = 1
-                            print("Trajectory done.")
-                            sys.stdout.flush()
+                                currFinDcd = parseDCD(str(self._getExtraPath(
+                                    'ini_cycle{0}.dcd'.format(i - 1))))
+                                finPdb = parsePDB(str(self._params['initPdb']))
+                                currFinDcd.setCoords(finPdb)
+                                currFinDcd.setAtoms(finPdb)
+                                writePDB(str(self._getExtraPath(
+                                    'ini_cycle{0}.pdb'.format(i - 1))),
+                                    currFinDcd)
+                                currFinPdb = self._getExtraPath(
+                                    'ini_cycle{0}.pdb'.format(i-1))
 
-                    file.close()
+                            outputDcdName = str(self._getExtraPath(
+                                'fin_cycle{0}.dcd'.format(i)))
+
+                        args = (currIniPdb
+                                + " " + currFinPdb
+                                + " " + self._params['initPdb']
+                                + " " + self._params['finPdb']
+                                + " " + str(i)
+                                + " " + str(self._params['maxDev'])
+                                + " " + str(self._params['stepCut'])
+                                + " " + str(self._params['acceptParam'])
+                                + " " + str(self._params['cutoff'])
+                                + " " + str(self._params['maxSteps'])
+                                + " " + outputDcdName
+                                + " " + str(int(self.usingPseudoatoms.get())))
+
+                        self.runJob("python " + os.path.abspath(os.environ[
+                                    'SCIPION_HOME']
+                                    + "/software/em/prody/vmd-1.9.3/lib/plugins/noarch/tcl"
+                                      "/comd/anmmc.py"), args)
+
+                    if i == 0:
+                        os.system("cp " + str(self._getExtraPath(
+                            'ini_cycle0.dcd')) +" " + str(self._getExtraPath(
+                            'initr.dcd')))
+                        os.system("cp " + str(self._getExtraPath(
+                            'fin_cycle0.dcd')) +" "+ str(self._getExtraPath(
+                            'fintr.dcd')))
+                    else:
+                        os.system("cat "+ str(self._getExtraPath(
+                            'initr.dcd')) +" "+ str(self._getExtraPath(
+                            'ini_cycle%d.dcd'%i)) +" "+">"+ str(
+                            self._getExtraPath("initial.dcd")))
+                        os.system("mv " + self._getExtraPath('initial.dcd') +
+                                  " "+self._getExtraPath('initr.dcd'))
+                        os.system("cat " + str(self._getExtraPath(
+                            'fintr.dcd')) + " " + str(self._getExtraPath(
+                            'fin_cycle%d.dcd' % i)) + " " + ">" + str(
+                            self._getExtraPath("final.dcd")))
+                        os.system("mv " + self._getExtraPath('final.dcd') +
+                                  " " + self._getExtraPath('fintr.dcd'))
+
+
+                    i += 1
+                    if self.cycleNumber.get() is not None and \
+                            i > self.cycleNumber.get():
+                        finished = True
+            else:
+                print("Calculating trajectory %d..." %(traj+1))
+                sys.stdout.flush()
+
+                args = ('-args ' + " " + str(os.path.abspath(self._getExtraPath()))
+                        + " " + "results{0}".format(str(traj+1))
+                        + " " + self._params['initPdb']
+                        + " " + self._params['finPdb']
+                        + " " + str(self._params['cycle'])
+                        + " " + str(self._params['maxDev'])
+                        + " " + str(self._params['acceptParam'])
+                        + " " + str(self._params['stepCut'])
+                        + " " + str(self._params['minLen'])
+                        + " " + str(self._params['tmdLen'])
+                        + " " + str(self._params['cutoff'])
+                        + " " + str(self._params['maxSteps'])
+                        + " & ")
+
+                self.runJob("VMDARGS='text with blanks' vmd -dispdev text -e " +
+                            os.path.abspath(os.environ['SCIPION_HOME'] +
+                            '/software/em/prody/vmd-1.9.3/lib/plugins/noarch/tcl'
+                            '/comd/comd.tcl'),args)
+
+                outputFn = self._getExtraPath('results{0}.log'.format(traj+1))
+                finished = 0
+                while not finished:
+                    if exists(outputFn):
+                        file = open(outputFn, 'r')
+                        lines = file.readlines()
+                        for line in lines:
+
+                            if line.find("ERROR") != -1:
+                                raise OSError(line)
+
+                            elif line.find("FINISHED") != -1:
+                                finished = 1
+                                print("Trajectory done.")
+                                sys.stdout.flush()
+
+                        file.close()
 
             if self.useFinalPdb.get():
-                w1_start = parsePDB(self._getExtraPath('walker1_initial.pdb'))
-                w1_traj = parseDCD(self._getExtraPath('walker1_trajectory.dcd'))
-                w1_traj.setCoords(w1_start)
-                w1_traj.setAtoms(w1_start.select('protein and not hydrogen'))
-                writeDCD(self._getExtraPath(
-                         'walker1_trajectory{:02d}_protein.dcd'.format(traj+1)),
-                         w1_traj)
+                if self.usingPseudoatoms.get() is True:
+                    w1_start = parsePDB(str(self._params['initPdb']))
+                    w1_traj = parseDCD(outputDcdName)
+                    w1_traj.setCoords(w1_start)
+                    w1_traj.setAtoms(w1_start)
+                    writeDCD(self._getExtraPath(
+                        'walker1_trajectory{:02d}_protein.dcd'.format(
+                            traj + 1)), w1_traj)
 
-                w2_start = parsePDB( self._getExtraPath('walker2_initial.pdb'))
-                w2_traj = parseDCD( self._getExtraPath('walker2_trajectory.dcd'))
-                w2_traj.setCoords(w2_start)
-                w2_traj.setAtoms(w2_start.select('protein and not hydrogen'))
-                writeDCD(self._getExtraPath(
-                         'walker2_trajectory{:02d}_protein.dcd'.format(traj+1)),
-                         w2_traj)
+                    w2_start = parsePDB(str(self._params['finPdb']))
+                    w2_traj = parseDCD(outputDcdName)
+                    w2_traj.setCoords(w2_start)
+                    w2_traj.setAtoms(w2_start)
+                    writeDCD(self._getExtraPath(
+                        'walker2_trajectory{:02d}_protein.dcd'.format(
+                            traj + 1)),
+                        w2_traj)
+
+                    os.system(
+                        'mv walker2_trajectory.dcd walker2_trajectory{:02d}'
+                        '.dcd'.format(traj + 1))
+                else:
+                    w1_start = parsePDB(self._getExtraPath(
+                        'walker1_ionized.pdb'))
+                    w1_traj = parseDCD(self._getExtraPath('walker1_trajectory.dcd'))
+                    w1_traj.setCoords(w1_start)
+                    w1_traj.setAtoms(w1_start.select('protein and not hydrogen'))
+                    writeDCD(self._getExtraPath(
+                             'walker1_trajectory{:02d}_protein.dcd'.format(traj+1)),
+                             w1_traj)
+
+                    w2_start = parsePDB( self._getExtraPath(
+                        'walker2_ionized.pdb'))
+                    w2_traj = parseDCD( self._getExtraPath('walker2_trajectory.dcd'))
+                    w2_traj.setCoords(w2_start)
+                    w2_traj.setAtoms(w2_start.select('protein and not hydrogen'))
+                    writeDCD(self._getExtraPath(
+                             'walker2_trajectory{:02d}_protein.dcd'.format(traj+1)),
+                             w2_traj)
 
                 combined_traj = parseDCD(self._getExtraPath(
                                          'walker1_trajectory{:02d}_protein.dcd'
@@ -243,17 +375,26 @@ class computePdbTrajectories(EMProtocol):
                 os.system('mv walker2_trajectory.dcd walker2_trajectory{:02d}'
                           '.dcd'.format(traj + 1))
             else:
-                w1_start = parsePDB(self._getExtraPath('walker1_initial.pdb'))
-                w1_traj = parseDCD(self._getExtraPath('walker1_trajectory.dcd'))
-                w1_traj.setCoords(w1_start)
-                w1_traj.setAtoms(w1_start.select('protein and not hydrogen'))
+                if self.usingPseudoatoms.get() is True:
+                    w1_start = parsePDB(str(self._params['initPdb']))
+                    w1_traj = parseDCD(self._getExtraPath('initr.dcd'))
+                    w1_traj.setCoords(w1_start)
+                    w1_traj.setAtoms(w1_start)
+                    '''os.system(
+                        'mv fin_trajectory.dcd fin_trajectory{:02d}'
+                        '.dcd'.format(traj + 1))'''
+                else:
+                    w1_start = parsePDB(self._getExtraPath(
+                        'walker1_ionized.pdb'))
+                    w1_traj = parseDCD(self._getExtraPath('walker1_trajectory.dcd'))
+                    w1_traj.setCoords(w1_start)
+                    w1_traj.setAtoms(w1_start.select('protein and not hydrogen'))
+
                 writeDCD(self._getExtraPath('trajectory{:02d}.dcd'.format(traj+1)),
                          w1_traj)
 
-            # all_trajectories.addFile(self._getExtraPath('trajectory{:02d}.dcd'.
-            #                                             format(traj+1)))
             os.system('mv walker1_trajectory.dcd walker1_trajectory{:02d}.dcd'.
-                      format(traj+1))
+                  format(traj+1))
 
             os.system('mv rmsd.txt trajectory{:02d}_rmsd.txt'.format(traj + 1))
 
@@ -266,8 +407,11 @@ class computePdbTrajectories(EMProtocol):
         for n in range(self.numTrajectories.get()):
             fnDcd = self._getExtraPath('trajectory{:02d}.dcd'.format(n+1))
             ens = parseDCD(fnDcd)
-            atoms = parsePDB(self._getExtraPath('walker1_initial.pdb'))
-            protein = atoms.select('protein and not hydrogen').copy()
+            if self.usingPseudoatoms.get() is True:
+                protein = parsePDB(str(self._params['initPdb']))
+            else:
+                atoms = parsePDB(self._getExtraPath('walker1_ionized.pdb'))
+                protein = atoms.select('protein and not hydrogen').copy()
             ens.setCoords(protein)
             ens.setAtoms(protein)
             fnPdb = []
