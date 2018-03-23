@@ -26,7 +26,6 @@
 
 from pyworkflow.em import *
 from prody import *
-from numpy import zeros, sqrt
 import time
 
 class computeModesPcaPdb(EMProtocol):
@@ -81,7 +80,7 @@ class computeModesPcaPdb(EMProtocol):
 
         else:
             foundPdb = False
-            if self.setType == 'setOfTrajectories':
+            if self.setType == 0:
                 for traj in self.setOfTrajectories.get():
                     if traj._initialPdb.get() is not None:
                         foundPdb = True
@@ -102,9 +101,9 @@ class computeModesPcaPdb(EMProtocol):
                                  "provided separately.")
 
         if self.pdbFileName.endswith('.pdb'):
-            pdb = parsePDB(self.pdbFileName,subset='ca')
+            pdb = parsePDB(self.pdbFileName)
         elif self.pdbFileName.endswith('.cif'):
-            pdb = parseCIF(self.pdbFileName,subset='ca')
+            pdb = parseCIF(self.pdbFileName)
         else:
             raise ValueError('The starting PDB filename needs to end in '
                              '.pdb or .cif')
@@ -121,14 +120,14 @@ class computeModesPcaPdb(EMProtocol):
                     raise ValueError('All PDB filenames should end in'
                                      ' .pdb or .cif')
 
-            for i, pdb in enumerate(pdbs):
-                if pdb.numAtoms() != pdbs[0].numAtoms():
+            for i, currPdb in enumerate(pdbs):
+                if currPdb.numAtoms() != pdbs[0].numAtoms():
                     pdbs.pop(i)
                     print("Scipion can only use sets of PDBs where all "
                           "members have the same number of atoms. Therefore"
                           " %s was removed as it does not have the same "
                           "number of atoms as the reference PDB."
-                          %pdb.getTitle())
+                          %currPdb.getTitle())
 
             self.ens = buildPDBEnsemble(pdb,pdbs,mapping_func=mapChainByChain)
 
@@ -138,9 +137,10 @@ class computeModesPcaPdb(EMProtocol):
                 combined_traj.addFile(traj.getFileName())
 
             combined_traj.setCoords(pdb)
+            combined_traj.setAtoms(pdb.ca)
 
             self.ens = Ensemble(combined_traj)
-            self.ens.setCoords(pdb)
+            self.ens.setCoords(pdb.ca)
 
             for i, coordset in enumerate(combined_traj.getCoordsets()):
                 self.ens.addCoordset(coordset)
@@ -153,23 +153,6 @@ class computeModesPcaPdb(EMProtocol):
         self.pca.calcModes()
 
     def _createOutputStep(self):
-        n = 2
-        projection = calcProjection(self.ens, self.pca[:n],
-                                    norm=False)
-        self.distanceMatrix = zeros((len(self.ens),len(self.ens)))
-
-        for i in range(len(self.ens)):
-            for j in range(len(self.ens)):
-                for k in range(n):
-                    self.distanceMatrix[i][j] += \
-                    (projection[i][k] - projection[j][k])**2
-
-                self.distanceMatrix[i][j] = sqrt(self.distanceMatrix[i][j])
-
-        writeArray(self._getExtraPath('distance_matrix.txt'),
-                   self.distanceMatrix,'%.18e','\t')
-        myFile = EMFile(self._getExtraPath('distance_matrix.txt'))
-        self._defineOutputs(distanceMatrix=myFile)
 
         writeDCD(self._getExtraPath('combined_trajectory.dcd'),self.ens)
         setOfTrajectories = self._createSetOfTrajectories()

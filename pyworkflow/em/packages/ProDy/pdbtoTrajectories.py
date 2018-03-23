@@ -135,7 +135,12 @@ class computePdbTrajectories(EMProtocol):
         self._insertFunctionStep('createOutputStep')
 
     def createTrajectories(self):
-        time.sleep(10)
+
+        if self.usingPseudoatoms.get() is True:
+            usingPseudoatoms = 1
+        else:
+            usingPseudoatoms = 0
+
         if self.initialStructure.get() is not None:
             self.initialFileName = self.initialStructure.get()
         else:
@@ -152,7 +157,7 @@ class computePdbTrajectories(EMProtocol):
                         'minLen': self.minLen.get(),
                         'tmdLen': self.tmdLen.get(),
                         'stepCut': self.stepCut.get(),
-                        # 'usingPseudoatoms': usingPseudoatoms,
+                        'usingPseudoatoms': usingPseudoatoms,
                         }
 
         if self.useFinalPdb.get() is True:
@@ -354,14 +359,13 @@ class computePdbTrajectories(EMProtocol):
                              'walker1_trajectory{:02d}_protein.dcd'.format(traj+1)),
                              w1_traj)
 
-                    w2_start = parsePDB( self._getExtraPath(
-                        'walker2_ionized.pdb'))
-                    w2_traj = parseDCD( self._getExtraPath('walker2_trajectory.dcd'))
-                    w2_traj.setCoords(w2_start)
-                    w2_traj.setAtoms(w2_start.select('protein and not hydrogen'))
-                    writeDCD(self._getExtraPath(
-                             'walker2_trajectory{:02d}_protein.dcd'.format(traj+1)),
-                             w2_traj)
+                w2_start = parsePDB( self._getExtraPath('walker2_ionized.pdb'))
+                w2_traj = parseDCD( self._getExtraPath('walker2_trajectory.dcd'))
+                w2_traj.setCoords(w2_start)
+                w2_traj.setAtoms(w2_start.select('protein and not hydrogen'))
+                writeDCD(self._getExtraPath(
+                         'walker2_trajectory{:02d}_protein.dcd'.format(traj+1)),
+                         w2_traj)
 
                 combined_traj = parseDCD(self._getExtraPath(
                                          'walker1_trajectory{:02d}_protein.dcd'

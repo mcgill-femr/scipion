@@ -1004,6 +1004,7 @@ class ProtRelionBase(EMProtocol):
                     starFile.close()
 
                     args['--ref'] = str(self._getExtraPath('references.star'))
+
                 else:
                     args['--ref'] = convertBinaryVol(self.referenceVolume.get(),
                                                     self._getTmpPath())

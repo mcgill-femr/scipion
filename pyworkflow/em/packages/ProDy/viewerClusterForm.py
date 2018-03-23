@@ -38,6 +38,8 @@ from numpy import array, where
 from matplotlib.pyplot import gca
 from pyworkflow.protocol.params import LabelParam, BooleanParam
 
+confProDy(auto_show=False)
+
 PDB_ALL = 0
 PDB_SEL = 1
 PDB_CHOICES = ['all', 'selection']
@@ -151,7 +153,7 @@ class ProdyViewerCluster(ProtocolViewer):
                               'newick')
 
             distMatrix = \
-                parseArray(str(obj.distanceMatrixFile.get().getFileName()))
+                parseArray(str(obj.distanceMatrixFile.getFileName()))
             reordered_matrix, indices = reorderMatrix(distMatrix, tree)
             plt.figure()
             show = showMatrix(reordered_matrix, ticklabels=indices,
@@ -206,7 +208,7 @@ class ProdyViewerCluster(ProtocolViewer):
                 colors.append(subgroup_color_dict[labels[where(labels == str(i)
                                                                )[0][0]]])
 
-            # plt.figure()
+            plt.figure()
             show = showProjection(combinedEns, pca[:2],
                                   color=colors, markeredgewidth=0)
 
