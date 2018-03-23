@@ -43,6 +43,7 @@ import pyworkflow.tests as pwtests
 from pyworkflow import HOME
 
 from pyworkflow.tests import *
+from pyworkflow import HOME
 
 from pyworkflow import HOME
 
