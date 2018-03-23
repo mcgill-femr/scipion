@@ -782,7 +782,6 @@ class XmippProtReconstructHighRes(ProtRefine3D, HelicalFinder):
                             if self.globalMethod.get() == self.GLOBAL_SIGNIFICANT:
                                 args='-i %s --initgallery %s --maxShift %d --odir %s --dontReconstruct --useForValidation %d'%\
                                      (fnGroup,fnGalleryGroupMd,maxShift,fnDirSignificant,self.numberOfReplicates.get()-1)
-                                # Falta Wiener y filtrar
                                 self.runJob('xmipp_reconstruct_significant',args,numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
                                 # moveFile(join(fnDirSignificant,"images_significant_iter001_00.xmd"),join(fnDirSignificant,"angles_group%03d%s.xmd"%(j,subset)))
                                 fnAnglesSignificant = join(fnDirSignificant,"angles_iter001_00.xmd")
