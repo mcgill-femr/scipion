@@ -120,6 +120,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         self._insertFunctionStep('classifyParticles',iteration)
         self._insertFunctionStep('reconstruct',iteration)
         self._insertFunctionStep('postProcessing',iteration)
+        self._insertFunctionStep('cleanDirectory',iteration)
         if iteration>1:
             self._insertFunctionStep('evaluateConvergence',iteration)
 
@@ -380,6 +381,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         fnDirPrevious=self._getExtraPath("Iter%03d"%(iteration-1))
         fnOut = join(fnDirCurrent,"classes.xmd")
         fnRootVol = join(fnDirCurrent,"class_")
+        TsCurrent=self.readInfoField(self._getExtraPath(),"sampling",xmipp.MDL_SAMPLINGRATE)
         
         self.parseSymList()
         for i in range(1,self.getNumberOfReconstructedVolumes()+1):
@@ -387,17 +389,39 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
             fnOutVolPrevious = join(fnDirPrevious,"volume%02d.mrc"%i)
             fnOutContPrevious = join(fnDirPrevious,"anglesCont%02d.stk"%i)
             for half in range(1,3):
+                fnAnglesToUse = "%s_%06d_%06d.xmd"%(fnRootVol,i,half)
+                if not exists(fnAnglesToUse):
+                    raise Exception("One of the halves cannot be reconstructed. Probably, class %d is too small"%i)
+                
+                row=getFirstRow(fnAnglesToUse)
+                hasCTF = row.containsLabel(xmipp.MDL_CTF_DEFOCUSU) or row.containsLabel(xmipp.MDL_CTF_MODEL)
+                fnCorrectedImagesRoot=join(fnDirCurrent,"images_corrected%02d"%i)
+                deleteStack = False
+                if hasCTF:
+                    args="-i %s -o %s.stk --save_metadata_stack %s.xmd --keep_input_columns"%(fnAnglesToUse,fnCorrectedImagesRoot,fnCorrectedImagesRoot)
+                    args+=" --sampling_rate %f --correct_envelope"%TsCurrent
+                    if self.inputParticles.get().isPhaseFlipped():
+                        args+=" --phase_flipped"
+                    self.runJob("xmipp_ctf_correct_wiener2d",args,numberOfMpi=min(self.numberOfMpi.get()*self.numberOfThreads.get(),24))
+                    cleanPath(fnAnglesToUse)
+                    fnAnglesToUse = fnCorrectedImagesRoot+".xmd"
+                    deleteStack = True
+                    deletePattern = fnCorrectedImagesRoot+".*"
+
                 fnOutVol = "%s_%06d_half%d.vol"%(fnRootVol,i,half)
-                args="-i %s_%06d_%06d.xmd -o %s --sym %s --weight --thr %d"%(fnRootVol,i,half,fnOutVol,
-                                                                             self.symList[i-1],self.numberOfThreads.get())
+                args="-i %s -o %s --sym %s --weight --thr %d"%(fnAnglesToUse,fnOutVol,
+                                                               self.symList[i-1],self.numberOfThreads.get())
                 self.runJob("xmipp_reconstruct_fourier",args,numberOfMpi=self.numberOfMpi.get())
-                cleanPath("%s_%06d_%06d.xmd"%(fnRootVol,i,half))
+                cleanPath(fnAnglesToUse)
+                if deleteStack:
+                    cleanPath(deletePattern)
                 if self.stochastic and iteration<self.numberOfIterations.get():
                     fnAux=join(fnDirCurrent,"aux.vol")
                     self.runJob("xmipp_image_operate","-i %s --mult %f"%(fnOutVol,self.stochasticAlpha),numberOfMpi=1)
                     self.runJob("xmipp_image_operate","-i %s --mult %f -o %s"%(fnOutVolPrevious,1-self.stochasticAlpha.get(),fnAux),numberOfMpi=1)
                     self.runJob("xmipp_image_operate","-i %s --plus %s"%(fnOutVol,fnAux),numberOfMpi=1)
                     cleanPath(fnAux)
+
             cleanPath(join(fnDirCurrent,"volumeRef%02d.mrc"%i))
             cleanPath(fnOutVolPrevious)
             cleanPath(fnOutContPrevious)
@@ -529,6 +553,13 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
             mdi = md.MetaData("class%06d_images@"%i+join(fnDirCurrent,"classes.xmd"))
             mdAll.unionAll(mdi)
         mdAll.write(join(fnDirCurrent,"images.xmd"))
+
+    def cleanDirectory(self,iteration):
+        fnDirCurrent=self._getExtraPath("Iter%03d"%iteration)
+        cleanPattern(join(fnDirCurrent,"anglesCont*"))
+        cleanPattern(join(fnDirCurrent,"images_corrected*"))
+        cleanPattern(join(fnDirCurrent,"angles_group*"))
+        cleanPattern(join(fnDirCurrent,"ctf*"))
 
     def evaluateConvergence(self,iteration):
         if not self.stochastic:
