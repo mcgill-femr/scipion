@@ -33,7 +33,7 @@ import numpy as np
 
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, StringParam, FloatParam, BooleanParam, IntParam, EnumParam
-from pyworkflow.utils.path import cleanPath, makePath, copyFile, moveFile
+from pyworkflow.utils.path import cleanPath, cleanPattern, makePath, copyFile, moveFile
 from pyworkflow.em.protocol import ProtClassify3D
 from pyworkflow.em.data import Volume
 from pyworkflow.em.metadata.utils import getFirstRow, getSize
