@@ -82,7 +82,7 @@ void ProgClassifySignificant::produceSideInfo()
 		std::cerr << "Producing side info ..." << std::endl;
     // Read the reference volumes
     Image<double> V;
-    MetaData mdVols, mdAngles;
+    MetaData mdVols, mdAngles, mdAnglesSorted;
     mdVols.read(fnVols);
     FileName fnVol;
     int i=1;
@@ -96,8 +96,9 @@ void ProgClassifySignificant::produceSideInfo()
         currentRowIdx.push_back(0);
 
         mdAngles.read(formatString("angles_%02d@%s",i,fnAngles.c_str()));
+        mdAnglesSorted.sort(mdAngles, MDL_ITEM_ID, true);
         VMetaData *vmd=new VMetaData();
-        mdAngles.asVMetaData(*vmd);
+        mdAnglesSorted.asVMetaData(*vmd);
         setAngles.push_back(*vmd);
         classifiedAngles.push_back(*(new VMetaData()));
 
