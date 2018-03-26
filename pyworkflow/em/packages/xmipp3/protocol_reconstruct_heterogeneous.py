@@ -556,10 +556,10 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
 
     def cleanDirectory(self,iteration):
         fnDirCurrent=self._getExtraPath("Iter%03d"%iteration)
-        cleanPattern(join(fnDirCurrent,"anglesCont*"))
-        cleanPattern(join(fnDirCurrent,"images_corrected*"))
-        cleanPattern(join(fnDirCurrent,"angles_group*"))
-        cleanPattern(join(fnDirCurrent,"ctf*"))
+        cleanPath(join(fnDirCurrent,"anglesCont*"))
+        cleanPath(join(fnDirCurrent,"images_corrected*"))
+        cleanPath(join(fnDirCurrent,"angles_group*"))
+        cleanPath(join(fnDirCurrent,"ctf*"))
 
     def evaluateConvergence(self,iteration):
         if not self.stochastic:
