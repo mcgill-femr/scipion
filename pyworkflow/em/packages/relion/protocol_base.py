@@ -195,7 +195,8 @@ class ProtRelionBase(EMProtocol):
         group = form.addGroup('Reference 3D map',
                               condition='not doContinue and not is2D')
         group.addParam('useMultipleVolumes', BooleanParam, default=False,
-                      label="Use multiple volumes")
+                        label="Use multiple volumes",
+                        condition = 'isClassify')
         group.addParam('referenceVolume', PointerParam, pointerClass='Volume',
                        important=True,
                        label="Input volume",
@@ -207,9 +208,9 @@ class ProtRelionBase(EMProtocol):
         group.addParam('referenceVolumeSet', PointerParam,
                        pointerClass='SetOfVolumes',
                        important=True,
-                       label="set of multiple input volumes",
+                       label="Set of multiple input volumes",
                        condition='not doContinue and not is2D and '
-                                 'useMultipleVolumes',
+                                 'useMultipleVolumes and isClassify',
                        help='Initial reference 3D maps should have the same '
                             'dimensions and the same pixel size as your input '
                             'particles.')
