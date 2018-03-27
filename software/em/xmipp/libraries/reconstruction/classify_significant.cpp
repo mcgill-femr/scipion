@@ -82,7 +82,7 @@ void ProgClassifySignificant::produceSideInfo()
 		std::cerr << "Producing side info ..." << std::endl;
     // Read the reference volumes
     Image<double> V;
-    MetaData mdVols, mdAngles;
+    MetaData mdVols, mdAngles, mdAnglesSorted;
     mdVols.read(fnVols);
     FileName fnVol;
     int i=1;
@@ -96,8 +96,9 @@ void ProgClassifySignificant::produceSideInfo()
         currentRowIdx.push_back(0);
 
         mdAngles.read(formatString("angles_%02d@%s",i,fnAngles.c_str()));
+        mdAnglesSorted.sort(mdAngles, MDL_ITEM_ID, true);
         VMetaData *vmd=new VMetaData();
-        mdAngles.asVMetaData(*vmd);
+        mdAnglesSorted.asVMetaData(*vmd);
         setAngles.push_back(*vmd);
         classifiedAngles.push_back(*(new VMetaData()));
 
@@ -435,14 +436,19 @@ void ProgClassifySignificant::run()
 	for (size_t ivol=0; ivol<projector.size(); ivol++)
 	{
 		md.clear();
-		md.fromVMetaData(classifiedAngles[ivol]);
-		double currentWmax=md.getColumnMax(MDL_WEIGHT);
-		double currentWmin=md.getColumnMin(MDL_WEIGHT);
-		if (currentWmax>currentWmin)
-			md.operate(formatString("weight=%f*(weight-%f)+%f",(1.0-wmin)/(currentWmax-currentWmin),currentWmin,wmin));
+		if (classifiedAngles[ivol].size()>0)
+		{
+			md.fromVMetaData(classifiedAngles[ivol]);
+			double currentWmax=md.getColumnMax(MDL_WEIGHT);
+			double currentWmin=md.getColumnMin(MDL_WEIGHT);
+			if (currentWmax>currentWmin)
+				md.operate(formatString("weight=%f*(weight-%f)+%f",(1.0-wmin)/(currentWmax-currentWmin),currentWmin,wmin));
+			else
+				md.operate(formatString("weight=%f",wmin));
+			md.setValueCol(MDL_REF3D,(int)ivol+1);
+		}
 		else
-			md.operate(formatString("weight=%f",wmin));
-		md.setValueCol(MDL_REF3D,(int)ivol+1);
+			REPORT_ERROR(ERR_VALUE_EMPTY,formatString("Class %d have been depleted of images. Cannot continue processing",ivol));
 		md.write(formatString("class%06d_images@%s",ivol+1,fnOut.c_str()),MD_APPEND);
 	}
 }

@@ -33,7 +33,7 @@ import numpy as np
 
 from pyworkflow.protocol.constants import LEVEL_ADVANCED
 from pyworkflow.protocol.params import PointerParam, StringParam, FloatParam, BooleanParam, IntParam, EnumParam
-from pyworkflow.utils.path import cleanPath, makePath, copyFile, moveFile
+from pyworkflow.utils.path import cleanPath, cleanPattern, makePath, copyFile, moveFile
 from pyworkflow.em.protocol import ProtClassify3D
 from pyworkflow.em.data import Volume
 from pyworkflow.em.metadata.utils import getFirstRow, getSize
@@ -121,6 +121,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         self._insertFunctionStep('classifyParticles',iteration)
         self._insertFunctionStep('reconstruct',iteration)
         self._insertFunctionStep('postProcessing',iteration)
+        self._insertFunctionStep('cleanDirectory',iteration)
         if iteration>1:
             self._insertFunctionStep('evaluateConvergence',iteration)
 
@@ -155,8 +156,8 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
 
         # Prepare images
         print "Preparing images to sampling rate=",TsCurrent
-        fnNewParticles=join(fnDir,"imagesWiener.stk")
-        fnNewMetadata = join(fnDir,"imagesWiener.xmd")
+        fnNewParticles=join(fnDir,"imagesResized.stk")
+        fnNewMetadata = join(fnDir,"imagesResized.xmd")
         if newXdim!=Xdim:
             self.runJob("xmipp_image_resize","-i %s -o %s --fourier %d"%(self.imgsFn,fnNewParticles,newXdim),
                         numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
@@ -168,13 +169,6 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         R=min(round(R*self.TsOrig/TsCurrent*(1+self.angularMaxShift.get()*0.01)),newXdim/2)
         self.runJob("xmipp_transform_mask","-i %s --mask circular -%d"%(fnNewParticles,R),numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
 
-        row=getFirstRow(fnNewMetadata)
-        if row.containsLabel(xmipp.MDL_CTF_MODEL) or row.containsLabel(xmipp.MDL_CTF_DEFOCUSU):
-            args="-i %s --sampling_rate %f --correct_envelope"%(fnNewMetadata,TsCurrent)
-            if self.inputParticles.get().isPhaseFlipped():
-                args+=" --phase_flipped"
-            self.runJob("xmipp_ctf_correct_wiener2d",args,numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
-        
         args="-i %s --sampling %f --fourier low_pass %f"%(fnNewMetadata,TsCurrent,self.targetResolution)
         self.runJob("xmipp_transform_filter",args,numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
         
@@ -240,16 +234,82 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         self.writeInfoField(fnDirCurrent,"angleStep",xmipp.MDL_ANGLE_DIFF,float(angleStep))
         
         # Generate projections
-        fnImgs = self._getExtraPath("imagesWiener.xmd")
+        fnImgs = self._getExtraPath("imagesResized.xmd")
         fnImgsToUse = fnImgs
         if self.stochastic and iteration<self.numberOfIterations.get():
-            fnImgsToUse = join(fnDirCurrent,"imagesWiener%02d.xmd"%iteration)
+            fnImgsToUse = join(fnDirCurrent,"imagesResized%02d.xmd"%iteration)
             self.runJob("xmipp_metadata_utilities","-i %s -o %s --operate random_subset %d"%(fnImgs,fnImgsToUse,self.stochasticN),
                         numberOfMpi=1)
         self.parseSymList()
         for i in range(1,self.getNumberOfReconstructedVolumes()+1):
             fnAngles=join(fnDirCurrent,"angles%02d.xmd"%i)
-            if not exists(fnAngles):
+            fnLocalStk=join(fnDirCurrent,"anglesCont%02d.stk"%i)
+            if not exists(fnLocalStk):
+                # Create defocus groups
+                row=getFirstRow(fnImgsToUse)
+                if row.containsLabel(xmipp.MDL_CTF_MODEL) or row.containsLabel(xmipp.MDL_CTF_DEFOCUSU):
+                    self.runJob("xmipp_ctf_group","--ctfdat %s -o %s/ctf:stk --pad 1.0 --sampling_rate %f --phase_flipped  --error 0.1 --resol %f"%\
+                                (fnImgsToUse,fnDirCurrent,TsCurrent,self.targetResolution.get()),numberOfMpi=1)
+                    moveFile("%s/ctf_images.sel"%fnDirCurrent,"%s/ctf_groups.xmd"%fnDirCurrent)
+                    cleanPath("%s/ctf_split.doc"%fnDirCurrent)
+                    mdInfo = xmipp.MetaData("numberGroups@%s"%join(fnDirCurrent,"ctfInfo.xmd"))
+                    fnCTFs="%s/ctf_ctf.stk"%fnDirCurrent
+                    numberGroups=mdInfo.getValue(xmipp.MDL_COUNT,mdInfo.firstObject())
+                    ctfPresent=True
+                else:
+                    numberGroups=1
+                    ctfPresent=False
+                    fnCTFs=""
+    
+                # Generate projections
+                fnReferenceVol=join(fnDirCurrent,"volumeRef%02d.mrc"%i)
+                fnGallery=join(fnDirCurrent,"gallery%02d.stk"%i)
+                fnGalleryMd=join(fnDirCurrent,"gallery%02d.xmd"%i)
+                args="-i %s -o %s --sampling_rate %f --perturb %f --sym %s --min_tilt_angle %f --max_tilt_angle %f"%\
+                     (fnReferenceVol,fnGallery,angleStep,math.sin(angleStep*math.pi/180.0)/4,self.symList[i-1],
+                      self.angularMinTilt.get(),self.angularMaxTilt.get())
+                args+=" --compute_neighbors --angular_distance -1 --experimental_images %s"%fnImgsToUse
+                self.runJob("xmipp_angular_project_library",args,numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
+                cleanPath(join(fnDirCurrent,"gallery%02d_sampling.xmd"%i))
+                moveFile(join(fnDirCurrent,"gallery%02d.doc"%i), fnGalleryMd)
+    
+                for j in range(1,numberGroups+1):
+                    fnAnglesGroup=join(fnDirCurrent,"angles_group%02d_%03d.xmd"%(i,j))
+                    if not exists(fnAnglesGroup):
+                        if ctfPresent:
+                            fnGroup="ctfGroup%06d@%s/ctf_groups.xmd"%(j,fnDirCurrent)
+                            fnCTF ="%d@%s/ctf_ctf.stk"%(j,fnDirCurrent)
+                            fnGalleryGroup=fnGallery=join(fnDirCurrent,"gallery%02d_%06d.stk"%(i,j))
+                            fnGalleryGroupMd=fnGallery=join(fnDirCurrent,"gallery%02d_%06d.xmd"%(i,j))
+                            self.runJob("xmipp_transform_filter","-i %s -o %s --fourier binary_file %s --save_metadata_stack %s --keep_input_columns"%\
+                                        (fnGalleryMd,fnGalleryGroup,fnCTF,fnGalleryGroupMd),
+                                        numberOfMpi=min(self.numberOfMpi.get()*self.numberOfThreads.get(),24))                            
+                        else:
+                            fnGroup=fnImgsToUse
+                            fnGalleryGroup=fnGallery
+                            fnGalleryGroupMd=fnGalleryMd
+                        if getSize(fnGroup)==0: # If the group is empty
+                            continue
+                        maxShift=round(self.angularMaxShift.get()*newXdim/100)
+                        
+                        args='-i %s --initgallery %s --maxShift %d --odir %s --dontReconstruct --useForValidation %d --dontApplyFisher'%\
+                             (fnGroup,fnGalleryGroupMd,maxShift,fnDirCurrent,self.numberOfReplicates.get()-1)
+                        self.runJob('xmipp_reconstruct_significant',args,numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
+                        fnAnglesSignificant = join(fnDirCurrent,"angles_iter001_00.xmd")
+                        if exists(fnAnglesSignificant): 
+                            moveFile(fnAnglesSignificant,fnAnglesGroup)
+                            cleanPath(join(fnDirCurrent,"images_iter001_00.xmd"))
+                            cleanPath(join(fnDirCurrent,"images_significant_iter001_00.xmd"))
+                    if exists(fnAnglesGroup):
+                        if not exists(fnAngles) and exists(fnAnglesGroup):
+                            copyFile(fnAnglesGroup, fnAngles)
+                        else:
+                            if exists(fnAngles) and exists(fnAnglesGroup):
+                                self.runJob("xmipp_metadata_utilities","-i %s --set union_all %s"%(fnAngles,fnAnglesGroup),numberOfMpi=1)
+                self.runJob("xmipp_metadata_utilities","-i %s --set join %s image"%(fnAngles,fnImgsToUse),numberOfMpi=1)
+                self.runJob("rm -f",fnDirCurrent+"/gallery*",numberOfMpi=1)
+                    
+                """                
                 fnReferenceVol=join(fnDirCurrent,"volumeRef%02d.mrc"%i)
                 fnGallery=join(fnDirCurrent,"gallery%02d.stk"%i)
                 fnGalleryXmd=join(fnDirCurrent,"gallery%02d.doc"%i)
@@ -275,8 +335,8 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
                     raise Exception("There is no angular assignment for this volume")
                 cleanPath(fnGallery)
                 cleanPath(fnGalleryXmd)
-
-                fnLocalStk=join(fnDirCurrent,"anglesCont%02d.stk"%i)
+                """
+    
                 args="-i %s -o %s --sampling %f --Rmax %d --padding 2 --ref %s --max_resolution %f"%\
                    (fnAngles,fnLocalStk,TsCurrent,newXdim/2,fnReferenceVol,2*TsCurrent)
                 args+=" --optimizeShift --max_shift %f"%maxShift
@@ -286,9 +346,9 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
                 if self.inputParticles.get().isPhaseFlipped():
                     args+=" --phaseFlipped"
                 self.runJob("xmipp_angular_continuous_assign2",args,numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
-                fnAngles=join(fnDirCurrent,"anglesCont%02d.xmd"%i)
-                self.runJob('xmipp_metadata_utilities','-i %s --fill weight constant 1'%fnAngles,numberOfMpi=1)
-                self.runJob('xmipp_metadata_utilities','-i %s --operate modify_values "weight=weightContinuous2"'%fnAngles,numberOfMpi=1)
+                fnAnglesCont=join(fnDirCurrent,"anglesCont%02d.xmd"%i)
+                self.runJob('xmipp_metadata_utilities','-i %s --fill weight constant 1'%fnAnglesCont,numberOfMpi=1)
+                self.runJob('xmipp_metadata_utilities','-i %s --operate modify_values "weight=weightContinuous2"'%fnAnglesCont,numberOfMpi=1)
 
     def classifyParticles(self,iteration):
         fnDirCurrent=self._getExtraPath("Iter%03d"%iteration)
@@ -322,6 +382,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         fnDirPrevious=self._getExtraPath("Iter%03d"%(iteration-1))
         fnOut = join(fnDirCurrent,"classes.xmd")
         fnRootVol = join(fnDirCurrent,"class_")
+        TsCurrent=self.readInfoField(self._getExtraPath(),"sampling",xmipp.MDL_SAMPLINGRATE)
         
         self.parseSymList()
         for i in range(1,self.getNumberOfReconstructedVolumes()+1):
@@ -329,17 +390,39 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
             fnOutVolPrevious = join(fnDirPrevious,"volume%02d.mrc"%i)
             fnOutContPrevious = join(fnDirPrevious,"anglesCont%02d.stk"%i)
             for half in range(1,3):
+                fnAnglesToUse = "%s_%06d_%06d.xmd"%(fnRootVol,i,half)
+                if not exists(fnAnglesToUse):
+                    raise Exception("One of the halves cannot be reconstructed. Probably, class %d is too small"%i)
+                
+                row=getFirstRow(fnAnglesToUse)
+                hasCTF = row.containsLabel(xmipp.MDL_CTF_DEFOCUSU) or row.containsLabel(xmipp.MDL_CTF_MODEL)
+                fnCorrectedImagesRoot=join(fnDirCurrent,"images_corrected%02d"%i)
+                deleteStack = False
+                if hasCTF:
+                    args="-i %s -o %s.stk --save_metadata_stack %s.xmd --keep_input_columns"%(fnAnglesToUse,fnCorrectedImagesRoot,fnCorrectedImagesRoot)
+                    args+=" --sampling_rate %f --correct_envelope"%TsCurrent
+                    if self.inputParticles.get().isPhaseFlipped():
+                        args+=" --phase_flipped"
+                    self.runJob("xmipp_ctf_correct_wiener2d",args,numberOfMpi=min(self.numberOfMpi.get()*self.numberOfThreads.get(),24))
+                    cleanPath(fnAnglesToUse)
+                    fnAnglesToUse = fnCorrectedImagesRoot+".xmd"
+                    deleteStack = True
+                    deletePattern = fnCorrectedImagesRoot+".*"
+
                 fnOutVol = "%s_%06d_half%d.vol"%(fnRootVol,i,half)
-                args="-i %s_%06d_%06d.xmd -o %s --sym %s --weight --thr %d"%(fnRootVol,i,half,fnOutVol,
-                                                                             self.symList[i-1],self.numberOfThreads.get())
+                args="-i %s -o %s --sym %s --weight --thr %d"%(fnAnglesToUse,fnOutVol,
+                                                               self.symList[i-1],self.numberOfThreads.get())
                 self.runJob("xmipp_reconstruct_fourier",args,numberOfMpi=self.numberOfMpi.get())
-                cleanPath("%s_%06d_%06d.xmd"%(fnRootVol,i,half))
+                cleanPath(fnAnglesToUse)
+                if deleteStack:
+                    cleanPath(deletePattern)
                 if self.stochastic and iteration<self.numberOfIterations.get():
                     fnAux=join(fnDirCurrent,"aux.vol")
                     self.runJob("xmipp_image_operate","-i %s --mult %f"%(fnOutVol,self.stochasticAlpha),numberOfMpi=1)
                     self.runJob("xmipp_image_operate","-i %s --mult %f -o %s"%(fnOutVolPrevious,1-self.stochasticAlpha.get(),fnAux),numberOfMpi=1)
                     self.runJob("xmipp_image_operate","-i %s --plus %s"%(fnOutVol,fnAux),numberOfMpi=1)
                     cleanPath(fnAux)
+
             cleanPath(join(fnDirCurrent,"volumeRef%02d.mrc"%i))
             cleanPath(fnOutVolPrevious)
             cleanPath(fnOutContPrevious)
@@ -471,6 +554,13 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
             mdi = md.MetaData("class%06d_images@"%i+join(fnDirCurrent,"classes.xmd"))
             mdAll.unionAll(mdi)
         mdAll.write(join(fnDirCurrent,"images.xmd"))
+
+    def cleanDirectory(self,iteration):
+        fnDirCurrent=self._getExtraPath("Iter%03d"%iteration)
+        cleanPattern(join(fnDirCurrent,"anglesCont*"))
+        cleanPattern(join(fnDirCurrent,"images_corrected*"))
+        cleanPattern(join(fnDirCurrent,"angles_group*"))
+        cleanPattern(join(fnDirCurrent,"ctf*"))
 
     def evaluateConvergence(self,iteration):
         if not self.stochastic:
