@@ -103,8 +103,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         self.symList = self.symmetryGroup.get().strip().split()
         if len(self.symList)<self.getNumberOfReconstructedVolumes():
             self.symList+=self.symList*(self.getNumberOfReconstructedVolumes()-len(self.symList))
-        #AJ fix a problem here with the list
-    
+
     #--------------------------- STEPS functions ---------------------------------------------------
     def _insertAllSteps(self):
         self.imgsFn=self._getExtraPath('images.xmd')
@@ -517,7 +516,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         cleanPath(fnCentered)
         
         # Align all volumes with respect to the first one taking care of the mirror
-        fnVol1=join(fnDirCurrent,"volume%02d.mrc"%i) ######## AJ DUDA 1 en lugar de i??
+        fnVol1=join(fnDirCurrent,"volume%02d.mrc"%1)
         I1=xmipp.Image(fnVol1)
         for i in range(2,self.getNumberOfReconstructedVolumes()+1):
             fnVoli=join(fnDirCurrent,"volume%02d.mrc"%i)
