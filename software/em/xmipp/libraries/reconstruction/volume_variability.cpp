@@ -93,19 +93,22 @@ void ProgVolVariability::defineParams()
     addParamsLine("                                 : CTF values (in absolute value) below this one will not be corrected");
  //   addExampleLine("For reconstruct enforcing i3 symmetry and using stored weights:", false);
  //   addExampleLine("   xmipp_reconstruct_fourier  -i reconstruction.sel --sym i3 --weight");
+ //   JV QUESTIONS;
+    // NiterWeight por defecto esta a 1, pero en muchos puntos se hace la comparacion con NiterWeight == 0, y me da la sensacion
+    // 			   que NiterWeight == 0, deberia ser NiterWeight == 1 mirar por ejem lineas 186-189
 }
 
 // Read arguments ==========================================================
 void ProgVolVariability::readParams()
 {
     fn_sel = getParam("-i");
-    fn_vol = getParam("--vol");
     fn_out = getParam("-o");
     fn_sym = getParam("--sym");
 
+    //~JV
+    fn_vol = getParam("--vol");
     std::string aux;
     aux = getParam("--metric");
-
     if (aux == "variance")
         method = VARIANCE;
     else if (aux == "std")
@@ -114,6 +117,7 @@ void ProgVolVariability::readParams()
         method = CONFIDENCE;
     else if (aux == "relative_error")
         method = RELATIVE_ERROR;
+    //~JV
 
     if(checkParam("--prepare_fsc"))
         fn_fsc = getParam("--prepare_fsc");
@@ -356,11 +360,12 @@ void ProgVolVariability::produceSideinfo()
         }
     }
 
+    // ~JV
     //Read the input average map
     Vin.read(fn_vol);
     Vin().setXmippOrigin();
 
-    //Distort Vin() by the Fourier Transform of the Blob (see lines starting 1287)
+    //JV: Distort Vin() by the Fourier Transform of the Blob (see lines starting 1356 in finishComputations)
     double pad_relation= ((double)padding_factor_proj/padding_factor_vol);
     pad_relation = (pad_relation * pad_relation * pad_relation);
 
@@ -376,7 +381,7 @@ void ProgVolVariability::produceSideinfo()
         double factor2=(pow(Sinc(radius/(2*(imgSize))),2));
         if (NiterWeight!=0)
         {
-            A3D_ELEM(mVin,k,i,j) *= (ipad_relation*factor2*factor);
+            A3D_ELEM(mVin,k,i,j) *= (ipad_relation*factor2*factor);  //JV changed!
             meanFactor2+=factor2;
         }
         else
@@ -387,9 +392,9 @@ void ProgVolVariability::produceSideinfo()
     {
         meanFactor2/=MULTIDIM_SIZE(mVin);
         FOR_ALL_ELEMENTS_IN_ARRAY3D(mVin)
-        A3D_ELEM(mVin,k,i,j) /= meanFactor2;
+        A3D_ELEM(mVin,k,i,j) /= meanFactor2;  //JV changed!
     }
-    //Finish here Vin distortion by FT of Blob
+    //JV Finish here Vin distortion by FT of Blob
 
     //Padding of Vin
     MultidimArray<double> localPaddedVin;
@@ -412,11 +417,14 @@ void ProgVolVariability::produceSideinfo()
     transformerVol2.FourierTransform(localPaddedVin, fftVin, true);
     transformerVol2.clear();
 
+    //JV See lines starting 596, This is because the normalizing factors in the Fourier Transform?
     double corr3D_2D=(imgSize* pow(padding_factor_vol,3.)) / pow(padding_factor_proj,2.);
     FOR_ALL_ELEMENTS_IN_ARRAY3D(fftVin)
     A3D_ELEM(fftVin,k,i,j)*=corr3D_2D;
 
     randomize_random_generator();
+    localPaddedVin.clear();
+    // ~JV
 
 }
 
@@ -481,7 +489,6 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
         {
         case PRELOAD_IMAGE:
             {
-
                 threadParams->read = 0;
 
                 if ( threadParams->imageIndex >= 0 )
@@ -492,7 +499,6 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
 
                     //Read projection from selfile, read also angles and shifts if present
                     //but only apply shifts
-
                     proj.readApplyGeo(*(threadParams->selFile), objId[threadParams->imageIndex], params);
                     rot  = proj.rot();
                     tilt = proj.tilt();
@@ -513,7 +519,7 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                     {
                         weight=1.0;
                     }
-                    else if (weight==0.0)
+                    else if (weight==0.0) // JV I think that the flux never enters here!
                     {
                         threadParams->read = 2;
                         break;
@@ -523,7 +529,7 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                     // and compute its Fourier transform
                     proj().setXmippOrigin();
                     size_t localPaddedImgSize=(size_t)(parent->imgSize*parent->padding_factor_proj);
-                    if (threadParams->reprocessFlag)
+                    if (threadParams->reprocessFlag) //JV if I use this flag to recalculate the 3D reconstruction this line should be removed
                         localPaddedFourier.initZeros(localPaddedImgSize,localPaddedImgSize/2+1);
                     else
                     {
@@ -582,8 +588,10 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                 }
                 break;
             }
+
         case EXIT_THREAD:
             return NULL;
+
         case PROCESS_WEIGHTS:
             {
 
@@ -922,18 +930,24 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                                 double *ptrOut=(double *)&(DIRECT_A1D_ELEM(VoutFourier, memIdx));
                                                 double *ptrInVol=(double *)&(DIRECT_A1D_ELEM(parent->fftVin, memIdx));
 
-                                                ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0]));
+                                                  //ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0]));
+                                                ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0])+(ptrIn[1]-ptrInVol[1])*(ptrIn[1]-ptrInVol[1]));
 //                                                ptrOut[0] += wEffective * (ptrIn[0]);
+//                                                ptrOut[0] += wEffective * std::abs(ptrIn[0] - ptrInVol[0]);
 //                                                ptrOut[0] += wEffective * (ptrInVol[0]);
                                                 DIRECT_A1D_ELEM(fourierWeights, memIdx) += w;
-//                                                if (conjugate)
+                                                if (conjugate)
 //                                                	 ptrOut[1]-=wEffective * (ptrIn[1]);
-//                                                   ptrOut[1]-=wEffective * (ptrIn[1]-ptrInVol[1])* (ptrIn[1]-ptrInVol[1]);
+                                                	ptrOut[1]+=wEffective*((-ptrIn[1]-ptrInVol[1])*(-ptrIn[1]-ptrInVol[1]));
 //                                                	ptrOut[1]-=wEffective * (ptrInVol[1]);
-//                                               else
+                                               else
 //                                            	   ptrOut[1]+=wEffective * (ptrIn[1]);
-                                                    ptrOut[1]+=wEffective * (ptrIn[1]-ptrInVol[1])* (ptrIn[1]-ptrInVol[1]);
+                                            	   ptrOut[1]+=wEffective*((ptrIn[1]-ptrInVol[1])*(ptrIn[1]-ptrInVol[1]));
 //                                            	   ptrOut[1]+=wEffective * (ptrInVol[1]);
+//                                            	   ptrOut[1]+=wEffective * std::abs(ptrIn[1]- ptrInVol[1]);
+
+//                                                if (memIdx == 10*50*50)
+//                                                	std::cout << ptrIn[0] << " " << ptrInVol[0] << " " << ptrIn[1] << " " << ptrInVol[1] << " " << w << std::endl;
                                             }
                                         }
                                     }
@@ -993,13 +1007,14 @@ void ProgVolVariability::processImages( int firstImageIndex, int lastImageIndex,
 
     // This index tells when to save work for later FSC usage
     int FSCIndex = (firstImageIndex + lastImageIndex)/2;
-
     // Index of the image that has just been processed. Used for
     // FSC purposes
     int current_index;
 
     do
     {
+
+//PRELOAD_IMAGE
         threadOpCode = PRELOAD_IMAGE;
 
         for ( int nt = 0 ; nt < numThreads ; nt ++ )
@@ -1025,6 +1040,8 @@ void ProgVolVariability::processImages( int firstImageIndex, int lastImageIndex,
 
         // each threads have read a different image and now
         // all the thread will work in a different part of a single image.
+
+//PROCESS_IMAGE
         threadOpCode = PROCESS_IMAGE;
 
         processed = false;
@@ -1082,7 +1099,7 @@ void ProgVolVariability::processImages( int firstImageIndex, int lastImageIndex,
                     Matrix2D<double> A_SL=R_repository[isym]*(*Ainv);
 
                     // Fill the thread arguments for each thread
-                    for ( int th = 0 ; th < numThreads ; th ++ )
+                    for ( int th = 0 ; th < numThreads ; th ++ ) // JV I think this for is incorrect all the threads have the same A_SL matrix
                     {
                         // Passing parameters to each thread
                         th_args[th].symmetry = &A_SL;
@@ -1111,6 +1128,7 @@ void ProgVolVariability::processImages( int firstImageIndex, int lastImageIndex,
                     // Threads are working now, wait for them to finish
                     // processing current projection
                     barrier_wait( &barrier );
+//PROCESS_IMAGE
 
                     //#define DEBUG2
 #ifdef DEBUG2
@@ -1265,8 +1283,15 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 
     // Enforce symmetry in the Fourier values as well as the weights
     // Sjors 19aug10 enforceHermitianSymmetry first checks ndim...
-    Vout().initZeros(volPadSizeZ,volPadSizeY,volPadSizeX);
-    transformerVol.setReal(Vout());
+
+    //~JV
+    Vout().initZeros(ZSIZE(Vin()),YSIZE(Vin()),XSIZE(Vin()));
+    Vout().setXmippOrigin();
+
+    Vin().initZeros(volPadSizeZ,volPadSizeY,volPadSizeX); //we want to reuse the Vin() memory
+    Vin().setXmippOrigin();
+
+    transformerVol.setReal(Vin());
     transformerVol.enforceHermitianSymmetry();
     //forceWeightSymmetry(preFourierWeights);
 
@@ -1283,36 +1308,96 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
         save2.write((std::string) fn_out + "hermiticFourierVol.vol");
     }
 #endif
+
+//PROCESS_WEIGHTS
     threadOpCode = PROCESS_WEIGHTS;
     // Awake threads
     barrier_wait( &barrier );
     // Threads are working now, wait for them to finish
     barrier_wait( &barrier );
 
-    //JV
-    VoutFourierTmp = fftVin;
-    int numIters = 1;
-    double randNum;
+//~JV MONTE CARLO SIMULATION
+    MultidimArray< std::complex<double> > VoutFourierTmp2;
+    VoutFourierTmp2 = fftVin;
+    int numIters = 5;
+    std::complex<double>  mean = 0;
+    std::complex<double> stddev = 0;
+    std::complex<double> result = 0;
 
+    //transformerVol.getFourierAlias(VoutFourierTmp2); // The Fourier transforms are calculated using the monte carlo maps
+
+    init_progress_bar(numIters);
     for (int it = 0; it < numIters; ++it)
-    	FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourier)
+    {
+		FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourierTmp2)  // Simulated Volume
 		{
-    		randNum = (100000.0*(rand()/(double)RAND_MAX-0.5));
-    		A3D_ELEM(VoutFourierTmp,k,i,j) += A3D_ELEM(VoutFourier,k,i,j)*randNum;
-		}
-    	/*
-    	if (method == STD)
-            A3D_ELEM(VoutFourier,k,i,j) = std::sqrt(A3D_ELEM(VoutFourier,k,i,j));
-        else if (method == CONFIDENCE)
-        	A3D_ELEM(VoutFourier,k,i,j) = 3.0*std::sqrt(A3D_ELEM(VoutFourier,k,i,j));
-        else if (method == RELATIVE_ERROR)
-        	A3D_ELEM(VoutFourier,k,i,j) = std::sqrt(A3D_ELEM(VoutFourier,k,i,j))/std::abs(A3D_ELEM(fftVin,k,i,j));
-        */
-    //}
+			mean = A3D_ELEM(fftVin, k, i, j);
+			stddev = std::sqrt(A3D_ELEM(VoutFourier, k, i, j)); // We compute the std from the variance
+			rand_normal(((double*) &mean)[0], ((double*) &stddev)[0],
+					((double*) &result)[0]);
+			rand_normal(((double*) &mean)[1], ((double*) &stddev)[1],
+					((double*) &result)[1]);
+			A3D_ELEM(VoutFourierTmp2,k,i,j) = result;
+		}  										   // Simulated Volume
 
-    VoutFourier = VoutFourierTmp;
-    //JV
+		std::cout << std::endl;
+	    std::cout << A3D_ELEM(fftVin,5,5,5) << " " << A3D_ELEM(VoutFourierTmp2,5,5,5) << " " << A3D_ELEM(VoutFourier,5,5,5) << std::endl;
 
+//Fourier Transform of simulated volume
+
+	    //transformerVol.inverseFourierTransform();
+	    //CenterFFT(Vin(),false);
+
+	   /*
+	    // Correct by the Fourier transform of the blob
+	    Vin().setXmippOrigin();
+
+	    //Remove the padding
+	    Vin().selfWindow(FIRST_XMIPP_INDEX(imgSize),FIRST_XMIPP_INDEX(imgSize),
+	                      FIRST_XMIPP_INDEX(imgSize),LAST_XMIPP_INDEX(imgSize),
+	                      LAST_XMIPP_INDEX(imgSize),LAST_XMIPP_INDEX(imgSize));
+
+	    double pad_relation= ((double)padding_factor_proj/padding_factor_vol);
+	    pad_relation = (pad_relation * pad_relation * pad_relation);
+
+	    MultidimArray<double> &mVout=Vin();
+	    double ipad_relation=1.0/pad_relation;
+	    double meanFactor2=0;
+	    FOR_ALL_ELEMENTS_IN_ARRAY3D(mVout)
+	    {
+	        double radius=sqrt((double)(k*k+i*i+j*j));
+	        double aux=radius*iDeltaFourier;
+	        double factor = Fourier_blob_table(ROUND(aux));
+	        double factor2=(pow(Sinc(radius/(2*(imgSize))),2));
+	        if (NiterWeight!=0)
+	        {
+	            A3D_ELEM(mVout,k,i,j) /= (ipad_relation*factor2*factor);
+	            meanFactor2+=factor2;
+	        }
+	        else
+	            A3D_ELEM(mVout,k,i,j) /= (ipad_relation*factor);
+	    }
+
+	    if (NiterWeight!=0)
+	    {
+	        meanFactor2/=MULTIDIM_SIZE(mVout);
+	        FOR_ALL_ELEMENTS_IN_ARRAY3D(mVout)
+	        A3D_ELEM(mVout,k,i,j) *= meanFactor2;
+	    }
+
+
+	    Vout() += Vin();
+
+	    Vin().initZeros(volPadSizeZ,volPadSizeY,volPadSizeX); //we want to reuse the Vin() memory
+	    Vin().setXmippOrigin();
+
+	    progress_bar(it);
+	    */
+
+    }
+    //~JV
+
+/*
 #ifdef DEBUG_VOL1
     {
         Image< std::complex<double> > save;
@@ -1369,7 +1454,12 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
         A3D_ELEM(mVout,k,i,j) *= meanFactor2;
     }
 
+  */
+
     Vout.write(out_name);
+
+
+
 }
 
 void ProgVolVariability::setIO(const FileName &fn_in, const FileName &fn_out)
@@ -1412,3 +1502,36 @@ void ProgVolVariability::forceWeightSymmetry(MultidimArray<double> &FourierWeigh
             DIRECT_A3D_ELEM(FourierWeights,ksym,0,0)=mean;
     }
 }
+
+
+void ProgVolVariability::rand_normal(double& mean, double& stddev, double& result)
+{//Box muller method
+    static double n2 = 0.0;
+    static int n2_cached = 0;
+    if (!n2_cached)
+    {
+        double x, y, r;
+        do
+        {
+            x = 2.0*rand()/RAND_MAX - 1;
+            y = 2.0*rand()/RAND_MAX - 1;
+
+            r = x*x + y*y;
+        }
+        while (r == 0.0 || r > 1.0);
+        {
+            double d = sqrt(-2.0*log(r)/r);
+            double n1 = x*d;
+            n2 = y*d;
+            result = n1*stddev + mean;
+            n2_cached = 1;
+        }
+    }
+    else
+    {
+        n2_cached = 0;
+        result = n2*stddev + mean;
+    }
+}
+
+

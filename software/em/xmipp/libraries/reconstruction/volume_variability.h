@@ -277,6 +277,9 @@ public:
 
     ///Functions of common reconstruction interface
     virtual void setIO(const FileName &fn_in, const FileName &fn_out);
+
+    void rand_normal(double& mean, double& stddev, double& result);
+
 };
 //@}
 #endif
