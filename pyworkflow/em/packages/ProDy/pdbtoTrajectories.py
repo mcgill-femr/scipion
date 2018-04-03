@@ -169,7 +169,7 @@ class computePdbTrajectories(EMProtocol):
             self._params['cycle'] = self.defaultCycles
         else:
             self._params['finPdb'] = self._params['initPdb']
-
+        time.sleep(10)
         for traj in range(self.numTrajectories.get()):
             if self.usingPseudoatoms.get() is True:
                 print("Calculating pseudoatoms trajectory %d..."%(traj+1))
@@ -289,7 +289,6 @@ class computePdbTrajectories(EMProtocol):
             else:
                 print("Calculating trajectory %d..." %(traj+1))
                 sys.stdout.flush()
-
                 args = ('-args ' + " " + str(os.path.abspath(self._getExtraPath()))
                         + " " + "results{0}".format(str(traj+1))
                         + " " + self._params['initPdb']
