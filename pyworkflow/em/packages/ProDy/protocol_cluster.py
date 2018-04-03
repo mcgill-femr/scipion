@@ -72,6 +72,13 @@ class clusterPdbTrajectories(EMProtocol):
                            'if PCA is selected as distance '
                            'measure.',
                       condition='distanceType == 0')
+        form.addParam('sampling', params.FloatParam, default=1.0,
+                      label="Sampling rate (A/px)",
+                      help='Sampling rate (Angstroms/pixel)')
+        form.addParam('size', params.IntParam,
+                      allowsNull=True,
+                      label="Final size (px)",
+                      help='Final size in pixels.')
 
     def _insertAllSteps(self):
         self._insertFunctionStep('clusterTrajectories')
@@ -181,3 +188,20 @@ class clusterPdbTrajectories(EMProtocol):
         self._defineOutputs(ClusteringTree=myFile)
 
         self._defineOutputs(representativePDBs=self.setOfRepresentatives)
+
+        outputVols = self._createSetOfVolumes()
+        outputVols.setSamplingRate(self.sampling.get())
+        for i, pdb in enumerate(self.setOfRepresentatives):
+            outFile = self._getExtraPath('output_vol%d'%(i+1))
+            args = '-i %s --sampling %f -o %s' % (pdb.getFileName(),
+                                                  self.sampling.get(), outFile)
+            args += ' --size %d  --centerPDB' % self.size.get()
+            program = "xmipp_volume_from_pdb"
+            self.runJob(program, args)
+            outVol = Volume()
+            outVol.setSamplingRate(self.sampling.get())
+            outVol.setFileName(outFile+'.vol')
+            outputVols.append(outVol)
+        outputVols.setDim(ImageDim(self.size.get(), self.size.get(), self.size.get()))
+
+        self._defineOutputs(outputVolumes=outputVols)
