@@ -122,13 +122,6 @@ class computePdbTrajectories(EMProtocol):
                            'with bigger proteins needing longer. As an '
                            'indication, 10 ps was used for the leucine '
                            'transporter, which has about 500 residues.')
-        '''form.addParam('spring', params.IntParam, default=20000,
-                      label='Spring constant in targeted MD', expertLevel=
-                      pwconst.LEVEL_ADVANCED,
-                      help='In targeted molecular dynamics simulation, '
-                           'the target potential is harmonic and the spring '
-                           'constant term shows the force applied to a given '
-                           'structure to reach the target structure')'''
 
     def _insertAllSteps(self):
         self._insertFunctionStep('createTrajectories')
@@ -169,7 +162,7 @@ class computePdbTrajectories(EMProtocol):
             self._params['cycle'] = self.defaultCycles
         else:
             self._params['finPdb'] = self._params['initPdb']
-        time.sleep(10)
+
         for traj in range(self.numTrajectories.get()):
             if self.usingPseudoatoms.get() is True:
                 print("Calculating pseudoatoms trajectory %d..."%(traj+1))
