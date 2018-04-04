@@ -362,6 +362,8 @@ void ProgVolVariability::produceSideinfo()
 
     // ~JV
     //Read the input average map
+    // Input volume
+    Image<double> Vin;
     Vin.read(fn_vol);
     Vin().setXmippOrigin();
 
@@ -1285,19 +1287,26 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     // Sjors 19aug10 enforceHermitianSymmetry first checks ndim...
 
     //~JV
+    //Read the input average map
+    Image<double> Vin;
+    Vin.read(fn_vol);
+    Vin().setXmippOrigin();
+
     Vout().initZeros(ZSIZE(Vin()),YSIZE(Vin()),XSIZE(Vin()));
     Vout().setXmippOrigin();
 
-    Vin().initZeros(volPadSizeZ,volPadSizeY,volPadSizeX); //we want to reuse the Vin() memory
-    Vin().setXmippOrigin();
+    MultidimArray< double > Vmc;
+    Vmc.initZeros(volPadSizeZ,volPadSizeY,volPadSizeX);
 
-    transformerVol.setReal(Vin());
+    transformerVol.setReal(Vmc);
     transformerVol.enforceHermitianSymmetry();
     //forceWeightSymmetry(preFourierWeights);
 
     // Tell threads what to do
     //#define DEBUG_VOL1
 #ifdef DEBUG_VOL1
+
+
     {
         Image<double> save;
         save().alias( FourierWeights );
@@ -1318,49 +1327,44 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 
 //~JV MONTE CARLO SIMULATION
     MultidimArray< std::complex<double> > VoutFourierTmp2;
-    VoutFourierTmp2 = fftVin;
-    int numIters = 5;
+    VoutFourierTmp2 = VoutFourier;
+    int numIters = 15;
     std::complex<double>  mean = 0;
     std::complex<double> stddev = 0;
     std::complex<double> result = 0;
 
-    //transformerVol.getFourierAlias(VoutFourierTmp2); // The Fourier transforms are calculated using the monte carlo maps
-
+    std::cout << std::endl;
+    std::cout << "Monte Carlo simulation: " << std::endl;
     init_progress_bar(numIters);
     for (int it = 0; it < numIters; ++it)
     {
 		FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourierTmp2)  // Simulated Volume
 		{
 			mean = A3D_ELEM(fftVin, k, i, j);
-			stddev = std::sqrt(A3D_ELEM(VoutFourier, k, i, j)); // We compute the std from the variance
+			stddev = std::sqrt(A3D_ELEM(VoutFourierTmp2, k, i, j)); // We compute the std from the variance
 			rand_normal(((double*) &mean)[0], ((double*) &stddev)[0],
 					((double*) &result)[0]);
 			rand_normal(((double*) &mean)[1], ((double*) &stddev)[1],
 					((double*) &result)[1]);
-			A3D_ELEM(VoutFourierTmp2,k,i,j) = result;
+			A3D_ELEM(VoutFourier,k,i,j) = mean;//result; // A3D_ELEM(fftVin,k,i,j);
 		}  										   // Simulated Volume
 
-		std::cout << std::endl;
-	    std::cout << A3D_ELEM(fftVin,5,5,5) << " " << A3D_ELEM(VoutFourierTmp2,5,5,5) << " " << A3D_ELEM(VoutFourier,5,5,5) << std::endl;
-
 //Fourier Transform of simulated volume
+	    transformerVol.inverseFourierTransform();
+	    CenterFFT(Vmc,false);
 
-	    //transformerVol.inverseFourierTransform();
-	    //CenterFFT(Vin(),false);
-
-	   /*
 	    // Correct by the Fourier transform of the blob
-	    Vin().setXmippOrigin();
+	    Vmc.setXmippOrigin();
 
 	    //Remove the padding
-	    Vin().selfWindow(FIRST_XMIPP_INDEX(imgSize),FIRST_XMIPP_INDEX(imgSize),
+	    Vmc.selfWindow(FIRST_XMIPP_INDEX(imgSize),FIRST_XMIPP_INDEX(imgSize),
 	                      FIRST_XMIPP_INDEX(imgSize),LAST_XMIPP_INDEX(imgSize),
 	                      LAST_XMIPP_INDEX(imgSize),LAST_XMIPP_INDEX(imgSize));
 
 	    double pad_relation= ((double)padding_factor_proj/padding_factor_vol);
 	    pad_relation = (pad_relation * pad_relation * pad_relation);
 
-	    MultidimArray<double> &mVout=Vin();
+	    MultidimArray<double> &mVout=Vmc;
 	    double ipad_relation=1.0/pad_relation;
 	    double meanFactor2=0;
 	    FOR_ALL_ELEMENTS_IN_ARRAY3D(mVout)
@@ -1385,14 +1389,16 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 	        A3D_ELEM(mVout,k,i,j) *= meanFactor2;
 	    }
 
+	    Vout() = Vmc;
+	    //FOR_ALL_ELEMENTS_IN_ARRAY3D(Vmc)
+	    //A3D_ELEM(Vout(),k,i,j) += std::sqrt((A3D_ELEM(Vmc,k,i,j)-A3D_ELEM(Vin(),k,i,j))*(A3D_ELEM(Vmc,k,i,j)-A3D_ELEM(Vin(),k,i,j)));
 
-	    Vout() += Vin();
-
-	    Vin().initZeros(volPadSizeZ,volPadSizeY,volPadSizeX); //we want to reuse the Vin() memory
-	    Vin().setXmippOrigin();
+	    std::cout << std::endl;
+	    std::cout << A3D_ELEM(Vmc,10,10,10) << " " << A3D_ELEM(Vin(),10,10,10) << " " << A3D_ELEM(Vout(),10,10,10) << std::endl;
+	    Vmc.initZeros(volPadSizeZ,volPadSizeY,volPadSizeX); //we want to reuse the Vin() memory
+	    Vmc.setXmippOrigin();
 
 	    progress_bar(it);
-	    */
 
     }
     //~JV
@@ -1457,6 +1463,7 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
   */
 
     Vout.write(out_name);
+    std::cout << std::endl;
 
 
 

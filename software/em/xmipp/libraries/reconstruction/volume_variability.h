@@ -245,9 +245,6 @@ public: // Internal members
     // Output volume
     Image<double> Vout;
 
-    // Input volume
-    Image<double> Vin;
-
 public:
     /// Read arguments from command line
     void readParams();
