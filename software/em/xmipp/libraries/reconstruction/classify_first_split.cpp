@@ -191,6 +191,8 @@ void ProgClassifyFirstSplit::run()
 	deleteFile(fnRoot+"_v2mirrored.vol");
 
     V2.read(fnRoot+"_v2.vol");
+    V1().setXmippOrigin();
+    V2().setXmippOrigin();
     Vdiff()=V1();
     Vdiff()-=V2();
     Vdiff.write(fnRoot+"_pc1.vol");
