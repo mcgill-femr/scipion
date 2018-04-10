@@ -150,7 +150,7 @@ class computePdbTrajectories(EMProtocol):
                         'minLen': self.minLen.get(),
                         'tmdLen': self.tmdLen.get(),
                         'stepCut': self.stepCut.get(),
-                        'usingPseudoatoms': usingPseudoatoms,
+                        'usingPseudoatoms': usingPseudoatoms
                         }
 
         if self.useFinalPdb.get() is True:
