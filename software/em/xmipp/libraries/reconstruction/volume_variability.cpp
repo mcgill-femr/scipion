@@ -372,6 +372,7 @@ void ProgVolVariability::produceSideinfo()
     pad_relation = (pad_relation * pad_relation * pad_relation);
 
     MultidimArray<double> &mVin=Vin();
+
     double ipad_relation=1.0/pad_relation;
     double meanFactor2=0;
 
@@ -426,6 +427,15 @@ void ProgVolVariability::produceSideinfo()
 
     randomize_random_generator();
     localPaddedVin.clear();
+
+    //KK
+    std::cout << corr3D_2D << " " << imgSize << std::endl;
+
+#ifdef DEBUG
+    Image< std::complex<double> > save;
+    save().alias(fftVin);
+    save.write((std::string)"Vin.vol");
+#endif
     // ~JV
 
 }
@@ -932,8 +942,8 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                                 double *ptrOut=(double *)&(DIRECT_A1D_ELEM(VoutFourier, memIdx));
                                                 double *ptrInVol=(double *)&(DIRECT_A1D_ELEM(parent->fftVin, memIdx));
 
-                                                  //ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0]));
-                                                ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0])+(ptrIn[1]-ptrInVol[1])*(ptrIn[1]-ptrInVol[1]));
+                                                  ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0]));
+//                                                ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0])+(ptrIn[1]-ptrInVol[1])*(ptrIn[1]-ptrInVol[1]));
 //                                                ptrOut[0] += wEffective * (ptrIn[0]);
 //                                                ptrOut[0] += wEffective * std::abs(ptrIn[0] - ptrInVol[0]);
 //                                                ptrOut[0] += wEffective * (ptrInVol[0]);
@@ -948,7 +958,7 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
 //                                            	   ptrOut[1]+=wEffective * (ptrInVol[1]);
 //                                            	   ptrOut[1]+=wEffective * std::abs(ptrIn[1]- ptrInVol[1]);
 
-//                                                if (memIdx == 10*50*50)
+//                                                if (memIdx == 0*0*0)
 //                                                	std::cout << ptrIn[0] << " " << ptrInVol[0] << " " << ptrIn[1] << " " << ptrInVol[1] << " " << w << std::endl;
                                             }
                                         }
@@ -1286,11 +1296,15 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     // Enforce symmetry in the Fourier values as well as the weights
     // Sjors 19aug10 enforceHermitianSymmetry first checks ndim...
 
+
     //~JV
     //Read the input average map
     Image<double> Vin;
     Vin.read(fn_vol);
     Vin().setXmippOrigin();
+    double corr2D_3D=pow(padding_factor_proj,2.)/
+                     (imgSize* pow(padding_factor_vol,3.));
+
 
     Vout().initZeros(ZSIZE(Vin()),YSIZE(Vin()),XSIZE(Vin()));
     Vout().setXmippOrigin();
@@ -1305,7 +1319,6 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     // Tell threads what to do
     //#define DEBUG_VOL1
 #ifdef DEBUG_VOL1
-
 
     {
         Image<double> save;
@@ -1328,7 +1341,7 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 //~JV MONTE CARLO SIMULATION
     MultidimArray< std::complex<double> > VoutFourierTmp2;
     VoutFourierTmp2 = VoutFourier;
-    int numIters = 15;
+    int numIters = 25;
     std::complex<double>  mean = 0;
     std::complex<double> stddev = 0;
     std::complex<double> result = 0;
@@ -1340,7 +1353,7 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     {
 		FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourierTmp2)  // Simulated Volume
 		{
-			mean = A3D_ELEM(fftVin, k, i, j);
+			mean = A3D_ELEM(fftVin, k, i, j)*corr2D_3D;
 			stddev = std::sqrt(A3D_ELEM(VoutFourierTmp2, k, i, j)); // We compute the std from the variance
 			rand_normal(((double*) &mean)[0], ((double*) &stddev)[0],
 					((double*) &result)[0]);
@@ -1389,9 +1402,8 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 	        A3D_ELEM(mVout,k,i,j) *= meanFactor2;
 	    }
 
-	    Vout() = Vmc;
-	    //FOR_ALL_ELEMENTS_IN_ARRAY3D(Vmc)
-	    //A3D_ELEM(Vout(),k,i,j) += std::sqrt((A3D_ELEM(Vmc,k,i,j)-A3D_ELEM(Vin(),k,i,j))*(A3D_ELEM(Vmc,k,i,j)-A3D_ELEM(Vin(),k,i,j)));
+	    FOR_ALL_ELEMENTS_IN_ARRAY3D(Vmc)
+	    A3D_ELEM(Vout(),k,i,j) += std::sqrt((A3D_ELEM(Vmc,k,i,j)-A3D_ELEM(Vin(),k,i,j))*(A3D_ELEM(Vmc,k,i,j)-A3D_ELEM(Vin(),k,i,j)));
 
 	    std::cout << std::endl;
 	    std::cout << A3D_ELEM(Vmc,10,10,10) << " " << A3D_ELEM(Vin(),10,10,10) << " " << A3D_ELEM(Vout(),10,10,10) << std::endl;
@@ -1403,7 +1415,17 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     }
     //~JV
 
-/*
+    /*
+
+    // Enforce symmetry in the Fourier values as well as the weights
+    // Sjors 19aug10 enforceHermitianSymmetry first checks ndim...
+    Vout().initZeros(volPadSizeZ,volPadSizeY,volPadSizeX);
+    transformerVol.setReal(Vout());
+    transformerVol.enforceHermitianSymmetry();
+    //forceWeightSymmetry(preFourierWeights);
+
+    // Tell threads what to do
+    //#define DEBUG_VOL1
 #ifdef DEBUG_VOL1
     {
         Image< std::complex<double> > save;
@@ -1414,6 +1436,26 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
         save2().alias( fftVin );
         save2.write((std::string) "FourierVolIn.vol");
     }
+#endif
+
+    threadOpCode = PROCESS_WEIGHTS;
+    // Awake threads
+    barrier_wait( &barrier );
+    // Threads are working now, wait for them to finish
+    barrier_wait( &barrier );
+
+//JV
+#ifdef DEBUG
+    Image< std::complex<double> > save;
+    save().alias(fftVin);
+    save.write((std::string)"Vin.vol");
+
+    save().alias(VoutFourier);
+    save.write((std::string)"Vfout.vol");
+
+    FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourier)
+    	A3D_ELEM(VoutFourier,k,i,j) = A3D_ELEM(fftVin,k,i,j)/100.0;
+
 #endif
 
     transformerVol.inverseFourierTransform();
@@ -1459,8 +1501,7 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
         FOR_ALL_ELEMENTS_IN_ARRAY3D(mVout)
         A3D_ELEM(mVout,k,i,j) *= meanFactor2;
     }
-
-  */
+*/
 
     Vout.write(out_name);
     std::cout << std::endl;
