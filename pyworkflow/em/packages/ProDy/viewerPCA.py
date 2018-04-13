@@ -47,10 +47,8 @@ class ProdyViewerPca(Viewer):
     def visualize(self, obj, **args):
 
         cls = type(obj)
-
         if issubclass(cls, computeModesPcaPdb):
             pca = loadModel(str(obj.pcaNpzFile.getFileName()) + '.pca.npz')
-
 
             setOfTraj = obj.setOfTrajectories.get()
             inputType = 0
@@ -70,6 +68,10 @@ class ProdyViewerPca(Viewer):
                     else:
                         raise ValueError('The initial PDB should have a filename '
                                          'ending in .pdb or .cif')
+                    if traj._pseudoatoms:
+                        pseudoatoms = True
+                    else:
+                        pseudoatoms = False
                     break
 
             else:
@@ -84,13 +86,19 @@ class ProdyViewerPca(Viewer):
                             'ending in .pdb or .cif')
                     break
 
-            protein = Pdb.select('protein and not hydrogen').copy()
+            if pseudoatoms:
+                protein = Pdb.copy()
+            else:
+                protein = Pdb.select('protein and not hydrogen').copy()
             combinedTrajSet = obj.combinedTrajectory
             for combinedTraj in combinedTrajSet:
                 combinedEns = parseDCD(str(combinedTraj.getFileName()))
-
-            combinedEns.setCoords(protein.ca.copy())
-            combinedEns.setAtoms(protein.ca)
+            if pseudoatoms:
+                proteinca = protein
+            else:
+                proteinca = protein.ca
+            combinedEns.setCoords(proteinca.copy())
+            combinedEns.setAtoms(proteinca)
 
             colors = []
             for i, traj in enumerate(setOfTraj):
@@ -100,7 +108,7 @@ class ProdyViewerPca(Viewer):
                 if inputType == 0:
                     ens = parseDCD(str(traj._filename))
                     ens.setCoords(protein)
-                    ens.setAtoms(protein.ca)
+                    ens.setAtoms(proteinca)
 
                     for j in range(len(ens)):
                         if j == 0:
@@ -124,8 +132,8 @@ class ProdyViewerPca(Viewer):
             for n, point in enumerate(projection):
                 ax.annotate(str(n), (point[0], point[1]))
 
-            distanceMatrix = parseArray(str(obj.distanceMatrix
+            '''distanceMatrix = parseArray(str(obj.distanceMatrix
                                             .getFileName()), '\t')
             plt.figure()
-            showMatrix(distanceMatrix, origin='upper')
+            showMatrix(distanceMatrix, origin='upper')'''
             plt.show()

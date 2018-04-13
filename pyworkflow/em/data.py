@@ -828,15 +828,19 @@ class PdbFile(EMFile):
 
 class TrajectoryDcd(EMFile):
 
-    def __init__(self, filename=None, initialPdb=None, **kwargs):
+    def __init__(self, filename=None, initialPdb=None, pseudoatoms = False, **kwargs):
         EMFile.__init__(self, filename, **kwargs)
         self._initialPdb = String(initialPdb)
+        self._pseudoatoms = Boolean(pseudoatoms)
 
     def setInitialPdb(self, initialPdb):
         self._initialPdb = initialPdb
 
     def getInitialPdb(self):
         return self._initialPdb
+
+    def isPseudoatoms(self):
+        return self._pseudoatoms
 
 
 class EMSet(Set, EMObject):

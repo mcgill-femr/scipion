@@ -162,7 +162,6 @@ class computePdbTrajectories(EMProtocol):
             self._params['cycle'] = self.defaultCycles
         else:
             self._params['finPdb'] = self._params['initPdb']
-
         for traj in range(self.numTrajectories.get()):
             if self.usingPseudoatoms.get() is True:
                 print("Calculating pseudoatoms trajectory %d..."%(traj+1))
@@ -257,22 +256,24 @@ class computePdbTrajectories(EMProtocol):
                         os.system("cp " + str(self._getExtraPath(
                             'ini_cycle0.dcd')) +" " + str(self._getExtraPath(
                             'initr.dcd')))
-                        os.system("cp " + str(self._getExtraPath(
-                            'fin_cycle0.dcd')) +" "+ str(self._getExtraPath(
-                            'fintr.dcd')))
+                        if self.useFinalPdb.get() is True:
+                            os.system("cp " + str(self._getExtraPath(
+                                'fin_cycle0.dcd')) +" "+ str(self._getExtraPath(
+                                'fintr.dcd')))
                     else:
-                        os.system("cat "+ str(self._getExtraPath(
+                        os.system("prody catdcd "+ str(self._getExtraPath(
                             'initr.dcd')) +" "+ str(self._getExtraPath(
-                            'ini_cycle%d.dcd'%i)) +" "+">"+ str(
+                            'ini_cycle%d.dcd'%i)) +" "+"-o "+ str(
                             self._getExtraPath("initial.dcd")))
                         os.system("mv " + self._getExtraPath('initial.dcd') +
                                   " "+self._getExtraPath('initr.dcd'))
-                        os.system("cat " + str(self._getExtraPath(
-                            'fintr.dcd')) + " " + str(self._getExtraPath(
-                            'fin_cycle%d.dcd' % i)) + " " + ">" + str(
-                            self._getExtraPath("final.dcd")))
-                        os.system("mv " + self._getExtraPath('final.dcd') +
-                                  " " + self._getExtraPath('fintr.dcd'))
+                        if self.useFinalPdb.get() is True:
+                            os.system("prody catdcd " + str(self._getExtraPath(
+                                'fintr.dcd')) + " " + str(self._getExtraPath(
+                                'fin_cycle%d.dcd' % i)) + " " + "-o " + str(
+                                self._getExtraPath("final.dcd")))
+                            os.system("mv " + self._getExtraPath('final.dcd') +
+                                      " " + self._getExtraPath('fintr.dcd'))
 
 
                     i += 1
@@ -416,9 +417,8 @@ class computePdbTrajectories(EMProtocol):
                 writePDB(fnPdb[i], conformation)
                 pdb = PdbFile(fnPdb[i])
                 setOfPDBs.append(pdb)
-
             traj = TrajectoryDcd(fnDcd,
-                   self._getExtraPath('trajectory{:02d}_pdb01.pdb'.format(n+1)))
+                   self._getExtraPath('trajectory{:02d}_pdb01.pdb'.format(n+1)), self.usingPseudoatoms.get())
             setOfTrajectories.append(traj)
 
         self._defineOutputs(outputPDBs=setOfPDBs)
