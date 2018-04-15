@@ -47,7 +47,6 @@ class clusterPdbTrajectories(EMProtocol):
                       important=True)
         form.addParam('subgroupCutoff', params.FloatParam, default=0.01,
                       label='Distance cutoff for defining clusters',
-                      expertLevel=pwconst.LEVEL_ADVANCED,
                       help='The distance in PCA space that is used for '
                            'dividing the tree into subgroups for hierarchical '
                            'clustering.')
@@ -72,13 +71,20 @@ class clusterPdbTrajectories(EMProtocol):
                            'if PCA is selected as distance '
                            'measure.',
                       condition='distanceType == 0')
+        form.addParam('createVolumes', params.BooleanParam, default=False,
+                      label='Select if you want an output set of volumes',
+                      help='Choose if you want to create a set of volumes as '
+                           'output of the protocol. These volumes are '
+                           'generated from the representative PDBs given by '
+                           'the clustering method')
         form.addParam('sampling', params.FloatParam, default=1.0,
-                      label="Sampling rate (A/px)",
-                      help='Sampling rate (Angstroms/pixel)')
-        form.addParam('size', params.IntParam,
-                      allowsNull=True,
-                      label="Final size (px)",
-                      help='Final size in pixels.')
+                      label="Sampling rate (A/px)", condition='createVolumes',
+                      help='Sampling rate (Angstroms/pixel) for the output '
+                           'set of volumes')
+        form.addParam('size', params.IntParam, default=128,
+                      label="Final size (px)", condition='createVolumes',
+                      help='Final size in pixels for the output set of '
+                           'volumes.')
 
     def _insertAllSteps(self):
         self._insertFunctionStep('clusterTrajectories')
@@ -148,10 +154,8 @@ class clusterPdbTrajectories(EMProtocol):
 
         self.setOfRepresentatives = self._createSetOfPDBs()
 
-        print(len(self.distanceMatrix)-1)
-
-        for subgroup in self.subgroups:
-            print subgroup
+        for idx,subgroup in enumerate(self.subgroups):
+            print "Conformations in cluster %d: "%idx,subgroup
 
             if '0' in subgroup:
                 repName = '0'
@@ -167,8 +171,7 @@ class clusterPdbTrajectories(EMProtocol):
                         minDist = distList[-1]
                         repName = distList[0]
 
-                print repName, minDist
-            print repName
+            print "Representative of cluster %d: "%idx,repName
 
             repPdb = PdbFile(self._getExtraPath('pdb{:02d}.pdb'
                                              .format(int(repName))))

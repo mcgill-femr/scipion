@@ -26,7 +26,7 @@
 
 from pyworkflow.em import *
 from prody import *
-import time
+from numpy import zeros, sqrt
 
 class computeModesPcaPdb(EMProtocol):
 
@@ -70,7 +70,6 @@ class computeModesPcaPdb(EMProtocol):
         self._insertFunctionStep('_createOutputStep')
 
     def _calcPCA(self):
-        time.sleep(10)
 
         if self.inputStructure.get() is not None:
             self.pdbFileName = self.inputStructure.get()
@@ -152,6 +151,18 @@ class computeModesPcaPdb(EMProtocol):
         self.pca.buildCovariance(self.ens)
         self.pca.calcModes()
 
+        projection = calcProjection(self.ens, self.pca[:2], norm=False)
+
+        self.distanceMatrix = zeros((len(self.ens),len(self.ens)))
+
+        for i in range(len(self.ens)):
+            for j in range(len(self.ens)):
+                for k in range(2):
+                    self.distanceMatrix[i][j] += \
+                    (projection[i][k] - projection[j][k])**2
+                self.distanceMatrix[i][j] = sqrt(self.distanceMatrix[i][j])
+
+
     def _createOutputStep(self):
 
         writeDCD(self._getExtraPath('combined_trajectory.dcd'),self.ens)
@@ -165,4 +176,9 @@ class computeModesPcaPdb(EMProtocol):
         saveModel(self.pca, fnOutPca)
         myFile = EMFile(fnOutPca)
         self._defineOutputs(pcaNpzFile=myFile)
+
+        writeArray(self._getExtraPath('distance_matrix.txt'),
+                   self.distanceMatrix,'%.18e','\t')
+        myFile = EMFile(self._getExtraPath('distance_matrix.txt'))
+        self._defineOutputs(distanceMatrixFile=myFile)
 

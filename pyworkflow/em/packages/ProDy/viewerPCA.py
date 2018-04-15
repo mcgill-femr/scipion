@@ -34,6 +34,7 @@ from computePCATrajectory import computeModesPcaPdb
 from prody import *
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import gca
+from Bio import Phylo
 
 
 class ProdyViewerPca(Viewer):
@@ -105,6 +106,8 @@ class ProdyViewerPca(Viewer):
                     for j in range(len(ens)):
                         if j == 0:
                             colors.append((1, 0, 0))
+                        elif j == len(ens)-1:
+                            colors.append((1, 0, 0))
                         else:
                             colors.append(c)
                 else:
@@ -124,8 +127,9 @@ class ProdyViewerPca(Viewer):
             for n, point in enumerate(projection):
                 ax.annotate(str(n), (point[0], point[1]))
 
-            distanceMatrix = parseArray(str(obj.distanceMatrix
-                                            .getFileName()), '\t')
+            distanceMatrix = parseArray(str(obj.distanceMatrixFile.getFileName()),
+                                        '\t')
             plt.figure()
             showMatrix(distanceMatrix, origin='upper')
             plt.show()
+
