@@ -70,7 +70,6 @@ class computeModesPcaPdb(EMProtocol):
         self._insertFunctionStep('_createOutputStep')
 
     def _calcPCA(self):
-        time.sleep(10)
         if self.inputStructure.get() is not None:
             self.pdbFileName = self.inputStructure.get()
 

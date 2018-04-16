@@ -128,7 +128,7 @@ class computePdbTrajectories(EMProtocol):
         self._insertFunctionStep('createOutputStep')
 
     def createTrajectories(self):
-
+        time.sleep(10)
         if self.usingPseudoatoms.get() is True:
             usingPseudoatoms = 1
         else:
@@ -164,122 +164,7 @@ class computePdbTrajectories(EMProtocol):
             self._params['finPdb'] = self._params['initPdb']
         for traj in range(self.numTrajectories.get()):
             if self.usingPseudoatoms.get() is True:
-                print("Calculating pseudoatoms trajectory %d..."%(traj+1))
-                finished = False
-                i = 0
-                while not finished:
-
-                    if self.useFinalPdb.get() is True:
-                        n = 2
-                    else:
-                        n = 1
-
-                    for sim in range(n):
-                        if sim == 0:
-                            if i == 0:
-                                currIniPdb = self._params['initPdb']
-                                currFinPdb = self._params['finPdb']
-                            else:
-                                currIniDcd = parseDCD(str(self._getExtraPath(
-                                    'ini_cycle{0}.dcd'.format(i - 1))))
-                                initPdb = parsePDB(str(self._params['initPdb']))
-                                currIniDcd.setCoords(initPdb)
-                                currIniDcd.setAtoms(initPdb)
-                                writePDB(str(self._getExtraPath(
-                                    'ini_cycle{0}.pdb'.format(i - 1))),
-                                    currIniDcd)
-                                currIniPdb = self._getExtraPath(
-                                    'ini_cycle{0}.pdb'.format(i - 1))
-
-                                if self.useFinalPdb.get() is True:
-                                    currFinDcd = parseDCD(str(self._getExtraPath(
-                                        'fin_cycle{0}.dcd'.format(i - 1))))
-                                    finPdb = parsePDB(str(self._params['finPdb']))
-                                    currFinDcd.setCoords(finPdb)
-                                    currFinDcd.setAtoms(finPdb)
-                                    writePDB(str(self._getExtraPath(
-                                        'fin_cycle{0}.pdb'.format(i - 1))),
-                                        currFinDcd)
-                                    currFinPdb = self._getExtraPath(
-                                        'fin_cycle{0}.pdb'.format(i - 1))
-
-                            outputDcdName = str(self._getExtraPath(
-                                'ini_cycle{0}.dcd'.format(i)))
-                        else:
-                            if i == 0:
-                                currIniPdb = self._params['finPdb']
-                                currFinPdb = self._params['initPdb']
-                            else:
-                                currIniDcd = parseDCD(str(self._getExtraPath(
-                                    'fin_cycle{0}.dcd'.format(i-1))))
-                                initPdb = parsePDB(str(self._params['finPdb']))
-                                currIniDcd.setCoords(initPdb)
-                                currIniDcd.setAtoms(initPdb)
-                                writePDB(str(self._getExtraPath(
-                                    'fin_cycle{0}.pdb'.format(i-1))), currIniDcd)
-                                currIniPdb = self._getExtraPath(
-                                    'fin_cycle{0}.pdb'.format(i-1))
-
-                                currFinDcd = parseDCD(str(self._getExtraPath(
-                                    'ini_cycle{0}.dcd'.format(i - 1))))
-                                finPdb = parsePDB(str(self._params['initPdb']))
-                                currFinDcd.setCoords(finPdb)
-                                currFinDcd.setAtoms(finPdb)
-                                writePDB(str(self._getExtraPath(
-                                    'ini_cycle{0}.pdb'.format(i - 1))),
-                                    currFinDcd)
-                                currFinPdb = self._getExtraPath(
-                                    'ini_cycle{0}.pdb'.format(i-1))
-
-                            outputDcdName = str(self._getExtraPath(
-                                'fin_cycle{0}.dcd'.format(i)))
-
-                        args = (currIniPdb
-                                + " " + currFinPdb
-                                + " " + self._params['initPdb']
-                                + " " + self._params['finPdb']
-                                + " " + str(i)
-                                + " " + str(self._params['maxDev'])
-                                + " " + str(self._params['stepCut'])
-                                + " " + str(self._params['acceptParam'])
-                                + " " + str(self._params['cutoff'])
-                                + " " + str(self._params['maxSteps'])
-                                + " " + outputDcdName
-                                + " " + str(int(self.usingPseudoatoms.get())))
-
-                        self.runJob("python " + os.path.abspath(os.environ[
-                                    'SCIPION_HOME']
-                                    + "/software/em/prody/vmd-1.9.3/lib/plugins/noarch/tcl"
-                                      "/comd/anmmc.py"), args)
-
-                    if i == 0:
-                        os.system("cp " + str(self._getExtraPath(
-                            'ini_cycle0.dcd')) +" " + str(self._getExtraPath(
-                            'initr.dcd')))
-                        if self.useFinalPdb.get() is True:
-                            os.system("cp " + str(self._getExtraPath(
-                                'fin_cycle0.dcd')) +" "+ str(self._getExtraPath(
-                                'fintr.dcd')))
-                    else:
-                        os.system("prody catdcd "+ str(self._getExtraPath(
-                            'initr.dcd')) +" "+ str(self._getExtraPath(
-                            'ini_cycle%d.dcd'%i)) +" "+"-o "+ str(
-                            self._getExtraPath("initial.dcd")))
-                        os.system("mv " + self._getExtraPath('initial.dcd') +
-                                  " "+self._getExtraPath('initr.dcd'))
-                        if self.useFinalPdb.get() is True:
-                            os.system("prody catdcd " + str(self._getExtraPath(
-                                'fintr.dcd')) + " " + str(self._getExtraPath(
-                                'fin_cycle%d.dcd' % i)) + " " + "-o " + str(
-                                self._getExtraPath("final.dcd")))
-                            os.system("mv " + self._getExtraPath('final.dcd') +
-                                      " " + self._getExtraPath('fintr.dcd'))
-
-
-                    i += 1
-                    if self.cycleNumber.get() is not None and \
-                            i > self.cycleNumber.get():
-                        finished = True
+                self.pseudoatomsTrajectory(traj)
             else:
                 print("Calculating trajectory %d..." %(traj+1))
                 sys.stdout.flush()
@@ -323,7 +208,7 @@ class computePdbTrajectories(EMProtocol):
             if self.useFinalPdb.get():
                 if self.usingPseudoatoms.get() is True:
                     w1_start = parsePDB(str(self._params['initPdb']))
-                    w1_traj = parseDCD(outputDcdName)
+                    w1_traj = parseDCD(self._getExtraPath('initr.dcd'))
                     w1_traj.setCoords(w1_start)
                     w1_traj.setAtoms(w1_start)
                     writeDCD(self._getExtraPath(
@@ -331,7 +216,7 @@ class computePdbTrajectories(EMProtocol):
                             traj + 1)), w1_traj)
 
                     w2_start = parsePDB(str(self._params['finPdb']))
-                    w2_traj = parseDCD(outputDcdName)
+                    w2_traj = parseDCD(self._getExtraPath('initr.dcd'))
                     w2_traj.setCoords(w2_start)
                     w2_traj.setAtoms(w2_start)
                     writeDCD(self._getExtraPath(
@@ -390,10 +275,137 @@ class computePdbTrajectories(EMProtocol):
                 writeDCD(self._getExtraPath('trajectory{:02d}.dcd'.format(traj+1)),
                          w1_traj)
 
-            os.system('mv walker1_trajectory.dcd walker1_trajectory{:02d}.dcd'.
-                  format(traj+1))
+            if self.usingPseudoatoms.get() is False:
+                os.system('mv walker1_trajectory.dcd walker1_trajectory{:02d}.dcd'.
+                      format(traj+1))
 
-            os.system('mv rmsd.txt trajectory{:02d}_rmsd.txt'.format(traj + 1))
+                os.system('mv rmsd.txt trajectory{:02d}_rmsd.txt'.format(traj + 1))
+
+    def pseudoatomsTrajectory(self, traj):
+
+        print("Calculating pseudoatoms trajectory %d..." % (traj + 1))
+        finished = False
+        i = 0
+        while not finished:
+
+            if self.useFinalPdb.get() is True:
+                n = 2
+            else:
+                n = 1
+
+            for sim in range(n):
+                if sim == 0:
+                    if i == 0:
+                        currIniPdb = self._params['initPdb']
+                        currFinPdb = self._params['finPdb']
+
+                        IniPdb = parsePDB(currIniPdb)
+                        init_traj = Ensemble()
+                        init_traj.setCoords(IniPdb)
+                        init_traj.setAtoms(IniPdb)
+                        init_traj.addCoordset(IniPdb.getCoordsets())
+                        writeDCD(self._getExtraPath("initr.dcd"), init_traj)
+
+                    else:
+                        currIniDcd = parseDCD(str(self._getExtraPath(
+                            'ini_cycle{0}.dcd'.format(i - 1))))
+                        initPdb = parsePDB(str(self._params['initPdb']))
+                        currIniDcd.setCoords(initPdb)
+                        currIniDcd.setAtoms(initPdb)
+                        writePDB(str(self._getExtraPath(
+                            'ini_cycle{0}.pdb'.format(i - 1))),
+                            currIniDcd)
+                        currIniPdb = self._getExtraPath(
+                            'ini_cycle{0}.pdb'.format(i - 1))
+
+                        if self.useFinalPdb.get() is True:
+                            currFinDcd = parseDCD(str(self._getExtraPath(
+                                'fin_cycle{0}.dcd'.format(i - 1))))
+                            finPdb = parsePDB(str(self._params['finPdb']))
+                            currFinDcd.setCoords(finPdb)
+                            currFinDcd.setAtoms(finPdb)
+                            writePDB(str(self._getExtraPath(
+                                'fin_cycle{0}.pdb'.format(i - 1))),
+                                currFinDcd)
+                            currFinPdb = self._getExtraPath(
+                                'fin_cycle{0}.pdb'.format(i - 1))
+
+                    outputDcdName = str(self._getExtraPath(
+                        'ini_cycle{0}.dcd'.format(i)))
+                else:
+                    if i == 0:
+                        currIniPdb = self._params['finPdb']
+                        currFinPdb = self._params['initPdb']
+
+                        IniPdb2 = parsePDB(currIniPdb)
+                        init_traj = Ensemble()
+                        init_traj.setCoords(IniPdb2)
+                        init_traj.setAtoms(IniPdb2)
+                        init_traj.addCoordset(IniPdb2.getCoordsets())
+                        writeDCD(self._getExtraPath("fintr.dcd"), init_traj)
+                    else:
+                        currIniDcd = parseDCD(str(self._getExtraPath(
+                            'fin_cycle{0}.dcd'.format(i - 1))))
+                        initPdb = parsePDB(str(self._params['finPdb']))
+                        currIniDcd.setCoords(initPdb)
+                        currIniDcd.setAtoms(initPdb)
+                        writePDB(str(self._getExtraPath(
+                            'fin_cycle{0}.pdb'.format(i - 1))), currIniDcd)
+                        currIniPdb = self._getExtraPath(
+                            'fin_cycle{0}.pdb'.format(i - 1))
+
+                        currFinDcd = parseDCD(str(self._getExtraPath(
+                            'ini_cycle{0}.dcd'.format(i - 1))))
+                        finPdb = parsePDB(str(self._params['initPdb']))
+                        currFinDcd.setCoords(finPdb)
+                        currFinDcd.setAtoms(finPdb)
+                        writePDB(str(self._getExtraPath(
+                            'ini_cycle{0}.pdb'.format(i - 1))),
+                            currFinDcd)
+                        currFinPdb = self._getExtraPath(
+                            'ini_cycle{0}.pdb'.format(i - 1))
+
+                    outputDcdName = str(self._getExtraPath(
+                        'fin_cycle{0}.dcd'.format(i)))
+
+                args = (currIniPdb
+                        + " " + currFinPdb
+                        + " " + self._params['initPdb']
+                        + " " + self._params['finPdb']
+                        + " " + str(i)
+                        + " " + str(self._params['maxDev'])
+                        + " " + str(self._params['stepCut'])
+                        + " " + str(self._params['acceptParam'])
+                        + " " + str(self._params['cutoff'])
+                        + " " + str(self._params['maxSteps'])
+                        + " " + outputDcdName
+                        + " " + str(int(self.usingPseudoatoms.get())))
+
+                self.runJob("python " + os.path.abspath(os.environ[
+                             'SCIPION_HOME'] + "/software/em/prody/vmd-1.9.3/"
+                                               "lib/plugins/noarch/tcl"
+                                                          "/comd/anmmc.py"), args)
+
+            os.system("prody catdcd " + str(self._getExtraPath(
+                'initr.dcd')) + " " + str(self._getExtraPath(
+                'ini_cycle%d.dcd' % i)) + " " + "-o " + str(
+                self._getExtraPath("initial.dcd")))
+            os.system("mv " + self._getExtraPath('initial.dcd') +
+                      " " + self._getExtraPath('initr.dcd'))
+
+            if self.useFinalPdb.get() is True:
+                os.system("prody catdcd " + str(self._getExtraPath(
+                    'fintr.dcd')) + " " + str(self._getExtraPath(
+                    'fin_cycle%d.dcd' % i)) + " " + "-o " + str(
+                    self._getExtraPath("final.dcd")))
+                os.system("mv " + self._getExtraPath('final.dcd') +
+                          " " + self._getExtraPath('fintr.dcd'))
+
+            if self.cycleNumber.get() is not None and \
+                    i + 1 >= self.cycleNumber.get():
+                finished = True
+            i += 1
+
 
     def createOutputStep(self):
         print("Starting createOutputStep")
