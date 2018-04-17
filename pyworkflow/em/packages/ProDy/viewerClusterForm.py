@@ -183,14 +183,23 @@ class ProdyViewerCluster(ProtocolViewer):
                 else:
                     raise ValueError('The initial PDB should have a filename '
                                      'ending in .pdb or .cif')
+                if traj._pseudoatoms:
+                    pseudoatoms = True
+                else:
+                    pseudoatoms = False
                 break
 
-            protein = Pdb.select('protein and not hydrogen').copy()
+            if pseudoatoms:
+                protein = Pdb.copy()
+                proteinca = protein
+            else:
+                protein = Pdb.select('protein and not hydrogen').copy()
+                proteinca = protein.ca
 
             for combinedTraj in combinedTrajSet:
                 combinedEns = parseDCD(str(combinedTraj.getFileName()))
-                combinedEns.setCoords(protein.ca.copy())
-                combinedEns.setAtoms(protein.ca)
+                combinedEns.setCoords(proteinca.copy())
+                combinedEns.setAtoms(proteinca)
 
             subgroup_color_dict = {}
             labels = []

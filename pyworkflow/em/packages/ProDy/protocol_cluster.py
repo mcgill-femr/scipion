@@ -91,7 +91,6 @@ class clusterPdbTrajectories(EMProtocol):
         self._insertFunctionStep('createOutputStep')
 
     def clusterTrajectories(self):
-
         if self.treeMethod.get() == 0:
             treeMethod = 'nj'
         else:
@@ -102,6 +101,10 @@ class clusterPdbTrajectories(EMProtocol):
 
         for trajectory in self.setOfTrajectories.get():
             fileName = trajectory.getFileName()
+            if trajectory.isPseudoatoms():
+                pseudoatoms = True
+            else:
+                pseudoatoms = False
             break
 
         self.ens = parseDCD(str(fileName))
@@ -114,9 +117,12 @@ class clusterPdbTrajectories(EMProtocol):
             raise ValueError('The initial PDB should have a filename '
                              'ending in .pdb or .cif')
 
-        ca = pdb.ca.copy()
-        self.ens.setCoords(ca)
-        self.ens.setAtoms(ca)
+        if pseudoatoms:
+            proteinca = pdb.copy()
+        else:
+            proteinca = pdb.ca.copy()
+        self.ens.setCoords(proteinca)
+        self.ens.setAtoms(proteinca)
 
         fnPdb = []
         setOfPDBs = self._createSetOfPDBs()

@@ -120,6 +120,7 @@ class computeModesPcaPdb(EMProtocol):
                                      ' .pdb or .cif')
 
             for i, currPdb in enumerate(pdbs):
+                flag = currPdb.getPseudoAtoms()
                 if currPdb.numAtoms() != pdbs[0].numAtoms():
                     pdbs.pop(i)
                     print("Scipion can only use sets of PDBs where all "
@@ -133,18 +134,30 @@ class computeModesPcaPdb(EMProtocol):
         else:
             combined_traj = Trajectory("combined traj for PCA")
             for traj in self.setOfTrajectories.get():
+                self.flag = traj.isPseudoatoms()
                 combined_traj.addFile(traj.getFileName())
+            if self.flag:
+                combined_traj.setCoords(pdb)
+                combined_traj.setAtoms(pdb)
 
-            combined_traj.setCoords(pdb)
-            combined_traj.setAtoms(pdb.ca)
+                self.ens = Ensemble(combined_traj)
+                self.ens.setCoords(pdb)
 
-            self.ens = Ensemble(combined_traj)
-            self.ens.setCoords(pdb.ca)
+            else:
+                combined_traj.setCoords(pdb)
+                combined_traj.setAtoms(pdb.ca)
 
+                self.ens = Ensemble(combined_traj)
+                self.ens.setCoords(pdb.ca)
+            combined_traj.getCoordsets()
             for i, coordset in enumerate(combined_traj.getCoordsets()):
                 self.ens.addCoordset(coordset)
 
-        self.ens.setAtoms(pdb.ca)
+        if self.flag:
+            self.ens.setAtoms(pdb)
+        else:
+            self.ens.setAtoms(pdb.ca)
+
         self.ens.superpose()
 
         self.pca = PCA('all trajectories')
@@ -168,7 +181,7 @@ class computeModesPcaPdb(EMProtocol):
         writeDCD(self._getExtraPath('combined_trajectory.dcd'),self.ens)
         setOfTrajectories = self._createSetOfTrajectories()
         trajectory = TrajectoryDcd(self._getExtraPath('combined_trajectory.dcd')
-                                   , self.pdbFileName)
+                                   , self.pdbFileName, self.flag)
         setOfTrajectories.append(trajectory)
         self._defineOutputs(combinedTrajectory=setOfTrajectories)
 
