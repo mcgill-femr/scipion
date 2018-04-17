@@ -1312,6 +1312,10 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     MultidimArray< double > Vmc;
     Vmc.initZeros(volPadSizeZ,volPadSizeY,volPadSizeX);
 
+    MultidimArray< double > Vintemp;
+    Vintemp.initZeros(ZSIZE(Vin()),YSIZE(Vin()),XSIZE(Vin()));
+    Vintemp.setXmippOrigin();
+
     transformerVol.setReal(Vmc);
     transformerVol.enforceHermitianSymmetry();
     //forceWeightSymmetry(preFourierWeights);
@@ -1341,16 +1345,24 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 //~JV MONTE CARLO SIMULATION
     MultidimArray< std::complex<double> > VoutFourierTmp2;
     VoutFourierTmp2 = VoutFourier;
-    int numIters = 25;
     std::complex<double>  mean = 0;
     std::complex<double> stddev = 0;
     std::complex<double> result = 0;
 
     std::cout << std::endl;
+    double error = 0.0;
+    double mean_err = 1000;
+
+    int it = 1;
+    int maxIter = 500;
     std::cout << "Monte Carlo simulation: " << std::endl;
-    init_progress_bar(numIters);
-    for (int it = 0; it < numIters; ++it)
+    //init_progress_bar(numIters);
+
+    while( (mean_err > 1.0) )
     {
+    	if (it > maxIter)
+    		break;
+
 		FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourierTmp2)  // Simulated Volume
 		{
 			mean = A3D_ELEM(fftVin, k, i, j)*corr2D_3D;
@@ -1359,7 +1371,7 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 					((double*) &result)[0]);
 			rand_normal(((double*) &mean)[1], ((double*) &stddev)[1],
 					((double*) &result)[1]);
-			A3D_ELEM(VoutFourier,k,i,j) = mean;//result; // A3D_ELEM(fftVin,k,i,j);
+			A3D_ELEM(VoutFourier,k,i,j) = result;//result; // A3D_ELEM(fftVin,k,i,j);
 		}  										   // Simulated Volume
 
 //Fourier Transform of simulated volume
@@ -1403,15 +1415,17 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 	    }
 
 	    FOR_ALL_ELEMENTS_IN_ARRAY3D(Vmc)
-	    A3D_ELEM(Vout(),k,i,j) += std::sqrt((A3D_ELEM(Vmc,k,i,j)-A3D_ELEM(Vin(),k,i,j))*(A3D_ELEM(Vmc,k,i,j)-A3D_ELEM(Vin(),k,i,j)));
+	    {
+	    	A3D_ELEM(Vout(),k,i,j) += ((A3D_ELEM(Vmc,k,i,j)-A3D_ELEM(Vin(),k,i,j))*(A3D_ELEM(Vmc,k,i,j)-A3D_ELEM(Vin(),k,i,j)));
+	    	A3D_ELEM(Vintemp,k,i,j) += (A3D_ELEM(Vmc,k,i,j));
+	    	error += (std::abs(A3D_ELEM(Vintemp,k,i,j)/(double)it - A3D_ELEM(Vin(),k,i,j)))/(ZSIZE(Vin())*YSIZE(Vin())*XSIZE(Vin()));
+	    }
 
-	    std::cout << std::endl;
-	    std::cout << A3D_ELEM(Vmc,10,10,10) << " " << A3D_ELEM(Vin(),10,10,10) << " " << A3D_ELEM(Vout(),10,10,10) << std::endl;
+	    mean_err = (error/it)*100.0;
+	    std::cout << "Iteration MC : " << it << " Max iter: " << maxIter << " Error : " << mean_err << std::endl;
 	    Vmc.initZeros(volPadSizeZ,volPadSizeY,volPadSizeX); //we want to reuse the Vin() memory
 	    Vmc.setXmippOrigin();
-
-	    progress_bar(it);
-
+	    ++it;
     }
     //~JV
 
