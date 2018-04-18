@@ -45,16 +45,6 @@ class clusterPdbTrajectories(EMProtocol):
                       pointerClass='SetOfTrajectories',
                       label="Set of Trajectories",
                       important=True)
-        form.addParam('subgroupCutoff', params.FloatParam, default=0.01,
-                      label='Distance cutoff for defining clusters',
-                      help='The distance in PCA space that is used for '
-                           'dividing the tree into subgroups for hierarchical '
-                           'clustering.')
-        form.addParam('treeMethod', params.EnumParam, choices=['nj', 'upgma'],
-                      expertLevel=pwconst.LEVEL_ADVANCED,
-                      default=0,
-                      display=params.EnumParam.DISPLAY_HLIST,
-                      label="Method to use for tree construction")
         form.addParam('pcaNpzFile', PointerParam,
                       pointerClass='EMFile',
                       label="PCA NPZ File",
@@ -85,6 +75,16 @@ class clusterPdbTrajectories(EMProtocol):
                       label="Final size (px)", condition='createVolumes',
                       help='Final size in pixels for the output set of '
                            'volumes.')
+        form.addParam('subgroupCutoff', params.FloatParam, default=1,
+                      label='Distance cutoff for defining clusters',
+                      help='The distance in PCA space that is used for '
+                           'dividing the tree into subgroups for hierarchical '
+                           'clustering.')
+        form.addParam('treeMethod', params.EnumParam, choices=['nj', 'upgma'],
+                      expertLevel=pwconst.LEVEL_ADVANCED,
+                      default=0,
+                      display=params.EnumParam.DISPLAY_HLIST,
+                      label="Method to use for tree construction")
 
     def _insertAllSteps(self):
         self._insertFunctionStep('clusterTrajectories')
@@ -102,9 +102,9 @@ class clusterPdbTrajectories(EMProtocol):
         for trajectory in self.setOfTrajectories.get():
             fileName = trajectory.getFileName()
             if trajectory.isPseudoatoms():
-                pseudoatoms = True
+                self.pseudoatoms = True
             else:
-                pseudoatoms = False
+                self.pseudoatoms = False
             break
 
         self.ens = parseDCD(str(fileName))
@@ -117,7 +117,7 @@ class clusterPdbTrajectories(EMProtocol):
             raise ValueError('The initial PDB should have a filename '
                              'ending in .pdb or .cif')
 
-        if pseudoatoms:
+        if self.pseudoatoms:
             proteinca = pdb.copy()
         else:
             proteinca = pdb.ca.copy()
@@ -125,13 +125,13 @@ class clusterPdbTrajectories(EMProtocol):
         self.ens.setAtoms(proteinca)
 
         fnPdb = []
-        setOfPDBs = self._createSetOfPDBs()
+        #setOfPDBs = self._createSetOfPDBs()
         numbers = []
         for i, conformation in enumerate(self.ens):
             fnPdb.append(self._getExtraPath('pdb{:02d}.pdb'.format(i)))
             writePDB(fnPdb[i], conformation)
-            pdb = PdbFile(fnPdb[i])
-            setOfPDBs.append(pdb)
+            #pdb = PdbFile(fnPdb[i])
+            #setOfPDBs.append(pdb)
             numbers.append(str(i))
 
         self.pca = loadModel(str(self.pcaNpzFile.get().getFileName())
@@ -198,19 +198,22 @@ class clusterPdbTrajectories(EMProtocol):
 
         self._defineOutputs(representativePDBs=self.setOfRepresentatives)
 
-        outputVols = self._createSetOfVolumes()
-        outputVols.setSamplingRate(self.sampling.get())
-        for i, pdb in enumerate(self.setOfRepresentatives):
-            outFile = self._getExtraPath('output_vol%d'%(i+1))
-            args = '-i %s --sampling %f -o %s' % (pdb.getFileName(),
-                                                  self.sampling.get(), outFile)
-            args += ' --size %d  --centerPDB' % self.size.get()
-            program = "xmipp_volume_from_pdb"
-            self.runJob(program, args)
-            outVol = Volume()
-            outVol.setSamplingRate(self.sampling.get())
-            outVol.setFileName(outFile+'.vol')
-            outputVols.append(outVol)
-        outputVols.setDim(ImageDim(self.size.get(), self.size.get(), self.size.get()))
+        if self.createVolumes:
+            outputVols = self._createSetOfVolumes()
+            outputVols.setSamplingRate(self.sampling.get())
+            for i, pdb in enumerate(self.setOfRepresentatives):
+                outFile = self._getExtraPath('output_vol%d'%(i+1))
+                args = '-i %s --sampling %f -o %s' % (pdb.getFileName(),
+                                                      self.sampling.get(), outFile)
+                args += ' --size %d  --centerPDB' % self.size.get()
+                if self.pseudoatoms:
+                    args += ' --fixed_Gaussian %f' %self.setOfTrajectories.get().getDeviation()
+                program = "xmipp_volume_from_pdb"
+                self.runJob(program, args)
+                outVol = Volume()
+                outVol.setSamplingRate(self.sampling.get())
+                outVol.setFileName(outFile+'.vol')
+                outputVols.append(outVol)
+            outputVols.setDim(ImageDim(self.size.get(), self.size.get(), self.size.get()))
 
-        self._defineOutputs(outputVolumes=outputVols)
+            self._defineOutputs(outputVolumes=outputVols)

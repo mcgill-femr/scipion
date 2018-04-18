@@ -74,7 +74,7 @@ class XmippProtConvertToPseudoAtoms(XmippProtConvertToPseudoAtomsBase):
         self._defineOutputs(outputVolume=volume)
         self._defineSourceRelation(self.inputStructure.get(),volume)
 
-        pdb = PdbFile(self._getPath('pseudoatoms.pdb'), pseudoatoms=True)
+        pdb = PdbFile(self._getPath('pseudoatoms.pdb'), pseudoatoms=True, sigma = self.pseudoAtomRadius.get())
         pdb.setVolume(volume)
         pdb.setOrigin(t)
         self.createChimeraScript(inputVol, pdb)

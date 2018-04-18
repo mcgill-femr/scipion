@@ -29,7 +29,7 @@ import pyworkflow.protocol.constants as pwconst
 from prody import *
 from pyworkflow.utils import *
 import time
-from shutil import copy
+import subprocess
 
 FILE = 0
 PDB = 1
@@ -45,36 +45,18 @@ class computePdbTrajectories(EMProtocol):
         self.defaultCycles = 5
 
         form.addSection(label="ProDy Generate Trajectories")
-        form.addParam('FilePdb', params.EnumParam, choices=['File', 'Pdb'],
-                      default=0, important=True,
-                      display=params.EnumParam.DISPLAY_HLIST,
-                      label="Input file or pdb")
-        form.addParam('initialStructure', PathParam, label="Initial structure",
-                      important=True,
-                      condition='FilePdb == %s' % FILE,
-                      help='The initial structure can be an atomic model '
-                           '(true PDB) or a pseudoatomic model (an EM volume '
-                           'converted into pseudoatoms)')
-        form.addParam('usingPseudoatoms', params.BooleanParam, default=False,
-                      label="Using Pseudoatoms?")
         form.addParam('initialPdb', PointerParam, pointerClass='PdbFile',
                       label='Initial Pdb', important=False,
                       help='Choose an initial conformation using a Pdb to '
-                           'compute its N trajectories',
-                      condition='FilePdb == %s' % PDB)
+                           'compute its N trajectories')
         form.addParam('useFinalPdb', params.BooleanParam, default=False,
                       label="Use final conformation")
         form.addParam('finalPdb', PointerParam, pointerClass='PdbFile',
-                      label='Final Pdb', important=True,
-                      condition='useFinalPdb == True and FilePdb == %s' % PDB,
+                      label='Final Pdb', important=True, condition = 'useFinalPdb == True',
                       help='Choose a final conformation using a Pdb to '
                            'compute its N trajectories')
-        form.addParam('finalStructure', PathParam, label="Final structure",
-                      important=True,
-                      condition='useFinalPdb == True and FilePdb == %s' % FILE,
-                      help='The final structure can be an atomic model '
-                           '(true PDB) or a pseudoatomic model (an EM volume '
-                           'converted into pseudoatoms)')
+        form.addParam('usingPseudoatoms', params.BooleanParam, default=False,
+                      label="Using Pseudoatoms?")
         form.addParam('cycleNumber', params.IntParam,
                       default=self.defaultCycles,
                       label='Number of cycles',
@@ -134,10 +116,8 @@ class computePdbTrajectories(EMProtocol):
         else:
             usingPseudoatoms = 0
 
-        if self.initialStructure.get() is not None:
-            self.initialFileName = self.initialStructure.get()
-        else:
-            self.initialFileName = self.initialPdb.get().getFileName()
+
+        self.initialFileName = self.initialPdb.get().getFileName()
 
         self._params = {'initPdb': self.initialFileName,
                         'numTraj': self.numTrajectories.get(),
@@ -154,11 +134,7 @@ class computePdbTrajectories(EMProtocol):
                         }
 
         if self.useFinalPdb.get() is True:
-            if self.finalStructure.get() is not None:
-                self._params['finPdb'] = self.finalStructure.get()
-            else:
-                self._params['finPdb'] = self.finalPdb.get().getFileName()
-
+            self._params['finPdb'] = self.finalPdb.get().getFileName()
             self._params['cycle'] = self.defaultCycles
         else:
             self._params['finPdb'] = self._params['initPdb']
@@ -166,44 +142,7 @@ class computePdbTrajectories(EMProtocol):
             if self.usingPseudoatoms.get() is True:
                 self.pseudoatomsTrajectory(traj)
             else:
-                print("Calculating trajectory %d..." %(traj+1))
-                sys.stdout.flush()
-                args = ('-args ' + " " + str(os.path.abspath(self._getExtraPath()))
-                        + " " + "results{0}".format(str(traj+1))
-                        + " " + self._params['initPdb']
-                        + " " + self._params['finPdb']
-                        + " " + str(self._params['cycle'])
-                        + " " + str(self._params['maxDev'])
-                        + " " + str(self._params['acceptParam'])
-                        + " " + str(self._params['stepCut'])
-                        + " " + str(self._params['minLen'])
-                        + " " + str(self._params['tmdLen'])
-                        + " " + str(self._params['cutoff'])
-                        + " " + str(self._params['maxSteps'])
-                        + " & ")
-
-                self.runJob("VMDARGS='text with blanks' vmd -dispdev text -e " +
-                            os.path.abspath(os.environ['SCIPION_HOME'] +
-                            '/software/em/prody/vmd-1.9.3/lib/plugins/noarch/tcl'
-                            '/comd/comd.tcl'),args)
-
-                outputFn = self._getExtraPath('results{0}.log'.format(traj+1))
-                finished = 0
-                while not finished:
-                    if exists(outputFn):
-                        file = open(outputFn, 'r')
-                        lines = file.readlines()
-                        for line in lines:
-
-                            if line.find("ERROR") != -1:
-                                raise OSError(line)
-
-                            elif line.find("FINISHED") != -1:
-                                finished = 1
-                                print("Trajectory done.")
-                                sys.stdout.flush()
-
-                        file.close()
+               self.atomsTrajectory(traj)
 
             if self.useFinalPdb.get():
                 if self.usingPseudoatoms.get() is True:
@@ -280,6 +219,47 @@ class computePdbTrajectories(EMProtocol):
                       format(traj+1))
 
                 os.system('mv rmsd.txt trajectory{:02d}_rmsd.txt'.format(traj + 1))
+
+    def atomstrajectory(self, traj):
+        print("Calculating trajectory %d..." % (traj + 1))
+        sys.stdout.flush()
+        args = ('-args ' + " " + str(os.path.abspath(self._getExtraPath()))
+                + " " + "results{0}".format(str(traj + 1))
+                + " " + self._params['initPdb']
+                + " " + self._params['finPdb']
+                + " " + str(self._params['cycle'])
+                + " " + str(self._params['maxDev'])
+                + " " + str(self._params['acceptParam'])
+                + " " + str(self._params['stepCut'])
+                + " " + str(self._params['minLen'])
+                + " " + str(self._params['tmdLen'])
+                + " " + str(self._params['cutoff'])
+                + " " + str(self._params['maxSteps'])
+                + " & ")
+
+        self.runJob("VMDARGS='text with blanks' vmd -dispdev text -e " +
+                    os.path.abspath(os.environ['SCIPION_HOME'] +
+                                    '/software/em/prody/vmd-1.9.3/lib/plugins/noarch/tcl'
+                                    '/comd/comd.tcl'), args)
+
+        outputFn = self._getExtraPath('results{0}.log'.format(traj + 1))
+        finished = 0
+        while not finished:
+            if exists(outputFn):
+                file = open(outputFn, 'r')
+                lines = file.readlines()
+                for line in lines:
+
+                    if line.find("ERROR") != -1:
+                        raise OSError(line)
+
+                    elif line.find("FINISHED") != -1:
+                        finished = 1
+                        print("Trajectory done.")
+                        sys.stdout.flush()
+
+                file.close()
+
 
     def pseudoatomsTrajectory(self, traj):
 
@@ -427,10 +407,11 @@ class computePdbTrajectories(EMProtocol):
             for i, conformation in enumerate(ens):
                 fnPdb.append(self._getExtraPath('trajectory{:02d}_pdb{:02d}.pdb'.format(n + 1,i + 1)))
                 writePDB(fnPdb[i], conformation)
-                pdb = PdbFile(fnPdb[i])
+                pdb = PdbFile(fnPdb[i],self.usingPseudoatoms.get(), self.initialPdb.get().getDeviation())
                 setOfPDBs.append(pdb)
             traj = TrajectoryDcd(fnDcd,
-                   self._getExtraPath('trajectory{:02d}_pdb01.pdb'.format(n+1)), self.usingPseudoatoms.get())
+                   self._getExtraPath('trajectory{:02d}_pdb01.pdb'.format(n+1)), self.usingPseudoatoms.get(),
+                                 self.initialPdb.get().getDeviation())
             setOfTrajectories.append(traj)
 
         self._defineOutputs(outputPDBs=setOfPDBs)
