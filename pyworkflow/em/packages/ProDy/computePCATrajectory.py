@@ -171,10 +171,15 @@ class computeModesPcaPdb(EMProtocol):
 
     def _createOutputStep(self):
 
+        if self.setType.get() == 1:
+            sigma = self.setOfPDBs.get().getDeviation()
+        else:
+            sigma = self.setOfTrajectories.get().getDeviation()
+
         writeDCD(self._getExtraPath('combined_trajectory.dcd'),self.ens)
         setOfTrajectories = self._createSetOfTrajectories()
         trajectory = TrajectoryDcd(self._getExtraPath('combined_trajectory.dcd')
-                                   , self.pdbFileName, self.flag)
+                                   , self.pdbFileName, self.flag, sigma=sigma)
         setOfTrajectories.append(trajectory)
         self._defineOutputs(combinedTrajectory=setOfTrajectories)
 

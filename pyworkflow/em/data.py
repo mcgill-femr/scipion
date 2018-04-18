@@ -777,10 +777,11 @@ class EMFile(EMObject):
 class PdbFile(EMFile):
     """Represents an PDB file. """
 
-    def __init__(self, filename=None, pseudoatoms=False, **kwargs):
+    def __init__(self, filename=None, pseudoatoms=False, sigma = 0,**kwargs):
         EMFile.__init__(self, filename, **kwargs)
         self._pseudoatoms = Boolean(pseudoatoms)
         self._volume = None
+        self._sigma = Float(sigma)
         # origin stores a matrix that using as input the point (0,0,0)
         # provides  the position of the actual origin in the system of
         # coordinates of the default origin.
@@ -806,6 +807,8 @@ class PdbFile(EMFile):
         else:
             raise Exception('TypeError', 'ERROR: SetVolume, This is not a '
                                          'volume')
+    def getDeviation(self):
+        return self._sigma
 
     def __str__(self):
         return "%s (pseudoatoms=%s, volume=%s)" % \
@@ -831,10 +834,11 @@ class PdbFile(EMFile):
 
 class TrajectoryDcd(EMFile):
 
-    def __init__(self, filename=None, initialPdb=None, pseudoatoms = False, **kwargs):
+    def __init__(self, filename=None, initialPdb=None, pseudoatoms = False, sigma = 0, **kwargs):
         EMFile.__init__(self, filename, **kwargs)
         self._initialPdb = String(initialPdb)
         self._pseudoatoms = Boolean(pseudoatoms)
+        self._sigma = Float(sigma)
 
     def setInitialPdb(self, initialPdb):
         self._initialPdb = initialPdb
@@ -844,6 +848,9 @@ class TrajectoryDcd(EMFile):
 
     def isPseudoatoms(self):
         return self._pseudoatoms
+
+    def getDeviation(self):
+        return self._sigma
 
 
 class EMSet(Set, EMObject):
@@ -1267,11 +1274,11 @@ class SetOfDefocusGroup(EMSet):
         self._avgSet.set(value)
 
 
-class SetOfPDBs(EMSet):
+class SetOfPDBs(EMSet, PdbFile):
     """ Set containing PDB items. """
     ITEM_TYPE = PdbFile
 
-class SetOfTrajectories(EMSet):
+class SetOfTrajectories(EMSet, TrajectoryDcd):
     """Set containing trajectory items"""
     ITEM_TYPE = TrajectoryDcd
 
