@@ -27,6 +27,7 @@
 from pyworkflow.em import *
 from prody import *
 from numpy import zeros, sqrt
+import pyworkflow.protocol.constants as pwconst
 
 class computeModesPcaPdb(EMProtocol):
 
@@ -34,22 +35,6 @@ class computeModesPcaPdb(EMProtocol):
 
     def _defineParams(self, form):
         form.addSection(label="Prody PCA Analysis")
-        form.addParam('usePdb', params.BooleanParam, default=False,
-                      label="Use a separate PDB")
-        form.addParam('FilePdb', params.EnumParam, choices=['File', 'Pdb'],
-                      default=0, important=True,
-                      display=params.EnumParam.DISPLAY_HLIST,
-                      condition='usePdb == True',
-                      label="Input file or pdb")
-        form.addParam('inputStructure', PathParam, label="Input structure",
-                      important=True,
-                      condition='FilePdb == 0 and usePdb == True',
-                      help='The input structure can be an atomic model '
-                           '(true PDB) or a pseudoatomic model (an EM volume '
-                           'converted into pseudoatoms)')
-        form.addParam('Pdb', PointerParam, pointerClass='PdbFile',
-                      label='Input Pdb', important=True,
-                      condition='FilePdb == 1 and usePdb == True')
         form.addParam('setType', params.EnumParam,
                       choices=['setOfTrajectories', 'setOfPDBs'],
                       default=0,
@@ -64,6 +49,17 @@ class computeModesPcaPdb(EMProtocol):
                       label="Set of PDBs",
                       condition='setType == 1',
                       important=True)
+        form.addParam('usePdb', params.BooleanParam, default=False,
+                      label="Use a separate initial PDB",
+                      help = "If you select this option you must provide a "
+                             "PdbFile that will be used as initial PDB for "
+                             "the input set",
+                      expertLevel=pwconst.LEVEL_ADVANCED)
+        form.addParam('Pdb', PointerParam, pointerClass='PdbFile',
+                      label='Input Pdb', condition='usePdb == True',
+                      help="Select the PdbFile that will be used as initial "
+                           "PDB for the input set",
+                      expertLevel=pwconst.LEVEL_ADVANCED,)
 
     def _insertAllSteps(self):
         self._insertFunctionStep('_calcPCA')
@@ -71,12 +67,8 @@ class computeModesPcaPdb(EMProtocol):
 
     def _calcPCA(self):
 
-        if self.inputStructure.get() is not None:
-            self.pdbFileName = self.inputStructure.get()
-
-        elif self.Pdb.get() is not None:
+        if self.Pdb.get() is not None:
             self.pdbFileName = self.Pdb.get().getFileName()
-
         else:
             foundPdb = False
             if self.setType == 0:
@@ -86,12 +78,12 @@ class computeModesPcaPdb(EMProtocol):
                         self.pdbFileName = traj._initialPdb.get()
                         break
             else:
-                pdbFileNames = []
+                #pdbFileNames = []
                 for i, pdb in enumerate(self.setOfPDBs.get()):
                     if i == 0:
                         foundPdb = True
                         self.pdbFileName = str(pdb.getFileName())
-                    pdbFileNames.append(str(pdb.getFileName()))
+                    #pdbFileNames.append(str(pdb.getFileName()))
 
             if not foundPdb:
                 self.pdbFileName = None
@@ -109,8 +101,9 @@ class computeModesPcaPdb(EMProtocol):
 
         if self.setType == 1:
 
+            #TODO: adapt this part when the input is a setofpdbs to pseudoatoms
             pdbs = []
-            for pdbFn in pdbFileNames:
+            for pdbFn in self.setOfPDBs.get():
                 if pdbFn.endswith('.pdb'):
                     pdbs.append(parsePDB(pdbFn,subset='ca'))
                 elif pdbFn.endswith('.cif'):
@@ -120,7 +113,7 @@ class computeModesPcaPdb(EMProtocol):
                                      ' .pdb or .cif')
 
             for i, currPdb in enumerate(pdbs):
-                flag = currPdb.getPseudoAtoms()
+                #flag = currPdb.getPseudoAtoms()
                 if currPdb.numAtoms() != pdbs[0].numAtoms():
                     pdbs.pop(i)
                     print("Scipion can only use sets of PDBs where all "

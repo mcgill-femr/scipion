@@ -29,7 +29,6 @@ import pyworkflow.protocol.constants as pwconst
 from prody import *
 from pyworkflow.utils import *
 import time
-from shutil import copy
 
 FILE = 0
 PDB = 1
