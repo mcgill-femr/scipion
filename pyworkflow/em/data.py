@@ -1274,11 +1274,11 @@ class SetOfDefocusGroup(EMSet):
         self._avgSet.set(value)
 
 
-class SetOfPDBs(EMSet, PdbFile):
+class SetOfPDBs(EMSet):
     """ Set containing PDB items. """
     ITEM_TYPE = PdbFile
 
-class SetOfTrajectories(EMSet, TrajectoryDcd):
+class SetOfTrajectories(EMSet):
     """Set containing trajectory items"""
     ITEM_TYPE = TrajectoryDcd
 

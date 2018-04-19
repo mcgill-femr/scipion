@@ -61,7 +61,7 @@ class clusterPdbTrajectories(EMProtocol):
                            'if PCA is selected as distance '
                            'measure.',
                       condition='distanceType == 0')
-        form.addParam('createVolumes', params.BooleanParam, default=False,
+        form.addParam('createVolumes', params.BooleanParam, default=True,
                       label='Select if you want an output set of volumes',
                       help='Choose if you want to create a set of volumes as '
                            'output of the protocol. These volumes are '
@@ -103,6 +103,7 @@ class clusterPdbTrajectories(EMProtocol):
             fileName = trajectory.getFileName()
             if trajectory.isPseudoatoms():
                 self.pseudoatoms = True
+                self.sigma = trajectory.getDeviation()
             else:
                 self.pseudoatoms = False
             break
@@ -207,7 +208,7 @@ class clusterPdbTrajectories(EMProtocol):
                                                       self.sampling.get(), outFile)
                 args += ' --size %d  --centerPDB' % self.size.get()
                 if self.pseudoatoms:
-                    args += ' --fixed_Gaussian %f' %self.setOfTrajectories.get().getDeviation()
+                    args += ' --fixed_Gaussian %f' %self.sigma
                 program = "xmipp_volume_from_pdb"
                 self.runJob(program, args)
                 outVol = Volume()
