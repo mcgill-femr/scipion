@@ -59,7 +59,7 @@ class computeModesPcaPdb(EMProtocol):
                       label='Input Pdb', condition='usePdb == True',
                       help="Select the PdbFile that will be used as initial "
                            "PDB for the input set",
-                      expertLevel=pwconst.LEVEL_ADVANCED,)
+                      expertLevel=pwconst.LEVEL_ADVANCED)
 
     def _insertAllSteps(self):
         self._insertFunctionStep('_calcPCA')

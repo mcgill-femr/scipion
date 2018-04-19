@@ -109,7 +109,7 @@ class computePdbTrajectories(EMProtocol):
         self._insertFunctionStep('createOutputStep')
 
     def createTrajectories(self):
-        time.sleep(10)
+
         if self.usingPseudoatoms.get() is True:
             usingPseudoatoms = 1
         else:
@@ -219,7 +219,7 @@ class computePdbTrajectories(EMProtocol):
 
                 os.system('mv rmsd.txt trajectory{:02d}_rmsd.txt'.format(traj + 1))
 
-    def atomstrajectory(self, traj):
+    def atomsTrajectory(self, traj):
         print("Calculating trajectory %d..." % (traj + 1))
         sys.stdout.flush()
         args = ('-args ' + " " + str(os.path.abspath(self._getExtraPath()))
