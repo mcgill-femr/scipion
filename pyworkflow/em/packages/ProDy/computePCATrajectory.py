@@ -128,6 +128,7 @@ class computeModesPcaPdb(EMProtocol):
             combined_traj = Trajectory("combined traj for PCA")
             for traj in self.setOfTrajectories.get():
                 self.flag = traj.isPseudoatoms()
+                self.sigma = traj.getDeviation()
                 combined_traj.addFile(traj.getFileName())
             if self.flag:
                 combined_traj.setCoords(pdb)
@@ -170,16 +171,17 @@ class computeModesPcaPdb(EMProtocol):
 
 
     def _createOutputStep(self):
-
-        if self.setType.get() == 1:
+        #import time
+        #time.sleep(10)
+        '''if self.setType.get() == 1:
             sigma = self.setOfPDBs.get().getDeviation()
         else:
-            sigma = self.setOfTrajectories.get().getDeviation()
+            sigma = self.setOfTrajectories.get().getDeviation()'''
 
         writeDCD(self._getExtraPath('combined_trajectory.dcd'),self.ens)
         setOfTrajectories = self._createSetOfTrajectories()
         trajectory = TrajectoryDcd(self._getExtraPath('combined_trajectory.dcd')
-                                   , self.pdbFileName, self.flag, sigma=sigma)
+                                   , self.pdbFileName, self.flag, sigma=self.sigma)
         setOfTrajectories.append(trajectory)
         self._defineOutputs(combinedTrajectory=setOfTrajectories)
 
