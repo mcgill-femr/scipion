@@ -434,6 +434,20 @@ class ImageHandler(object):
         
         return fn
 
+    @classmethod
+    def removeFileType(cls, fileName):
+        # Remove filename format specification such as :mrc, :mrcs or :ems
+        if ':' in fileName:
+            fileName = fileName.split(':')[0]
+        return fileName
+
+    def scaleFourier(self, inputFn, outputFn, scaleFactor):
+        """ Scale an image by cropping in Fourier space. """
+        # TODO: Avoid using xmipp program for this
+        self.__runXmippProgram("xmipp_transform_downsample",
+                               "-i %s -o %s --step %f --method fourier"
+                               % (inputFn, outputFn, scaleFactor))
+
 
 DT_FLOAT = ImageHandler.DT_FLOAT
 
@@ -451,9 +465,9 @@ def __downloadPdb(pdbId, pdbGz, log):
         log.info("File to download and unzip: %s" % pdbGz)
     
     pdborgHostname = "ftp.wwpdb.org"
-    pdborgDirectory = "/pub/pdb/data/structures/all/pdb/"
-    prefix = "pdb"
-    suffix = ".ent.gz"
+    pdborgDirectory = "/pub/pdb/data/structures/all/mmCIF/"
+    prefix = ""  # use pdb for PDB and null for mmcif
+    suffix = ".cif.gz"
     success = True
     # Log into serverhttp://www.rcsb.org/pdb/files/2MP1.pdb.gz
     ftp = ftplib.FTP()
@@ -514,3 +528,32 @@ def __unzipPdb(pdbGz, pdbFile, log, cleanFile=True):
         success = False
         
     return success
+
+
+def getSubsetByDefocus(inputCTFs, inputMics, nMics):
+    """ Return a subset of inputMics that covers the whole range of defocus
+    from the inputCtfs set.
+    This function can be used from picking wizards that wants to optimize the
+    parameters for micrographs with different defocus values.
+    Params:
+        nMics is the number of micrographs that will be in the subset.
+    """
+    sortedMicIds = []
+
+    # Sort CTFs by defocus and select only those that match with inputMics
+    for ctf in inputCTFs.iterItems(orderBy='_defocusU'):
+        ctfId = ctf.getObjId()
+        if ctfId in inputMics:
+            sortedMicIds.append(ctfId)
+
+    # Take an equally spaced subset of micrographs
+    space = len(sortedMicIds) / (nMics - 1)
+    micIds = [sortedMicIds[0], sortedMicIds[-1]]
+    pos = 0
+    while len(micIds) < nMics:  # just add first and last
+        pos += space
+        micIds.insert(1, sortedMicIds[pos])
+
+    # Return the list with selected micrographs
+    return [inputMics[micId].clone() for micId in micIds]
+

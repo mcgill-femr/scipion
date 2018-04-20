@@ -26,14 +26,16 @@
 # **************************************************************************
 
 from __future__ import print_function
-import os
-import sys
-import shlex
+
 import ast
-from threading import Thread
+import os
+import shlex
+import socket
+import sys
 from multiprocessing.connection import Client
 from numpy import flipud
-import socket
+from threading import Thread
+
 try:  # python 2
     import Tkinter as tk
     import tkFont
@@ -56,15 +58,16 @@ import showj
 import metadata as md
 from data import PdbFile
 from convert import ImageHandler
+from pyworkflow.em.viewers.chimera_utils import \
+    getChimeraEnviron,  createCoordinateAxisFile
 
 import xmipp
 
-# TODO: ROB I think all this imports are not needed. First step toward removing
-# TODO: comment them
 from viewer_fsc import FscViewer
 from viewer_pdf import PDFReportViewer
 from viewer_monitor_summary import ViewerMonitorSummary
 
+# ------------------------ Some common Views ------------------
 
 
 class DataView(View):
@@ -101,7 +104,8 @@ class DataView(View):
                             "should be 'string' or 'tuple'")
 
     def show(self):
-        showj.runJavaIJapp(self._memory, 'xmipp.viewer.scipion.ScipionViewer',
+        showj.runJavaIJapp(self._memory,
+                           'xmipp.viewer.scipion.ScipionViewer',
                            self.getShowJParams(), env=self._env)
 
     def getShowJParams(self):
@@ -113,28 +117,6 @@ class DataView(View):
         return params
 
     def getShowJWebParams(self):
-
-    # FIXME: Maybe it is time to remove this old commented lines
-    #=OLD SHOWJ WEB DOCUMENTATION===============================================
-    # Extra parameters can be used to configure table layout and set render function for a column
-    # Default layout configuration is set in ColumnLayoutProperties method in layout_configuration.py
-    # 
-    # Parameters are formed by: [label]___[property]: [value]. E.g.: id___visible:True or micrograph___renderFunc:"get_image_psd"
-    # Properties to be configured are:
-    #    visible: Defines if this column is displayed
-    #    allowSetVisible: Defines if user can change visible property (show/hide this column).
-    #    editable: Defines if this column is editable, ie user can change field value.
-    #    allowSetEditable: Defines if user can change editable property (allow editing this column).
-    #    renderable: Defines if this column is renderizable, ie it renders data column using renderFunc
-    #    allowSetRenderable: Defines if user can change renderable property.
-    #    renderFunc: Function to be used when this field is rendered. (it has to be inserted in render_column method)
-    #    extraRenderFunc: Any extra parameters needed for rendering. Parameters are passed like in a url ie downsample=2&lowPass=3.5
-    # 
-    # Example:
-    # extraParameters["id___visible"]=True
-    # extraParameters["micrograph___renderFunc"]="get_image_psd"
-    # extraParameters["micrograph___extraRenderFunc"]="downsample=2"
-    #===========================================================================
     
         parameters = {
             showj.MODE,  # FOR MODE TABLE OR GALLERY
@@ -226,10 +208,10 @@ class CtfView(ObjectView):
     EXTRA_LABELS = ['_ctffind4_ctfResolution', '_gctf_ctfResolution',
                     '_ctffind4_ctfPhaseShift', '_gctf_ctfPhaseShift',
                     '_xmipp_ctfCritFirstZero',
-                    '_xmipp_ctfCritCorr13', '_xmipp_ctfCritFitting',
+                    '_xmipp_ctfCritCorr13', '_xmipp_ctfCritIceness','_xmipp_ctfCritFitting',
                     '_xmipp_ctfCritNonAstigmaticValidty',
                     '_xmipp_ctfCritCtfMargin', '_xmipp_ctfCritMaxFreq',
-                    '_xmipp_ctfCritPsdCorr90'
+                    '_xmipp_ctfCritPsdCorr90', '_xmipp_ctfVPPphaseshift'
                    ]
 
 
@@ -308,6 +290,8 @@ class Classes3DView(ClassesView):
 
 class CoordinatesObjectView(DataView):
     """ Wrapper to View but for displaying Scipion objects. """
+    MODE_AUTOMATIC = 'Automatic'
+
     def __init__(self, project, path, outputdir, protocol, pickerProps=None,
                  inTmpFolder=False, **kwargs):
         DataView.__init__(self, path, **kwargs)
@@ -316,10 +300,10 @@ class CoordinatesObjectView(DataView):
         self.protocol = protocol
         self.pickerProps = pickerProps
         self.inTmpFolder = inTmpFolder
-
+        self.mode = kwargs.get('mode', None)
     def show(self):
         return showj.launchSupervisedPickerGUI(self._path, self.outputdir,
-                                               self.protocol,
+                                               self.protocol, mode=self.mode,
                                                pickerProps=self.pickerProps,
                                                inTmpFolder=self.inTmpFolder)
 
@@ -486,20 +470,6 @@ class TableView(View):
 # ------------------------ Some views and  viewers ------------------------
 
 
-def getChimeraEnviron():
-    """ Return the proper environ to launch chimera.
-    CHIMERA_HOME variable is read from the ~/.config/scipion.conf file.
-    """
-    environ = Environ(os.environ)
-    environ.set('PATH', os.path.join(os.environ['CHIMERA_HOME'], 'bin'),
-                position=Environ.BEGIN)
-
-    if "REMOTE_MESA_LIB" in os.environ:
-        environ.set('LD_LIBRARY_PATH', os.environ['REMOTE_MESA_LIB'],
-                    position=Environ.BEGIN)
-    return environ
-
-
 class ChimeraView(CommandView):
     """ View for calling an external command. """
     def __init__(self, inputFile, **kwargs):
@@ -548,13 +518,44 @@ class ChimeraViewer(Viewer):
 
     def visualize(self, obj, **kwargs):
         cls = type(obj)
-
         if issubclass(cls, PdbFile):
-            fn = obj.getFileName()
-            if obj.getPseudoAtoms():
-                if hasattr(obj, '_chimeraScript'):
-                    fn = obj._chimeraScript.get()
-            ChimeraView(fn).show()
+            # if attribute _chimeraScript exists then protocol
+            # has create a script file USE IT
+            if hasattr(obj, '_chimeraScript'):
+                fn = obj._chimeraScript.get()
+                ChimeraView(fn).show()
+                return
+            # if not create a script file with: coordinates axis, PDB and
+            # volume (if available)
+            else:
+                fn = obj.getFileName()
+                fnCmd = self.protocol._getTmpPath("chimera.cmd")
+                f = open(fnCmd, 'w')
+                if obj.hasVolume():
+                    volID = 0
+                    volumeObject = obj.getVolume()
+                    dim = volumeObject.getDim()[0]
+                    sampling = volumeObject.getSamplingRate()
+                    f.write("open %s\n" % os.path.abspath(
+                        ImageHandler.removeFileType(volumeObject.getFileName())))
+                    f.write("volume #%d style surface\n"%volID)
+                    x, y, z = volumeObject.getVolOriginAsTuple()
+                    f.write("volume #%d origin %0.2f,%0.2f,%0.2f\n" % (volID, x,
+                                                                     y, z))
+                else:
+                    dim = 150  # eventually we will create a PDB library that
+                               # computes PDB dim
+                    sampling = 1.
+                # Construct the coordinate file
+                bildFileName = os.path.abspath(
+                    self.protocol._getTmpPath("axis.bild"))
+                createCoordinateAxisFile(dim,
+                                         bildFileName=bildFileName,
+                                         sampling=sampling)
+                f.write("open %s\n" % bildFileName)
+                f.write("open %s\n" % os.path.abspath(fn))
+                f.close()
+                ChimeraView(fnCmd).show()
             # FIXME: there is an asymmetry between ProtocolViewer and Viewer
             # for the first, the visualize method return a list of View's
             # (that are shown)
@@ -957,10 +958,10 @@ class LocalResolutionViewer(ProtocolViewer):
 
     """
     binaryCondition = ('(colorMap == %d) ' % (COLOR_OTHER))
-    
+
     def __init__(self, *args, **kwargs):
         ProtocolViewer.__init__(self, *args, **kwargs)
-    
+
     def getImgData(self, imgFile):
         import numpy as np
         img = ImageHandler().read(imgFile)
@@ -983,26 +984,26 @@ class LocalResolutionViewer(ProtocolViewer):
         else:
             imgSlice = volumeData[sliceNumber, :, :]
         return imgSlice
-    
+
     def createChimeraScript(self, scriptFile, fnResVol, fnOrigMap, sampRate):
         import pyworkflow.gui.plotter as plotter
         import os
         from itertools import izip
         fhCmd = open(scriptFile, 'w')
         imageFile = os.path.abspath(fnResVol)
-        
+
         _, minRes, maxRes = self.getImgData(imageFile)
-        
+
         stepColors = self._getStepColors(minRes, maxRes)
         colorList = plotter.getHexColorList(stepColors, self._getColorName())
-        
+
         fnVol = os.path.abspath(fnOrigMap)
 
         fhCmd.write("background solid white\n")
-        
+
         fhCmd.write("open %s\n" % fnVol)
         fhCmd.write("open %s\n" % (imageFile))
-        
+
         fhCmd.write("volume #0 voxelSize %s\n" % (str(sampRate)))
         fhCmd.write("volume #1 voxelSize %s\n" % (str(sampRate)))
         fhCmd.write("volume #1 hide\n")
@@ -1025,19 +1026,19 @@ class LocalResolutionViewer(ProtocolViewer):
                 + scolorStr2 + " \n")
         fhCmd.write(line)
         fhCmd.close()
-        
+
     def _getStepColors(self, minRes, maxRes, numberOfColors=13):
         inter = (maxRes - minRes) / (numberOfColors - 1)
         rangeList = []
         for step in range(0, numberOfColors):
             rangeList.append(round(minRes + step * inter, 2))
         return rangeList
-    
+
     def _getColorName(self):
         if self.colorMap.get() != COLOR_OTHER:
             return COLOR_CHOICES[self.colorMap.get()]
         else:
-            return self.otherColorMap.get()    
+            return self.otherColorMap.get()
 
 
 class VmdView(CommandView):
