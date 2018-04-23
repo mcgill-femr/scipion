@@ -172,8 +172,12 @@ void ProgClassifySignificant::selectSubset(size_t particleId)
 		size_t currentParticleId;
 		currentRow.getValue(MDL_PARTICLE_ID,currentParticleId);
 		size_t idxMax=setAngles[i].size();
+		//std::cout << "1 currentParticleId " << currentParticleId << std::endl;
+		//std::cout << "1 crIdx " << crIdx << std::endl;
 		while (currentParticleId<=particleId)
 		{
+			//std::cout << "2 currentParticleId " << currentParticleId << std::endl;
+			//std::cout << "2 crIdx " << crIdx << std::endl;
 			if (currentParticleId==particleId)
 			{
 				subsetAngles[i].push_back(currentRow);
@@ -189,6 +193,8 @@ void ProgClassifySignificant::selectSubset(size_t particleId)
 			}
 			else
 				break;
+			//std::cout << "3 currentParticleId " << currentParticleId << std::endl;
+			//std::cout << "3 crIdx " << crIdx << std::endl;
 		}
 		currentRowIdx[i]=crIdx;
 	}
@@ -359,18 +365,52 @@ void ProgClassifySignificant::run()
 			for (size_t ivol2=ivol1+1; ivol2<projector.size(); ivol2++)
 			{
 				std::vector<size_t> &subset2=subsetProjectionIdx[ivol2];
-				for (size_t i1=0; i1<subset1.size(); i1++)
+				//std::cout << "subset1.size()= " << subset1.size() << std::endl;
+
+				//AJ test with do-while loop
+				size_t i1=0;
+				do //for (size_t i1=0; i1<subset1.size(); i1++)
 				{
-					MultidimArray<double> &I1=*(subsetProjections[subset1[i1]]);
-					for (size_t i2=0; i2<subset2.size(); i2++)
+					//AJ test
+					MultidimArray<double> I1;
+					if (subset1.size()==0)
+						I1.resize(1, 1, (int)XSIZE(Iexp()), (int)XSIZE(Iexp()));
+					else
+						//MultidimArray<double> &I1=*(subsetProjections[subset1[i1]]);
+						I1=*(subsetProjections[subset1[i1]]);
+					//END AJ
+
+					//std::cout << "subset2.size()= " << subset2.size() << std::endl;
+
+					//AJ test with do-while loop
+					size_t i2=0;
+					do //for (size_t i2=0; i2<subset2.size(); i2++)
 					{
-						MultidimArray<double> &I2=*(subsetProjections[subset2[i2]]);
+						//AJ test
+						MultidimArray<double> I2;
+						//END AJ
+						if (subset2.size()==0)
+							I2.resize(1, 1, (int)XSIZE(Iexp()), (int)XSIZE(Iexp()));
+						else
+							//MultidimArray<double> &I2=*(subsetProjections[subset2[i2]]);
+							I2=*(subsetProjections[subset2[i2]]);
+						//END AJ
+
 						Idiff=I1;
 						Idiff-=I2;
 						Idiff.selfABS();
 
 						double corr1exp, corr2exp;
 						computeWeightedCorrelation(I1, I2, mIexp, Idiff, corr1exp, corr2exp);
+						//AJ test
+						if (isnan(corr1exp))
+							corr1exp=0.0;
+						if (isnan(corr2exp))
+							corr2exp=0.0;
+						//END AJ
+
+						std::cout << "id= " << id << " ivol1: " << ivol1 << " ivol2: " << ivol2 << " corr1exp=" << corr1exp << " corr2exp=" << corr2exp << std::endl;
+
 						double corrDiff12=corr1exp-corr2exp;
 						if (corrDiff12>0 && corr1exp>0)
 						{
@@ -394,12 +434,18 @@ void ProgClassifySignificant::run()
 //						save.write("PPP2.xmp");
 //						save()=Idiff;
 //						save.write("PPPdiff.xmp");
-//						std::cout << "corr1exp=" << corr1exp << " corr2exp=" << corr2exp << std::endl;
+
 //						char c;
 //						std::cout << "Press any key" << std::endl;
 //						std::cin >> c;
-					}
-				}
+
+						//AJ test with do-while loop
+						i2++;
+					}while(i2<subset2.size());
+
+					//AJ test with do-while loop
+					i1++;
+				}while(i1<subset1.size());
 			}
 		}
 		double iNcomparisons=1.0/winning.sum();
@@ -411,6 +457,7 @@ void ProgClassifySignificant::run()
 //		std::cout << corrDiff << std::endl;
 //		std::cout << winning << std::endl;
 //		std::cout << weight << std::endl;
+
 //		char c;
 //		std::cout << "Press any key" << std::endl;
 //		std::cin >> c;

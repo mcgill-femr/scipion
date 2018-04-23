@@ -406,8 +406,8 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         fnImgsId = self._getExtraPath("imagesId.xmd")
         fnOut = join(fnDirCurrent,"classes.xmd")
         self.runJob("xmipp_classify_significant","--id %s --angles %s --ref %s -o %s"%(fnImgsId,fnAnglesAll,fnVols,fnOut), numberOfMpi=1)
-        cleanPath(fnVols)
-        cleanPath(fnAnglesAll)
+        #cleanPath(fnVols)
+        #cleanPath(fnAnglesAll)
 
     def reconstruct(self, iteration):
         fnDirCurrent=self._getExtraPath("Iter%03d"%iteration)
