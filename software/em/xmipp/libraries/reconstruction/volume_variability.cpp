@@ -1354,7 +1354,7 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     double mean_err = 1000;
 
     int it = 1;
-    int maxIter = 500;
+    int maxIter = 100;
     std::cout << "Monte Carlo simulation: " << std::endl;
     //init_progress_bar(numIters);
 
