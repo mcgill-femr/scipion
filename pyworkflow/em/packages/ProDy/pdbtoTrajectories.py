@@ -56,6 +56,12 @@ class computePdbTrajectories(EMProtocol):
                            'compute its N trajectories')
         form.addParam('usingPseudoatoms', params.BooleanParam, default=False,
                       label="Using Pseudoatoms?")
+        form.addParam('threshold', params.FloatParam, default = 0.0, label="Threshold",
+                      condition="usingPseudoatoms == True",
+                      help = "You need to set a threshold to reduce the number of pseudoatoms "
+                             "depending on your computer memory. This threshold takes the "
+                             "pseudoatoms with maximum intensity. If you get a memory error try to "
+                             "increase the threshold")
         form.addParam('cycleNumber', params.IntParam,
                       default=self.defaultCycles,
                       label='Number of cycles',
@@ -110,13 +116,42 @@ class computePdbTrajectories(EMProtocol):
 
     def createTrajectories(self):
         time.sleep(10)
-        if self.usingPseudoatoms.get() is True:
-            usingPseudoatoms = 1
-        else:
-            usingPseudoatoms = 0
-
 
         self.initialFileName = self.initialPdb.get().getFileName()
+
+        if self.usingPseudoatoms.get() is True:
+            usingPseudoatoms = 1
+            pseudoatomsFile = open(self.initialFileName,'r')
+
+            for n, line in enumerate(pseudoatomsFile.readlines()):
+                self.numPseudoatoms = n
+            pseudoatomsFile.close()
+            if self.numPseudoatoms > 10000: #Esta condicion es dependiendo de cada ordenador
+                pseudoatomsFile = open(self.initialFileName, 'r')
+                newFile = self._getExtraPath('pseudoatomsReduced.pdb')
+                pseudoatomsReduced = open(newFile, 'w')
+                self.numPseudoatoms = 0
+                for n, line in enumerate(pseudoatomsFile.readlines()):
+                    column = line.split()
+
+                    try:
+                        if n >= 3 and n < 10000:
+                            intensity = column[9]
+                        if n >= 10000:
+                            intensity = column[8]
+
+                        if n < 3 or float(intensity) > self.threshold: #0.15
+                            self.numPseudoatoms += 1
+                            pseudoatomsReduced.write(str(line))
+                    except:
+                        print "Pseudoatom skipped line %s"%line
+
+                pseudoatomsReduced.close()
+                self.initialFileName = newFile
+            pseudoatomsFile.close()
+
+        else:
+            usingPseudoatoms = 0
 
         self._params = {'initPdb': self.initialFileName,
                         'numTraj': self.numTrajectories.get(),
@@ -422,7 +457,14 @@ class computePdbTrajectories(EMProtocol):
         print("Finished createOutputStep")
         sys.stdout.flush()
 
+    def _summary(self):
+        summary = []
+        try:
+            summary.append("Number of pseudoatoms: %d"% self.numPseudoatoms)
+        except:
+            summary.append("Number of pseudoatoms not ready yet")
 
+        return summary
 
 
 
