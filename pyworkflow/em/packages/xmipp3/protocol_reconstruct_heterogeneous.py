@@ -74,7 +74,8 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         form.addParam('targetResolution', FloatParam, default=8, 
                      label='Target resolution',
                      help='Target resolution to solve for the heterogeneity')    
-        form.addParam('computeDiff', BooleanParam, default=False, label="Compute the difference volumes")   
+        form.addParam('computeDiff', BooleanParam, default=False, label="Compute the difference volumes")
+        form.addParam('useGpu', BooleanParam, default=False, label="Use GPU")
         
         form.addSection(label='Angular assignment')
         form.addParam('numberOfIterations', IntParam, default=3, label='Number of iterations')
@@ -271,7 +272,8 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
                 self.runJob("xmipp_angular_project_library",args,numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
                 cleanPath(join(fnDirCurrent,"gallery%02d_sampling.xmd"%i))
                 moveFile(join(fnDirCurrent,"gallery%02d.doc"%i), fnGalleryMd)
-    
+
+                noAsignedGroups=0
                 for j in range(1,numberGroups+1):
                     fnAnglesGroup=join(fnDirCurrent,"angles_group%02d_%03d.xmd"%(i,j))
                     if not exists(fnAnglesGroup):
@@ -290,15 +292,26 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
                         if getSize(fnGroup)==0: # If the group is empty
                             continue
                         maxShift=round(self.angularMaxShift.get()*newXdim/100)
-                        
-                        args='-i %s --initgallery %s --maxShift %d --odir %s --dontReconstruct --useForValidation %d --dontApplyFisher'%\
-                             (fnGroup,fnGalleryGroupMd,maxShift,fnDirCurrent,self.numberOfReplicates.get()-1)
-                        self.runJob('xmipp_reconstruct_significant',args,numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
-                        fnAnglesSignificant = join(fnDirCurrent,"angles_iter001_00.xmd")
-                        if exists(fnAnglesSignificant): 
-                            moveFile(fnAnglesSignificant,fnAnglesGroup)
-                            cleanPath(join(fnDirCurrent,"images_iter001_00.xmd"))
-                            cleanPath(join(fnDirCurrent,"images_significant_iter001_00.xmd"))
+
+                        fnAnglesSignificant = join(fnDirCurrent, "angles_iter001_00.xmd")
+                        if not self.useGpu:
+                            args='-i %s --initgallery %s --maxShift %d --odir %s --dontReconstruct --useForValidation %d --dontApplyFisher'%\
+                                 (fnGroup,fnGalleryGroupMd,maxShift,fnDirCurrent,self.numberOfReplicates.get()-1)
+                            self.runJob('xmipp_reconstruct_significant',args,numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
+                        else: #AJ use gpu
+                            args = '-i_exp %s -i_ref %s --maxShift %d -o %s --keep_best %d' % \
+                                   (fnGroup, fnGalleryGroupMd, maxShift, fnAnglesSignificant, self.numberOfReplicates.get() - 1)
+                            self.runJob('xmipp_cuda_correlation', args, numberOfMpi=1)
+
+                        if exists(fnAnglesSignificant):
+                            moveFile(fnAnglesSignificant, fnAnglesGroup)
+                            cleanPath(join(fnDirCurrent, "images_iter001_00.xmd"))
+                            cleanPath(join(fnDirCurrent, "images_significant_iter001_00.xmd"))
+                        else: #AJ que pasa cuando no se asignan imagenes a ese volumen
+                            noAsignedGroups+=1
+                            if noAsignedGroups==numberGroups:
+                                raise Exception("There is no angular assignment for this volume")
+                            continue
                     if exists(fnAnglesGroup):
                         if not exists(fnAngles) and exists(fnAnglesGroup):
                             copyFile(fnAnglesGroup, fnAngles)
