@@ -405,6 +405,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         #AJ busca el maximo de correlacion entre todos los volumenes a los que se ha asigando cada particula??
         fnImgsId = self._getExtraPath("imagesId.xmd")
         fnOut = join(fnDirCurrent,"classes.xmd")
+        print("A correr","xmipp_classify_significant --id %s --angles %s --ref %s -o %s"%(fnImgsId,fnAnglesAll,fnVols,fnOut))
         self.runJob("xmipp_classify_significant","--id %s --angles %s --ref %s -o %s"%(fnImgsId,fnAnglesAll,fnVols,fnOut), numberOfMpi=1)
         #cleanPath(fnVols)
         #cleanPath(fnAnglesAll)
@@ -462,7 +463,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
                     self.runJob("xmipp_image_operate","-i %s --plus %s"%(fnOutVol,fnAux),numberOfMpi=1)
                     cleanPath(fnAux)
 
-            cleanPath(join(fnDirCurrent,"volumeRef%02d.mrc"%i))
+            # AJ *** cleanPath(join(fnDirCurrent,"volumeRef%02d.mrc"%i))
             cleanPath(fnOutVolPrevious)
             cleanPath(fnOutContPrevious)
 
