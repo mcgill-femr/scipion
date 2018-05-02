@@ -130,20 +130,20 @@ class computeModesPcaPdb(EMProtocol):
                 self.flag = traj.isPseudoatoms()
                 self.sigma = traj.getDeviation()
                 combined_traj.addFile(traj.getFileName())
+
             if self.flag:
                 combined_traj.setCoords(pdb)
                 combined_traj.setAtoms(pdb)
 
                 self.ens = Ensemble(combined_traj)
                 self.ens.setCoords(pdb)
-
             else:
                 combined_traj.setCoords(pdb)
                 combined_traj.setAtoms(pdb.ca)
 
                 self.ens = Ensemble(combined_traj)
                 self.ens.setCoords(pdb.ca)
-            combined_traj.getCoordsets()
+
             for i, coordset in enumerate(combined_traj.getCoordsets()):
                 self.ens.addCoordset(coordset)
 

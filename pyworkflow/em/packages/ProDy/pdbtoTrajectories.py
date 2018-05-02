@@ -172,6 +172,7 @@ class computePdbTrajectories(EMProtocol):
             self._params['cycle'] = self.defaultCycles
         else:
             self._params['finPdb'] = self._params['initPdb']
+
         for traj in range(self.numTrajectories.get()):
             if self.usingPseudoatoms.get() is True:
                 self.pseudoatomsTrajectory(traj)
@@ -210,13 +211,13 @@ class computePdbTrajectories(EMProtocol):
                              'walker1_trajectory{:02d}_protein.dcd'.format(traj+1)),
                              w1_traj)
 
-                w2_start = parsePDB( self._getExtraPath('walker2_ionized.pdb'))
-                w2_traj = parseDCD( self._getExtraPath('walker2_trajectory.dcd'))
-                w2_traj.setCoords(w2_start)
-                w2_traj.setAtoms(w2_start.select('protein and not hydrogen'))
-                writeDCD(self._getExtraPath(
-                         'walker2_trajectory{:02d}_protein.dcd'.format(traj+1)),
-                         w2_traj)
+                    w2_start = parsePDB( self._getExtraPath('walker2_ionized.pdb'))
+                    w2_traj = parseDCD( self._getExtraPath('walker2_trajectory.dcd'))
+                    w2_traj.setCoords(w2_start)
+                    w2_traj.setAtoms(w2_start.select('protein and not hydrogen'))
+                    writeDCD(self._getExtraPath(
+                             'walker2_trajectory{:02d}_protein.dcd'.format(traj+1)),
+                             w2_traj)
 
                 combined_traj = parseDCD(self._getExtraPath(
                                          'walker1_trajectory{:02d}_protein.dcd'
