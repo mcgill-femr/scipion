@@ -46,6 +46,8 @@ void ProgClassifySignificant::readParams()
     fnOut = getParam("-o");
     pad = getIntParam("--padding");
     wmin = getDoubleParam("--minWeight");
+    onlyIntersection = checkParam("--onlyIntersection");
+    numVotes = getIntParam("--votes");
 }
 
 // Show ====================================================================
@@ -73,8 +75,10 @@ void ProgClassifySignificant::defineParams()
     addParamsLine("                               : for each volume. The assignment per volume should be organized");
     addParamsLine("                               : in different blocks");
     addParamsLine("   -o <metadata>               : Output metadata with a set of angles per volume");
+    addParamsLine("  [--votes <numVotes=5>]       : Minimum number of votes to consider an image belonging to a volume");
+    addParamsLine("  [--onlyIntersection]         : Flag to select only the images belonging only to the set intersection");
     addParamsLine("  [--padding <p=2>]            : Padding factor");
-    addParamsLine("  [--minWeight <p=0.1>]        : Minimum weight");
+    addParamsLine("  [--minWeight <w=0.1>]        : Minimum weight");
 }
 
 // Produce side information ================================================
@@ -140,7 +144,6 @@ void ProgClassifySignificant::generateProjection(size_t volumeIdx, size_t poolId
 		MAT_ELEM(A,0,2)*=-1;
 	}
 	projectVolume(*(projector[volumeIdx]), Paux, xdim, xdim,  rot, tilt, psi);
-	std::cout << "Projecting vol. " << volumeIdx << " " << rot << " " << tilt << " " << psi << " " << x << " " << y << " " << flip << std::endl;
 
 	if (poolIdx>=subsetProjections.size())
 		subsetProjections.push_back(new MultidimArray<double>);
@@ -162,7 +165,6 @@ void ProgClassifySignificant::selectSubset(size_t particleId, bool &flagEmpty)
 {
 	size_t poolIdx=0;
 	FileName fnImg;
-	std::cout << "Particle ID" << particleId << std::endl;
 	for (size_t i=0; i<projector.size(); i++)
 	{
 		subsetAngles[i].clear();
@@ -180,12 +182,8 @@ void ProgClassifySignificant::selectSubset(size_t particleId, bool &flagEmpty)
 		size_t currentParticleId;
 		currentRow.getValue(MDL_PARTICLE_ID,currentParticleId);
 		size_t idxMax=setAngles[i].size();
-		std::cout << "1 currentParticleId " << currentParticleId << std::endl;
-		std::cout << "1 crIdx " << crIdx << std::endl;
 		while (currentParticleId<=particleId)
 		{
-			std::cout << "2 currentParticleId " << currentParticleId << std::endl;
-			std::cout << "2 crIdx " << crIdx << std::endl;
 			if (currentParticleId==particleId)
 			{
 				flagEmpty=false;
@@ -194,7 +192,7 @@ void ProgClassifySignificant::selectSubset(size_t particleId, bool &flagEmpty)
 				currentRow.getValue(MDL_IMAGE,fnImg);
 				Iexp.push_back(new Image<double>);
 				Iexp[poolIdx]->read(fnImg);
-				std::cout << "Particle fnImg: " << fnImg << " en " << poolIdx << std::endl;
+				//std::cout << "Particle fnImg: " << fnImg << " in " << poolIdx << std::endl;
 				generateProjection(i,poolIdx,currentRow);
 				poolIdx+=1;
 			}
@@ -206,8 +204,6 @@ void ProgClassifySignificant::selectSubset(size_t particleId, bool &flagEmpty)
 			}
 			else
 				break;
-			std::cout << "3 currentParticleId " << currentParticleId << std::endl;
-			std::cout << "3 crIdx " << crIdx << std::endl;
 		}
 		currentRowIdx[i]=crIdx;
 	}
@@ -221,21 +217,23 @@ void ProgClassifySignificant::selectSubset(size_t particleId, bool &flagEmpty)
 #undef DEBUG
 
 void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double> &I2, MultidimArray<double> &Iexp1,
-		MultidimArray<double> &Iexp2, double &corr1exp, double &corr2exp, bool I1isEmpty, bool I2isEmpty, int xdim)
+		MultidimArray<double> &Iexp2, double &corr1exp, double &corr2exp, bool I1isEmpty, bool I2isEmpty, int xdim,
+		bool onlyIntersection, int numVotes)
 {
 
-	MultidimArray<double> Idiff, I2Aligned;
+	MultidimArray<double> Idiff, I2Aligned, Iexp2Aligned;
 	Matrix2D<double> M;
 
 	MultidimArray<double> Iaux1(1, 1, xdim, xdim);
 	MultidimArray<double> Iaux2(1, 1, xdim, xdim);
-	MultidimArray<double> Iexp2Aligned(1, 1, xdim, xdim);
 
 	I1.setXmippOrigin();
 	I2.setXmippOrigin();
-	Iexp2Aligned.setXmippOrigin();
+	Iexp1.setXmippOrigin();
+	Iexp2.setXmippOrigin();
 
 	I2Aligned=I2;
+	Iexp2Aligned=Iexp2;
 
 	if (!I1isEmpty && !I2isEmpty){
 		alignImages(I1, I2Aligned, M, false);
@@ -253,21 +251,20 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 	save.write("I1.xmp");
 	save()=I2;
 	save.write("I2.xmp");
-	save()=Idiff;
-	save.write("Idiff.xmp");
 	save()=I2Aligned;
 	save.write("I2Aligned.xmp");
 	save()=Iexp1;
 	save.write("Iexp1.xmp");
 	save()=Iexp2;
-	save.write("Iexp2.xmp");
-	save()=I2Transformed;
-	save.write("I2Transformed.xmp");*/
+	save.write("Iexp2.xmp");*/
 
 	double mean, std;
 	Idiff.computeAvgStdev(mean,std);
 	Idiff.selfABS();
 	double threshold=std;
+
+	/*save()=Idiff;
+	save.write("Idiff.xmp");*/
 
 	double mean1, std1, mean2, std2, th1, th2;
 	I1.computeAvgStdev(mean1,std1);
@@ -279,11 +276,18 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 
 	corr1exp=corr2exp=0.0;
 
+	if (!I1isEmpty && !I2isEmpty){
+		applyGeometry(LINEAR, Iexp2Aligned, Iexp2, M, IS_NOT_INV, false);
+	}
+	/*save()=Iexp2Aligned;
+	save.write("Iexp2Aligned.xmp");*/
+
 	// Estimate the mean and stddev within the mask
 	double N=0;
 	double N1=0, N2=0;
 	double sumMI1=0, sumMI2=0, sumMIexp1=0, sumMIexp2=0;
 	double sumI1=0, sumI2=0, sumIexp1=0, sumIexp2=0;
+	double sumWI1=0, sumWI2=0, sumWIexp1=0, sumWIexp2=0;
 
 	FOR_ALL_DIRECT_ELEMENTS_IN_MULTIDIMARRAY(Idiff)
 	{
@@ -295,31 +299,31 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 		sumI2+=p2;
 		sumIexp1+=pexp1;
 		sumIexp2+=pexp2;
-		/*if (DIRECT_MULTIDIM_ELEM(Idiff,n)>threshold)
+		if (DIRECT_MULTIDIM_ELEM(Idiff,n)>threshold)
 		{
 			double p2Alg=DIRECT_MULTIDIM_ELEM(I2Aligned,n);
+			double pexp2Alg=DIRECT_MULTIDIM_ELEM(Iexp2Aligned,n);
 			sumWI1+=p1;
 			sumWI2+=p2Alg;
 			sumWIexp1+=pexp1;
-			sumWIexp2+=pexp2;
+			sumWIexp2+=pexp2Alg;
 			N+=1.0;
-		}*/
+			//DIRECT_MULTIDIM_ELEM(Iaux1,n)=1.0;
+		}
 		if(p1>th1){
 			sumMI1+=p1;
 			sumMIexp1+=pexp1;
 			N1+=1.0;
-			DIRECT_MULTIDIM_ELEM(Iaux1,n)=1.0;
 		}
 		if(p2>th2){
 			sumMI2+=p2;
 			sumMIexp2+=pexp2;
 			N2+=1.0;
-			DIRECT_MULTIDIM_ELEM(Iaux2,n)=1.0;
 		}
 	}
 
-	/*//Image<double> save;
-	save()=Iaux1;
+	//Image<double> save;
+	/*save()=Iaux1;
 	save.write("Iaux1.xmp");
 	save()=Iaux2;
 	save.write("Iaux2.xmp");*/
@@ -327,12 +331,13 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 
 	double sumMI1exp1=0.0, sumMI2exp2=0.0, sumMI1I1=0.0, sumMI2I2=0.0, sumMIexpIexp1=0.0, sumMIexpIexp2=0.0;
 	double sumI1exp1=0.0,  sumI2exp2=0.0,  sumI1I1=0.0,  sumI2I2=0.0,  sumIexpIexp1=0.0, sumIexpIexp2=0.0;
-	double corrM1exp, corrM2exp, corrN1exp, corrN2exp;
+	double sumWI1exp1=0.0, sumWI2exp2=0.0, sumWI1I1=0.0, sumWI2I2=0.0, sumWIexpIexp1=0.0, sumWIexpIexp2=0.0;
+	double corrM1exp, corrM2exp, corrN1exp, corrN2exp, corrW1exp, corrW2exp;
 
-	//AJ TEST
-	applyGeometry(LINEAR, Iexp2Aligned, Iexp2, M, IS_NOT_INV, false);
+	double sumWI1exp2=0.0, sumWI2exp1=0.0, corrWI1exp2, corrWI2exp1;
+	double sumI1exp2=0.0, sumI2exp1=0.0, corrI1exp2, corrI2exp1;
 
-	double avg1, avgExp1, avgM1, avgMExp1, avg2, avgExp2, avgM2, avgMExp2, iN1, iN2;
+	double avg1, avgExp1, avgM1, avgMExp1, avgW1, avgWExp1, avg2, avgExp2, avgM2, avgMExp2, avgW2, avgWExp2, iN1, iN2, iN;
 	double isize=1.0/MULTIDIM_SIZE(Idiff);
 	avg1=sumI1*isize;
 	avgExp1=sumIexp1*isize;
@@ -347,6 +352,13 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 		iN2=1.0/N2;
 		avgM2=sumMI2*iN2;
 		avgMExp2=sumMIexp2*iN2;
+	}
+	if(N>0){
+		iN=1.0/N;
+		avgW1=sumWI1*iN;
+		avgWExp1=sumWIexp1*iN;
+		avgW2=sumWI2*iN;
+		avgWExp2=sumWIexp2*iN;
 	}
 	FOR_ALL_DIRECT_ELEMENTS_IN_MULTIDIMARRAY(Idiff)
 	{
@@ -365,6 +377,9 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 		sumIexpIexp1 +=pexp1*pexp1;
 		sumIexpIexp2 +=pexp2*pexp2;
 
+		sumI1exp2+=p1a*pexpa2;
+		sumI2exp1+=p2a*pexp1;
+
 		if (p1>th1){
 			p1a=p1-avgM1;
 			pexpa1=pexp1-avgMExp1;
@@ -379,7 +394,7 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 			sumMI2I2 +=p2a*p2a;
 			sumMIexpIexp2 +=pexpa2*pexpa2;
 		}
-		/*if (DIRECT_MULTIDIM_ELEM(Idiff,n)>threshold)
+		if (DIRECT_MULTIDIM_ELEM(Idiff,n)>threshold)
 		{
 			double p2Alg=DIRECT_MULTIDIM_ELEM(I2Aligned,n);
 			double pexp2Alg=DIRECT_MULTIDIM_ELEM(Iexp2Aligned,n);
@@ -400,7 +415,10 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 			sumWI2I2 +=wp2a*p2a;
 			sumWIexpIexp1 +=wpexpa1*pexpa1;
 			sumWIexpIexp2 +=wpexpa2*pexpa2;
-		}*/
+
+			sumWI1exp2+=wp1a*pexpa2;
+			sumWI2exp1+=wp2a*pexpa1;
+		}
 	}
 
 	sumI1exp1*=isize;
@@ -410,6 +428,9 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 	sumIexpIexp1*=isize;
 	sumIexpIexp2*=isize;
 
+	sumI1exp2*=isize;
+	sumI2exp1*=isize;
+
 	sumMI1exp1*=iN1;
 	sumMI2exp2*=iN2;
 	sumMI1I1*=iN1;
@@ -417,103 +438,93 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 	sumMIexpIexp1*=iN1;
 	sumMIexpIexp2*=iN2;
 
+	sumWI1exp1*=iN;
+	sumWI2exp2*=iN;
+	sumWI1I1*=iN;
+	sumWI2I2*=iN;
+	sumWIexpIexp1*=iN;
+	sumWIexpIexp2*=iN;
+
+	sumWI1exp2*=iN;
+	sumWI2exp1*=iN;
+
 	corrM1exp=sumMI1exp1/sqrt(sumMI1I1*sumMIexpIexp1);
 	corrM2exp=sumMI2exp2/sqrt(sumMI2I2*sumMIexpIexp2);
 	corrN1exp=sumI1exp1/sqrt(sumI1I1*sumIexpIexp1);
 	corrN2exp=sumI2exp2/sqrt(sumI2I2*sumIexpIexp2);
+	corrW1exp=sumWI1exp1/sqrt(sumWI1I1*sumWIexpIexp1);
+	corrW2exp=sumWI2exp2/sqrt(sumWI2I2*sumWIexpIexp2);
 
-	corr1exp=corrN1exp;
-	corr2exp=corrN2exp;
-	//FIN AJ TEST
+	corrWI1exp2 = sumWI1exp2/sqrt(sumWI1I1*sumWIexpIexp2);
+	corrWI2exp1 = sumWI2exp1/sqrt(sumWI2I2*sumWIexpIexp1);
 
-	// Estimate the weighted correlation
-	/*if (N>0)
-	{
-		double iN=1.0/N;
-		double isize=1.0/MULTIDIM_SIZE(Idiff);
-		double avg1=sumI1*iN;
-		double avg2=sumI2*iN;
-		double avgExp1=sumIexp1*iN;
-		double avgExp2=sumIexp2*iN;
-		double avgW1=sumWI1*iN;
-		double avgW2=sumWI2*iN;
-		double avgWExp1=sumWIexp1*iN;
-		double avgWExp2=sumWIexp2*iN;
-		//std::cout << "avgW1= " << avgW1 << " avgW2: " << avgW2 << " avgWExp=" << avgWExp << std::endl;
+	corrI1exp2 = sumI1exp2/sqrt(sumI1I1*sumIexpIexp2);
+	corrI2exp1 = sumI2exp1/sqrt(sumI2I2*sumIexpIexp1);
 
-		FOR_ALL_DIRECT_ELEMENTS_IN_MULTIDIMARRAY(Idiff)
-		{
-			double p1=DIRECT_MULTIDIM_ELEM(I1,n);
-			double p2=DIRECT_MULTIDIM_ELEM(I2,n);
-			double pexp1=DIRECT_MULTIDIM_ELEM(Iexp1,n);
-			double pexp2=DIRECT_MULTIDIM_ELEM(Iexp2,n);
-			double p1a=p1-avg1;
-			double p2a=p2-avg2;
-			double pexpa1=pexp1-avgExp1;
-			double pexpa2=pexp2-avgExp2;
-			sumI1exp1+=p1a*pexpa1;
-			sumI2exp2+=p2a*pexpa2;
-			sumI1I1 +=p1a*p1a;
-			sumI2I2 +=p2a*p2a;
-			sumIexpIexp1 +=pexp1*pexp1;
-			sumIexpIexp2 +=pexp2*pexp2;
+	if (isnan(corrWI2exp1))
+		corrWI2exp1=-1.0;
+	if (isnan(corrWI1exp2))
+		corrWI1exp2=-1.0;
 
-			if (DIRECT_MULTIDIM_ELEM(Idiff,n)>threshold)
-			{
-				p1a=p1-avgW1;
-				p2a=p2-avgW2;
-				pexpa1=pexp1-avgWExp1;
-				pexpa2=pexp2-avgWExp2;
+	if(isnan(corrN1exp))
+		corrN1exp=-1.0;
+	if(isnan(corrM1exp))
+		corrM1exp=-1.0;
+	if(isnan(corrW1exp))
+		corrW1exp=-1.0;
+	if(isnan(corrN2exp))
+		corrN2exp=-1.0;
+	if(isnan(corrM2exp))
+		corrM2exp=-1.0;
+	if(isnan(corrW2exp))
+		corrW2exp=-1.0;
+	if (isnan(corrI2exp1))
+		corrI2exp1=-1.0;
+	if (isnan(corrI1exp2))
+		corrI1exp2=-1.0;
+	corr2exp = -1;
+	corr1exp=-1;
+	if (onlyIntersection){
+		if (corrN1exp==-1 || corrN2exp==-1)
+			return;
+	}
+	double imedN1exp=imedDistance(I1, Iexp1);
+	double imedN2exp=imedDistance(I2, Iexp2);
 
-				double w=DIRECT_MULTIDIM_ELEM(Idiff,n);
-				double wp1a=w*p1a;
-				double wp2a=w*p2a;
-				double wpexpa1=w*pexpa1;
-				double wpexpa2=w*pexpa2;
+	int votes=0;
+	if (corrN1exp>corrN2exp && corrN1exp>0)
+		votes+=1;
+	else if (corrN1exp<corrN2exp && corrN2exp>0)
+		votes-=1;
+	if (corrM1exp>corrM2exp && corrM1exp>0)
+		votes+=1;
+	else if (corrM1exp<corrM2exp && corrM2exp>0)
+		votes-=1;
+	if (corrW1exp>corrW2exp && corrW1exp>0)
+		votes+=1;
+	else if (corrW1exp<corrW2exp && corrW2exp>0)
+		votes-=1;
+	if ((corrW1exp-corrWI2exp1)>(corrW2exp-corrWI1exp2))
+		votes+=1;
+	else if ((corrW1exp-corrWI2exp1)<(corrW2exp-corrWI1exp2))
+		votes-=1;
+	if (imedN1exp<imedN2exp)
+		votes+=1;
+	else if (imedN1exp>imedN2exp)
+		votes-=1;
 
-				sumWI1exp1+=wp1a*pexpa1;
-				sumWI2exp2+=wp2a*pexpa2;
-				sumWI1I1 +=wp1a*p1a;
-				sumWI2I2 +=wp2a*p2a;
-				sumWIexpIexp1 +=wpexpa1*pexpa1;
-				sumWIexpIexp2 +=wpexpa2*pexpa2;
-			}
-		}
+	if(votes>=numVotes && corrN1exp>corrI2exp1){
+		corr1exp = corrN1exp;
+		corr2exp = -1;
+	}
+	else if(votes<=-numVotes && corrN2exp>corrI1exp2){
+		corr2exp= corrN2exp;
+		corr1exp=-1;
+	}
 
-		sumWI1exp1*=iN;
-		sumWI2exp2*=iN;
-		sumWI1I1*=iN;
-		sumWI2I2*=iN;
-		sumWIexpIexp1*=iN;
-		sumWIexpIexp2*=iN;
-
-		sumI1exp1*=isize;
-		sumI2exp2*=isize;
-		sumI1I1*=isize;
-		sumI2I2*=isize;
-		sumIexpIexp1*=isize;
-		sumIexpIexp2*=isize;
-
-		corrW1exp=sumWI1exp1/sqrt(sumWI1I1*sumWIexpIexp1);
-		corrW2exp=sumWI2exp2/sqrt(sumWI2I2*sumWIexpIexp2);
-		corrN1exp=sumI1exp1/sqrt(sumI1I1*sumIexpIexp1);
-		corrN2exp=sumI2exp2/sqrt(sumI2I2*sumIexpIexp2);
-        
-        corr1exp=corrN1exp;
-        corr2exp=corrN2exp;
-
-//		if (corrW1exp>0 && corrN1exp>0)
-//			corr1exp=sqrt(corrW1exp*corrN1exp);
-//		else
-//			corr1exp=-1;
-//		if (corrW2exp>0 && corrN2exp>0)
-//			corr2exp=sqrt(corrW2exp*corrN2exp);
-//		else
-//			corr2exp=-1;
-
-	}*/
-	std::cout << "corr1exp= " << corr1exp << " corrN1exp: " << corrN1exp << " corrW1exp=" << corrW1exp << std::endl;
-	std::cout << "corr2exp= " << corr2exp << " corrN2exp: " << corrN2exp << " corrW2exp=" << corrW2exp << std::endl;
+	/*std::cout << "corr1exp= " << corr1exp << " corrN1exp: " << corrN1exp << " corrM1exp=" << corrM1exp << " corrW1exp=" << corrW1exp << " corrWI2exp1=" << corrWI2exp1 << " corrI2exp1=" << corrI2exp1 << " imedN1exp=" << imedN1exp << std::endl;
+	std::cout << "corr2exp= " << corr2exp << " corrN2exp: " << corrN2exp << " corrM2exp=" << corrM2exp << " corrW2exp=" << corrW2exp << " corrWI1exp2=" << corrWI1exp2 << " corrI1exp2=" << corrI1exp2 << " imedN2exp=" << imedN2exp << std::endl;
+	std::cout << "votes= " << votes << std::endl;*/
 }
 
 void ProgClassifySignificant::updateClass(int n, double wn)
@@ -587,7 +598,7 @@ void ProgClassifySignificant::run()
 				size_t i1=0;
 				do //for (size_t i1=0; i1<subset1.size(); i1++)
 				{
-					std::cout << "subset1.size()" << subset1.size() << std::endl;
+					//std::cout << "subset1.size()" << subset1.size() << std::endl;
 					if (subset1.size()==0)
 						I1isEmpty=true;
 					else
@@ -596,13 +607,13 @@ void ProgClassifySignificant::run()
 						I1=*(subsetProjections[subset1[i1]]);
 						Iexp1 = (*(Iexp[subset1[i1]]))();
 						I1isEmpty = false;
-						std::cout << "subset1[i1]" << subset1[i1] << std::endl;
+						//std::cout << "subset1[i1]" << subset1[i1] << std::endl;
 					}
 
 					size_t i2=0;
 					do //for (size_t i2=0; i2<subset2.size(); i2++)
 					{
-						std::cout << "subset2.size()" << subset2.size() << std::endl;
+						//std::cout << "subset2.size()" << subset2.size() << std::endl;
 						if (subset2.size()==0)
 							I2isEmpty=true;
 						else
@@ -611,18 +622,16 @@ void ProgClassifySignificant::run()
 							I2=*(subsetProjections[subset2[i2]]);
 							Iexp2 = (*(Iexp[subset2[i2]]))();
 							I2isEmpty=false;
-							std::cout << "subset2[i2]" << subset2[i2] << std::endl;
+							//std::cout << "subset2[i2]" << subset2[i2] << std::endl;
 						}
 
 						//if (!I1isEmpty && !I2isEmpty)
 						//{
-							computeWeightedCorrelation(I1, I2, Iexp1, Iexp2, corr1exp, corr2exp, I1isEmpty, I2isEmpty, xdim);
+							computeWeightedCorrelation(I1, I2, Iexp1, Iexp2, corr1exp, corr2exp, I1isEmpty, I2isEmpty, xdim, onlyIntersection, numVotes);
 							if (isnan(corr1exp))
-								corr1exp=0.0;
+								corr1exp=-1.0;
 							if (isnan(corr2exp))
-								corr2exp=0.0;
-
-							//std::cout << "id= " << id << " ivol1: " << ivol1 << " ivol2: " << ivol2 << " corr1exp=" << corr1exp << " corr2exp=" << corr2exp << std::endl;
+								corr2exp=-1.0;
 
 							double corrDiff12=corr1exp-corr2exp;
 							if (corrDiff12>0 && corr1exp>0)
@@ -661,13 +670,13 @@ void ProgClassifySignificant::run()
 						save.write("PPP1.xmp");
 						save()=I2;
 						save.write("PPP2.xmp");*/
-						std::cout << id << " " << corr1exp << " " << corr2exp << " " << I1isEmpty << " " << I2isEmpty << std::endl;
-						std::cout << "winning=" << winning << std::endl;
-						std::cout << "corrDiff=" << corrDiff << std::endl;
+						//std::cout << id << " " << corr1exp << " " << corr2exp << " " << I1isEmpty << " " << I2isEmpty << std::endl;
+						//std::cout << "winning=" << winning << std::endl;
+						//std::cout << "corrDiff=" << corrDiff << std::endl;
 
-						char c;
+						/*char c;
 						std::cout << "Press any key" << std::endl;
-						std::cin >> c;
+						std::cin >> c;*/
 
 						i2++;
 					}while(i2<subset2.size());
@@ -686,9 +695,6 @@ void ProgClassifySignificant::run()
 //		std::cout << winning << std::endl;
 //		std::cout << weight << std::endl;
 
-//		char c;
-//		std::cout << "Press any key" << std::endl;
-//		std::cin >> c;
 
 		int nBest=weight.maxIndex();
 		double wBest=VEC_ELEM(weight,nBest);

@@ -51,6 +51,10 @@ public:
     int pad;
     /** Min. Weight */
     double wmin;
+    /** Flag to select only the images belonging only to the set intersection */
+    bool onlyIntersection;
+    /** Minimum number of votes to consider an image belonging to a volume */
+    int numVotes;
 public:
     // Fourier projector
     std::vector<FourierProjector *> projector;
