@@ -185,7 +185,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         # Prepare volumes
         fnDir=self._getExtraPath('Iter000')
         makePath(fnDir)
-        self.listVolumesToProcess=[]
+        listVolumesToProcess=[]
         i=1
         for vol in self.inputVolumes.get():
             fnVol=join(fnDir,"volume%02d.mrc"%i)
@@ -196,16 +196,18 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
             self.runJob('xmipp_transform_window',"-i %s --size %d"%(fnVol,newXdim),numberOfMpi=1)
             args="-i %s --sampling %f --fourier low_pass %f"%(fnVol,TsCurrent,self.targetResolution)
             self.runJob("xmipp_transform_filter",args,numberOfMpi=1)
-            self.listVolumesToProcess.append(True)
+            listVolumesToProcess.append(True)
             i+=1
+        self._saveVolumesToProcess(listVolumesToProcess)
 
 
     def prepareReferences(self,fnDirPrevious,fnDir,TsCurrent,Xdim):
         fnMask=''
+        listVolumesToProcess = self._readVolumesToProcess()
         if self.nextMask.hasValue():
             fnMask=self._getExtraPath("mask.vol")
         for i in range(0,self.getNumberOfReconstructedVolumes()):
-            if (self.listVolumesToProcess[i] == False):
+            if (listVolumesToProcess[i] == False):
                 continue
             fnPreviousVol=join(fnDirPrevious,"volume%02d.mrc"%(i+1))
             fnReferenceVol=join(fnDir,"volumeRef%02d.mrc"%(i+1))
@@ -248,9 +250,10 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
             self.runJob("xmipp_metadata_utilities","-i %s -o %s --operate random_subset %d"%(fnImgs,fnImgsToUse,self.stochasticN),
                         numberOfMpi=1)
         self.parseSymList()
-        print("self.listVolumesToProcess", self.listVolumesToProcess)
+        listVolumesToProcess = self._readVolumesToProcess()
+        print("listVolumesToProcess", listVolumesToProcess)
         for i in range(1,self.getNumberOfReconstructedVolumes()+1):
-            if (self.listVolumesToProcess[i-1] == False):
+            if (listVolumesToProcess[i-1] == False):
                 continue
             fnAngles=join(fnDirCurrent,"angles%02d.xmd"%i)
             fnLocalStk=join(fnDirCurrent,"anglesCont%02d.stk"%i)
@@ -322,7 +325,8 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
                             noAsignedGroups+=1
                             print("noAsignedGroups", noAsignedGroups)
                             if noAsignedGroups==numberGroups:
-                                self.listVolumesToProcess[i-1]=False
+                                listVolumesToProcess[i-1]=False
+                                self._saveVolumesToProcess(listVolumesToProcess)
                                 #raise Exception("There is no angular assignment for this volume")
                                 print("Exception: There is no angular assignment for this volume")
                             continue
@@ -333,7 +337,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
                             if exists(fnAngles) and exists(fnAnglesGroup):
                                 self.runJob("xmipp_metadata_utilities","-i %s --set union_all %s"%(fnAngles,fnAnglesGroup),numberOfMpi=1)
 
-                if (self.listVolumesToProcess[i-1] == True):
+                if (listVolumesToProcess[i-1] == True):
                     self.runJob("xmipp_metadata_utilities","-i %s --set join %s image"%(fnAngles,fnImgsToUse),numberOfMpi=1)
                     self.runJob("rm -f",fnDirCurrent+"/gallery*",numberOfMpi=1)
 
@@ -384,9 +388,10 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         # Gather all angles
         fnAnglesAll = join(fnDirCurrent,"anglesAll.xmd")
         mdVolumes = MetaData()
-        print("self.listVolumesToProcess", self.listVolumesToProcess)
+        listVolumesToProcess = self._readVolumesToProcess()
+        print("listVolumesToProcess", listVolumesToProcess)
         for i in range(1,self.getNumberOfReconstructedVolumes()+1):
-            if (self.listVolumesToProcess[i-1] == False):
+            if (listVolumesToProcess[i-1] == False):
                 continue
             fnReferenceVol=join(fnDirCurrent,"volumeRef%02d.mrc"%i)
             fnOut = "angles_%02d@%s"%(i,fnAnglesAll)
@@ -418,9 +423,10 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         TsCurrent=self.readInfoField(self._getExtraPath(),"sampling",xmipp.MDL_SAMPLINGRATE)
         
         self.parseSymList()
-        print("self.listVolumesToProcess", self.listVolumesToProcess)
+        listVolumesToProcess = self._readVolumesToProcess()
+        print("listVolumesToProcess", listVolumesToProcess)
         for i in range(1,self.getNumberOfReconstructedVolumes()+1):
-            if (self.listVolumesToProcess[i-1] == False):
+            if (listVolumesToProcess[i-1] == False):
                 continue
             self.runJob("xmipp_metadata_split","-i class%06d_images@%s --oroot %s_%06d_"%(i,fnOut,fnRootVol,i),numberOfMpi=1)
             fnOutVolPrevious = join(fnDirPrevious,"volume%02d.mrc"%i)
@@ -485,10 +491,11 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
                         (fnRootVol,round(R*self.TsOrig/TsCurrent),fnMask),numberOfMpi=1)
         fnCentered = join(fnDirCurrent,"volumeCentered.mrc")
 
-        print("self.listVolumesToProcess", self.listVolumesToProcess)
+        listVolumesToProcess = self._readVolumesToProcess()
+        print("listVolumesToProcess", listVolumesToProcess)
         for i in range(1,self.getNumberOfReconstructedVolumes()+1):
             # Align the two volumes
-            if (self.listVolumesToProcess[i-1] == False):
+            if (listVolumesToProcess[i-1] == False):
                 continue
             fnVol1="%s_%06d_half1.vol"%(fnRootVol,i)
             fnVol2="%s_%06d_half2.vol"%(fnRootVol,i)
@@ -556,9 +563,9 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
                 self.runJob("xmipp_image_operate","-i %s --plus %s"%(fnCentered,fnVolAvg),numberOfMpi=1)
 
         # Align all volumes with respect to center
-        print("self.listVolumesToProcess", self.listVolumesToProcess)
+        print("listVolumesToProcess", listVolumesToProcess)
         for i in range(1,self.getNumberOfReconstructedVolumes()+1):
-            if (self.listVolumesToProcess[i-1] == False):
+            if (listVolumesToProcess[i-1] == False):
                 continue
             fnVoli=join(fnDirCurrent,"volume%02d.mrc"%i)
             self.runJob('xmipp_volume_align','--i1 %s --i2 %s --local --apply'%(fnCentered,fnVoli),numberOfMpi=1)
@@ -568,7 +575,7 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         fnVol1=join(fnDirCurrent,"volume%02d.mrc"%1)
         I1=xmipp.Image(fnVol1)
         for i in range(2,self.getNumberOfReconstructedVolumes()+1):
-            if (self.listVolumesToProcess[i-1] == False):
+            if (listVolumesToProcess[i-1] == False):
                 continue
             fnVoli=join(fnDirCurrent,"volume%02d.mrc"%i)
             fnVoliAux1=join(fnDirCurrent,"volume%02d_aux1.mrc"%i)
@@ -624,10 +631,11 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
             coocurrence = np.zeros((N, N))
             sizeClasses = np.zeros((N, N))
             self.parseSymList()
-            print("self.listVolumesToProcess", self.listVolumesToProcess)
+            listVolumesToProcess = self._readVolumesToProcess()
+            print("listVolumesToProcess", listVolumesToProcess)
             for i in range(1,N+1):
                 for j in range(1,N+1):
-                    if (self.listVolumesToProcess[i-1] == False or self.listVolumesToProcess[j-1] == False):
+                    if (listVolumesToProcess[i-1] == False or listVolumesToProcess[j-1] == False):
                         continue
                     fnCurrent = "class%06d_images@%s"%(i,join(fnDirCurrent,"classes.xmd"))
                     fnPrevious = "class%06d_images@%s"%(j,join(fnDirPrevious,"classes.xmd"))
@@ -712,3 +720,27 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         item.setSamplingRate(self.Ts)
         item.getRepresentative().setFileName(join(self.fnLastDir,"volume%02d.mrc"%classId))
         
+    def _saveVolumesToProcess(self, volumesToProcess):
+        fn = open(self._getExtraPath('volumesToProcess.txt'),'w')
+        for flag in volumesToProcess:
+            if flag:
+                fn.write("1 ")
+            else:
+                fn.write("0 ")
+        fn.close()
+
+    def _readVolumesToProcess(self):
+        volumesToProcess=[]
+        if exists(self._getExtraPath('volumesToProcess.txt')):
+            fn = open(self._getExtraPath('volumesToProcess.txt'), 'r')
+            text=fn.read()
+            listText = text.split(' ')
+            for value in listText:
+                if value=='1':
+                    volumesToProcess.append(True)
+                elif value=='0':
+                    volumesToProcess.append(False)
+            fn.close()
+        else:
+            volumesToProcess = 0
+        return volumesToProcess
