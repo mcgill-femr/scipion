@@ -117,14 +117,14 @@ class XmippProtConsensusClasses3D(EMProtocol):
     def createOutputStep(self):
 
         # self.intersectsList.sort(key=lambda e: e[0], reverse=True)
-
+        #
         # print("   ---   S O R T E D:   ---")
         # numberOfPart = 0
         # for classItem in self.intersectsList:
-        #     printTuple = (classItem[0], classItem[2])
+        #     printTuple = (classItem[0], classItem[1], classItem[2], classItem[3])
         #     print(printTuple)
         #     numberOfPart += classItem[0]
-
+        #
         # print('Number of intersections: %d' % len(self.intersectsList))
         # print('Total of particles: %d' % numberOfPart)
 
@@ -141,9 +141,11 @@ class XmippProtConsensusClasses3D(EMProtocol):
             clRep = setRep[clsRepId]
 
             newClass = Class3D()
-            newClass.copyInfo(clRep)
+            # newClass.copyInfo(clRep)
             newClass.setAcquisition(clRep.getAcquisition())
             newClass.setRepresentative(clRep.getRepresentative())
+
+            #print '   ----   HERE   >>>>  ', setRepId, clsRepId, setRep
 
             outputClasses.append(newClass)
 
@@ -191,14 +193,14 @@ class XmippProtConsensusClasses3D(EMProtocol):
             clsId = clId2
             clsSize = size2
 
-        # print(" ")
-        # print(" - Intersection of cl%d of set%d (%d part.) and "
-        #                          "cl%d of set%d (%d part.):"
-        #        % (clId1, setId1, len(ids1), clId2, setId2, len(ids2)))
-        # print("    Size1=%d < Size2=%d = %s" 
-        #        % (size1, size2, size1<size2))
-        # print("      -> from set %d calss %d, with %d part. in the intersection." 
-        #        % (setId, clsId, len(inter)))
-        # print(" -  -  -  -  -  -  -  -  -  -")
+        print(" ")
+        print(" - Intersection of cl%d of set%d (%d part.) and "
+                                 "cl%d of set%d (%d part.):"
+               % (clId1, setId1, len(ids1), clId2, setId2, len(ids2)))
+        print("    Size1=%d < Size2=%d = %s"
+               % (size1, size2, size1<size2))
+        print("      -> from set %d calss %d, with %d part. in the intersection."
+               % (setId, clsId, len(inter)))
+        print(" -  -  -  -  -  -  -  -  -  -")
 
         return (len(inter), inter, setId, clsId, clsSize)
