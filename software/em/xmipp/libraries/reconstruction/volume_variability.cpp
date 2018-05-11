@@ -1351,7 +1351,7 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     std::cout << "Monte Carlo simulation: " << std::endl;
     //init_progress_bar(numIters);
 
-    while( (mean_err > 0.1) )
+    while( (mean_err > 3*Vin().computeStddev()) )
     {
     	if (it > maxIter)
     		break;
@@ -1429,7 +1429,6 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 	    	}
 	    }
 
-	    std::cout << numElem << std::endl;
 	    mean_err = (error/(it*numElem))*100.0;
 	    std::cout << "Iteration MC : " << it << " Max iter: " << maxIter << " Error : " << mean_err << std::endl;
 	    Vmc.initZeros(volPadSizeZ,volPadSizeY,volPadSizeX); //we want to reuse the Vin() memory
