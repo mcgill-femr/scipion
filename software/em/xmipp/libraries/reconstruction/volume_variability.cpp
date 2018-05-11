@@ -67,15 +67,7 @@ void ProgVolVariability::defineParams()
     addParamsLine("   -i <md_file>                : Metadata file with input projections");
     addParamsLine("   --vol <volume_file=\"rec_fourier.vol\"> : Filename for input volume");
     addParamsLine("  [-o <volume_file=\"rec_fourier.vol\">]   : Filename for output variability volume");
-
-    addParamsLine(" [--metric <met=variance>]     : Variability metric.");
-    addParamsLine("           where <met>");
-    addParamsLine("           variance            : Compute the variance map");
-    addParamsLine("           std		          : Compute the standard deviation map");
-    addParamsLine("           confidence	      : Compute 3* standard deviation map");
-    addParamsLine("           relative_error	  : Relative error map");
-
-
+	addParamsLine("  [--mask <vol_file=\"\">]     : Binary Mask defining the macromolecule");
     addParamsLine("  [--iter <iterations=1>]      : Number of iterations for weight correction");
     addParamsLine("  [--sym <symfile=c1>]              : Enforce symmetry in projections");
     addParamsLine("  [--padding <proj=2.0> <vol=2.0>]  : Padding used for projections and volume");
@@ -107,16 +99,7 @@ void ProgVolVariability::readParams()
 
     //~JV
     fn_vol = getParam("--vol");
-    std::string aux;
-    aux = getParam("--metric");
-    if (aux == "variance")
-        method = VARIANCE;
-    else if (aux == "std")
-        method = STD;
-    else if (aux == "confidence")
-        method = CONFIDENCE;
-    else if (aux == "relative_error")
-        method = RELATIVE_ERROR;
+    fn_mask = getParam("--mask");
     //~JV
 
     if(checkParam("--prepare_fsc"))
@@ -136,6 +119,7 @@ void ProgVolVariability::readParams()
     minCTF = getDoubleParam("--minCTF");
     if (useCTF)
         Ts=getDoubleParam("--sampling");
+
 }
 
 // Show ====================================================================
@@ -148,6 +132,7 @@ void ProgVolVariability::show()
         std::cout << " =====================================================================" << std::endl;
         std::cout << " Input selfile             		: "  << fn_sel << std::endl;
         std::cout << " Input reconstructed average map  : "  << fn_vol << std::endl;
+        std::cout << " Input mask map  					: "  << fn_mask << std::endl;
         std::cout << " padding_factor_proj       		: "  << padding_factor_proj << std::endl;
         std::cout << " padding_factor_vol        		: "  << padding_factor_vol << std::endl;
         std::cout << " Output variability map      		: "  << fn_out << std::endl;
@@ -436,6 +421,7 @@ void ProgVolVariability::produceSideinfo()
     save().alias(fftVin);
     save.write((std::string)"Vin.vol");
 #endif
+
     // ~JV
 
 }
@@ -1318,6 +1304,13 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 
     transformerVol.setReal(Vmc);
     transformerVol.enforceHermitianSymmetry();
+
+	if (fn_mask != "")
+	{
+		mask.read(fn_mask);
+		mask().setXmippOrigin();
+	}
+
     //forceWeightSymmetry(preFourierWeights);
 
     // Tell threads what to do
@@ -1358,7 +1351,7 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     std::cout << "Monte Carlo simulation: " << std::endl;
     //init_progress_bar(numIters);
 
-    while( (mean_err > 1.0) )
+    while( (mean_err > 0.1) )
     {
     	if (it > maxIter)
     		break;
@@ -1414,113 +1407,58 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 	        A3D_ELEM(mVout,k,i,j) *= meanFactor2;
 	    }
 
+	    int numElem = 0;
 	    FOR_ALL_ELEMENTS_IN_ARRAY3D(Vmc)
 	    {
+	    	//This is variance
 	    	A3D_ELEM(Vout(),k,i,j) += ((A3D_ELEM(Vmc,k,i,j)-A3D_ELEM(Vin(),k,i,j))*(A3D_ELEM(Vmc,k,i,j)-A3D_ELEM(Vin(),k,i,j)));
 	    	A3D_ELEM(Vintemp,k,i,j) += (A3D_ELEM(Vmc,k,i,j));
-	    	error += (std::abs(A3D_ELEM(Vintemp,k,i,j)/(double)it - A3D_ELEM(Vin(),k,i,j)))/(ZSIZE(Vin())*YSIZE(Vin())*XSIZE(Vin()));
+
+			if (fn_mask != "")
+	    		if ( A3D_ELEM(mask(),k,i,j) != 0 )
+	    		{
+	    			error += (std::abs(A3D_ELEM(Vintemp,k,i,j)/(double)it - A3D_ELEM(Vin(),k,i,j)));
+	    	    	numElem++;
+	    		}
+	    		else
+	    			;
+	    	else
+	    	{
+    			error += (std::abs(A3D_ELEM(Vintemp,k,i,j)/(double)it - A3D_ELEM(Vin(),k,i,j)));
+    	    	numElem++;
+	    	}
 	    }
 
-	    mean_err = (error/it)*100.0;
+	    std::cout << numElem << std::endl;
+	    mean_err = (error/(it*numElem))*100.0;
 	    std::cout << "Iteration MC : " << it << " Max iter: " << maxIter << " Error : " << mean_err << std::endl;
 	    Vmc.initZeros(volPadSizeZ,volPadSizeY,volPadSizeX); //we want to reuse the Vin() memory
 	    Vmc.setXmippOrigin();
+	    error = 0.0;
 	    ++it;
     }
     //~JV
 
-    /*
+    Vout() /=(double)it;
+    Vout.write("variance_"+(std::string) fn_out);
 
-    // Enforce symmetry in the Fourier values as well as the weights
-    // Sjors 19aug10 enforceHermitianSymmetry first checks ndim...
-    Vout().initZeros(volPadSizeZ,volPadSizeY,volPadSizeX);
-    transformerVol.setReal(Vout());
-    transformerVol.enforceHermitianSymmetry();
-    //forceWeightSymmetry(preFourierWeights);
+    FOR_ALL_ELEMENTS_IN_ARRAY3D(Vintemp)
+    	A3D_ELEM(Vintemp,k,i,j) = std::sqrt(A3D_ELEM(Vout(),k,i,j));
 
-    // Tell threads what to do
-    //#define DEBUG_VOL1
-#ifdef DEBUG_VOL1
-    {
-        Image< std::complex<double> > save;
-        save().alias( VoutFourier );
-        save.write((std::string) "FourierVol.vol");
+    Vout() = Vintemp;
+    Vout.write("std_"+(std::string) fn_out);
 
-        Image< std::complex<double> > save2;
-        save2().alias( fftVin );
-        save2.write((std::string) "FourierVolIn.vol");
-    }
-#endif
-
-    threadOpCode = PROCESS_WEIGHTS;
-    // Awake threads
-    barrier_wait( &barrier );
-    // Threads are working now, wait for them to finish
-    barrier_wait( &barrier );
-
-//JV
-#ifdef DEBUG
-    Image< std::complex<double> > save;
-    save().alias(fftVin);
-    save.write((std::string)"Vin.vol");
-
-    save().alias(VoutFourier);
-    save.write((std::string)"Vfout.vol");
-
-    FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourier)
-    	A3D_ELEM(VoutFourier,k,i,j) = A3D_ELEM(fftVin,k,i,j)/100.0;
-
-#endif
-
-    transformerVol.inverseFourierTransform();
-    CenterFFT(Vout(),false);
-
-    // Correct by the Fourier transform of the blob
-    Vout().setXmippOrigin();
-
-#ifdef DEBUG
-    Image< double > save2;
-    save2().alias( Vout() );
-    save2.write((std::string)"Vout.vol");
-#endif
-
-    //Remove the padding
-    Vout().selfWindow(FIRST_XMIPP_INDEX(imgSize),FIRST_XMIPP_INDEX(imgSize),
-                      FIRST_XMIPP_INDEX(imgSize),LAST_XMIPP_INDEX(imgSize),
-                      LAST_XMIPP_INDEX(imgSize),LAST_XMIPP_INDEX(imgSize));
-
-    double pad_relation= ((double)padding_factor_proj/padding_factor_vol);
-    pad_relation = (pad_relation * pad_relation * pad_relation);
-
-    MultidimArray<double> &mVout=Vout();
-    double ipad_relation=1.0/pad_relation;
-    double meanFactor2=0;
-    FOR_ALL_ELEMENTS_IN_ARRAY3D(mVout)
-    {
-        double radius=sqrt((double)(k*k+i*i+j*j));
-        double aux=radius*iDeltaFourier;
-        double factor = Fourier_blob_table(ROUND(aux));
-        double factor2=(pow(Sinc(radius/(2*(imgSize))),2));
-        if (NiterWeight!=0)
-        {
-            A3D_ELEM(mVout,k,i,j) /= (ipad_relation*factor2*factor);
-            meanFactor2+=factor2;
-        }
-        else
-            A3D_ELEM(mVout,k,i,j) /= (ipad_relation*factor);
-    }
-    if (NiterWeight!=0)
-    {
-        meanFactor2/=MULTIDIM_SIZE(mVout);
-        FOR_ALL_ELEMENTS_IN_ARRAY3D(mVout)
-        A3D_ELEM(mVout,k,i,j) *= meanFactor2;
-    }
-*/
-
-    Vout.write(out_name);
     std::cout << std::endl;
 
-
+    #ifdef DEBUG_VOL2
+    {
+    	Vintemp /=(double)it;
+        Image<double> save;
+        save().alias( Vintemp );
+        save.write((std::string) fn_out + "Vintemp.vol");
+        Vin.write((std::string) fn_out + "Vin.vol");
+    }
+    #endif
 
 }
 

@@ -96,15 +96,6 @@
 //@{
 class ProgVolVariability;
 
-enum Metric {
-    VARIANCE,
-    STD,
-    CONFIDENCE,
-    RELATIVE_ERROR,
-};
-
-Metric method;
-
 // static pthread_mutex_t mutexDocFile= PTHREAD_MUTEX_INITIALIZER;
 
 struct ImageThreadParams
@@ -129,7 +120,7 @@ class ProgVolVariability : public ProgReconsBase
 {
 public:
     /** Filenames */
-    FileName fn_out, fn_sym, fn_sel, fn_doc, fn_fsc, fn_vol;
+    FileName fn_out, fn_sym, fn_sel, fn_doc, fn_fsc, fn_vol, fn_mask;
 
     /** SelFile containing all projections */
     MetaData SF;
@@ -244,6 +235,9 @@ public: // Internal members
 
     // Output volume
     Image<double> Vout;
+
+    // Mask
+    Image<int> mask;
 
 public:
     /// Read arguments from command line
