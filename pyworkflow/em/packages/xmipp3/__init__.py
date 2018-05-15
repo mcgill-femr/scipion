@@ -131,6 +131,8 @@ from protocol_volume_homogenizer import XmippProtVolumeHomogenizer
 from protocol_write_testC import XmippProtWriteTestC
 from protocol_write_testP import XmippProtWriteTestP
 from protocol_ctf_selection import XmippProtCTFSelection
+from protocol_volume_variance import Prot3DVariance
+
 #AJ
 from protocol_realignment_classes import XmippProtReAlignClasses
 # Wizards

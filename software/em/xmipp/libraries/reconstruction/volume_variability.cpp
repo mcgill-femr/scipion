@@ -1434,18 +1434,21 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 	    Vmc.initZeros(volPadSizeZ,volPadSizeY,volPadSizeX); //we want to reuse the Vin() memory
 	    Vmc.setXmippOrigin();
 	    error = 0.0;
-	    ++it;
+	    it=it+1;
     }
     //~JV
 
     Vout() /=(double)it;
-    Vout.write("variance_"+(std::string) fn_out);
+
+    FileName fn_variance = fn_out.removeFileFormat().removeLastExtension()+"_variance.vol";
+    Vout.write(fn_variance);
 
     FOR_ALL_ELEMENTS_IN_ARRAY3D(Vintemp)
     	A3D_ELEM(Vintemp,k,i,j) = std::sqrt(A3D_ELEM(Vout(),k,i,j));
 
+    fn_variance = fn_out.removeFileFormat().removeLastExtension()+ "_std.vol";
     Vout() = Vintemp;
-    Vout.write("std_"+(std::string) fn_out);
+    Vout.write(fn_variance);
 
     std::cout << std::endl;
 
