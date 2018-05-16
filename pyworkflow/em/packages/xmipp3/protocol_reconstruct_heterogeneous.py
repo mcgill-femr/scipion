@@ -45,7 +45,7 @@ from pyworkflow.em.packages.xmipp3.convert import createItemMatrix, \
 from pyworkflow.em.convert import ImageHandler
 import pyworkflow.em.metadata as md
 import pyworkflow.em as em
-from convert import writeSetOfParticles
+from convert import writeSetOfParticles, readSetOfParticles
 import xmipp
 from xmipp import MetaData
 
@@ -902,6 +902,19 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
 
         self._defineOutputs(outputVolumes=volumes)
         self._defineSourceRelation(self.inputParticles, volumes)
+
+        #create a set of particles with the no-assigned particles
+        fnSubtracted = join(self.fnLastDir, "imagesNotAssig.xmd")
+        self.runJob("xmipp_metadata_utilities",
+                    "-i %s --set subtraction %s itemId -o %s" % (self.imgsFn, fnLastImages, fnSubtracted),
+                    numberOfMpi=1)
+        if getSize(fnSubtracted)>0:
+            particlesNotAssig = self._createSetOfParticles("_NotAssigned")
+            readSetOfParticles(fnSubtracted, particlesNotAssig)
+            particlesNotAssig.copyInfo(partSet)
+            self._defineOutputs(particlesNotAssigned=particlesNotAssig)
+            self._defineSourceRelation(self.inputParticles, particlesNotAssig)
+
 
     def _updateParticle(self, particle, row):
         particle.setClassId(row.getValue(md.MDL_REF3D))
