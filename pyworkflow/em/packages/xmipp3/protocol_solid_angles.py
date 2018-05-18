@@ -356,6 +356,7 @@ class XmippProtSolidAngles(ProtAnalysis3D):
         pass
 
     def createOutputStep(self):
+        inputParticles = self.inputParticles.get()
         Ts = inputParticles.getSamplingRate()
         newTs = self.targetResolution.get() * 0.4
         newTs = max(Ts, newTs)
@@ -363,7 +364,6 @@ class XmippProtSolidAngles(ProtAnalysis3D):
         self.mdClasses = xmipp.MetaData(self._getDirectionalClassesFn())
         self.mdImages = xmipp.MetaData(self._getDirectionalImagesFn())
 
-        inputParticles = self.inputParticles.get()
         classes2D = self._createSetOfClasses2D(inputParticles)
         classes2D.setSamplingRate(newTs)
 
