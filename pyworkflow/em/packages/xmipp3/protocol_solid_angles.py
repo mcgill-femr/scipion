@@ -356,11 +356,16 @@ class XmippProtSolidAngles(ProtAnalysis3D):
         pass
 
     def createOutputStep(self):
+        Ts = inputParticles.getSamplingRate()
+        newTs = self.targetResolution.get() * 0.4
+        newTs = max(Ts, newTs)
+
         self.mdClasses = xmipp.MetaData(self._getDirectionalClassesFn())
         self.mdImages = xmipp.MetaData(self._getDirectionalImagesFn())
 
         inputParticles = self.inputParticles.get()
         classes2D = self._createSetOfClasses2D(inputParticles)
+        classes2D.setSamplingRate(newTs)
 
         Ts = inputParticles.getSamplingRate()
         newTs = self.targetResolution.get() * 0.4
@@ -383,6 +388,7 @@ class XmippProtSolidAngles(ProtAnalysis3D):
         if exists(fnHomogeneous):
             homogeneousSet = self._createSetOfParticles()
             homogeneousSet.copyInfo(inputParticles)
+            homogeneousSet.setSamplingRate(newTs)
             homogeneousSet.setAlignmentProj()
             self.iterMd = md.iterRows(fnHomogeneous, md.MDL_PARTICLE_ID)
             self.lastRow = next(self.iterMd) 
