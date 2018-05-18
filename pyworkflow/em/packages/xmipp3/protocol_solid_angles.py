@@ -376,7 +376,7 @@ class XmippProtSolidAngles(ProtAnalysis3D):
         self.averageSet = self._createSetOfAverages()
         self.averageSet.copyInfo(inputParticles)
         self.averageSet.setAlignmentProj()
-        self.averageSet.getImages().setSamplingRate(newTs)
+        self.averageSet.setSamplingRate(newTs)
 
         # Let's use a SetMdIterator because it should be less particles
         # in the metadata produced than in the input set
