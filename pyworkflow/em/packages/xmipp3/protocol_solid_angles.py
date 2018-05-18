@@ -365,7 +365,7 @@ class XmippProtSolidAngles(ProtAnalysis3D):
         self.mdImages = xmipp.MetaData(self._getDirectionalImagesFn())
 
         classes2D = self._createSetOfClasses2D(inputParticles)
-        classes2D.setSamplingRate(newTs)
+        classes2D.setSampling(newTs)
 
         Ts = inputParticles.getSamplingRate()
         newTs = self.targetResolution.get() * 0.4
@@ -376,7 +376,7 @@ class XmippProtSolidAngles(ProtAnalysis3D):
         self.averageSet = self._createSetOfAverages()
         self.averageSet.copyInfo(inputParticles)
         self.averageSet.setAlignmentProj()
-        self.averageSet.setSamplingRate(newTs)
+        self.averageSet.setSampling(newTs)
 
         # Let's use a SetMdIterator because it should be less particles
         # in the metadata produced than in the input set
@@ -388,7 +388,7 @@ class XmippProtSolidAngles(ProtAnalysis3D):
         if exists(fnHomogeneous):
             homogeneousSet = self._createSetOfParticles()
             homogeneousSet.copyInfo(inputParticles)
-            homogeneousSet.setSamplingRate(newTs)
+            homogeneousSet.setSampling(newTs)
             homogeneousSet.setAlignmentProj()
             self.iterMd = md.iterRows(fnHomogeneous, md.MDL_PARTICLE_ID)
             self.lastRow = next(self.iterMd) 
