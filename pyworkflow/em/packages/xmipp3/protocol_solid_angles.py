@@ -224,7 +224,7 @@ class XmippProtSolidAngles(ProtAnalysis3D):
         # Run CL2D classification for the images assigned to one direction
         args = "-i %s " % projMdBlock
         args += "--odir %s " % fnDir
-        args += "--ref0 %s --iter 1 --nref %d " % (projRef, Nclasses)
+        args += "--ref0 %s --iter %d --nref %d " % (projRef, self.cl2dIterations, Nclasses)
         args += "--distance correlation --classicalMultiref "
         args += "--maxShift %f " % self.maxShift
         args += "--dontAlign"
