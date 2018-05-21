@@ -227,7 +227,6 @@ class XmippProtSolidAngles(ProtAnalysis3D):
         args += "--ref0 %s --iter %d --nref %d " % (projRef, self.cl2dIterations, Nclasses)
         args += "--distance correlation --classicalMultiref "
         args += "--maxShift %f " % self.maxShift
-        args += "--dontAlign"
 	try:
             self.runJob("xmipp_classify_CL2D", args)
 	except:
