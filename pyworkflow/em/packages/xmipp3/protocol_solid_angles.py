@@ -29,9 +29,9 @@ import math
 
 import pyworkflow.protocol.params as params
 from pyworkflow import VERSION_1_1
-from pyworkflow.utils.path import makePath, cleanPattern
+from pyworkflow.utils.path import makePath, cleanPattern, moveFile
 from pyworkflow.em.convert import ImageHandler, ALIGN_PROJ
-from pyworkflow.em.data import Image
+from pyworkflow.em.data import Image, Volume
 from pyworkflow.em.protocol import ProtAnalysis3D
 from pyworkflow.em.packages.xmipp3.convert import createItemMatrix, writeSetOfParticles
 import pyworkflow.em.metadata as md
@@ -41,6 +41,7 @@ import xmipp
 from convert import rowToAlignment, setXmippAttributes, xmippToLocation
 from xmipp3 import findRow
 from constants import SYM_URL
+from pyworkflow.em.metadata.constants import MDL_SAMPLINGRATE
 
 
 class XmippProtSolidAngles(ProtAnalysis3D):
@@ -120,6 +121,23 @@ class XmippProtSolidAngles(ProtAnalysis3D):
                       condition="directionalClasses > 1",
                       label='Number of CL2D iterations')
 
+        form.addSection("Split volume")
+        form.addParam('splitVolume', params.BooleanParam, label="Split volume", condition="directionalClasses > 1", default=False,
+                      help='If desired, the protocol can use the directional classes calculated in this protocol to divide the input volume '
+                           'into 2 distinct 3D classes as measured by PCA. If the PCA component is just noise, it means that the algorithm '
+                           'does not find a difference between the 2D classes')
+        form.addParam('mask', params.PointerParam, label="Mask", pointerClass='VolumeMask', allowsNull=True, condition="splitVolume",
+                      help='The mask values must be binary: 0 (remove these voxels) and 1 (let them pass).')
+        form.addParam('Nrec', params.IntParam, label="Number of reconstructions", default=5000, condition="splitVolume", 
+                      expertLevel=params.LEVEL_ADVANCED, 
+                      help="Number of random reconstructions to perform");
+        form.addParam('Nsamples', params.IntParam, label="Number of images/reconstruction", default=15, condition="splitVolume",
+                      expertLevel=params.LEVEL_ADVANCED, 
+                      help="Number of images per reconstruction. Consider that reconstructions with symmetry c1 will be perfomed");
+        form.addParam('alpha', params.FloatParam, label="Confidence level", default=0.05, condition="splitVolume",
+                      expertLevel=params.LEVEL_ADVANCED, 
+                      help="This parameter is alpha. Two volumes, one at alpha/2 and another one at 1-alpha/2, will be generated");
+
         form.addParallelSection(threads=0, mpi=8)
     
     #--------------------------- INSERT steps functions ------------------------
@@ -141,11 +159,24 @@ class XmippProtSolidAngles(ProtAnalysis3D):
 
         if self.refineAngles:
             self._insertFunctionStep('refineAnglesStep')
+        
+        if self.splitVolume and self.directionalClasses.get()>1:
+            self._insertFunctionStep("splitVolumeStep")
 
         self._insertFunctionStep('createOutputStep')
     
     #--------------------------- STEPS functions -------------------------------
 
+    def readInfoField(self,fnDir,block,label):
+        mdInfo = xmipp.MetaData("%s@%s"%(block,join(fnDir,"iterInfo.xmd")))
+        return mdInfo.getValue(label,mdInfo.firstObject())
+
+    def writeInfoField(self,fnDir,block,label, value):
+        mdInfo = xmipp.MetaData()
+        objId=mdInfo.addObject()
+        mdInfo.setValue(label,value,objId)
+        mdInfo.write("%s@%s"%(block,join(fnDir,"iterInfo.xmd")),xmipp.MD_APPEND)
+    
     def convertInputStep(self, particlesId, volId):
         """ Write the input images as a Xmipp metadata file. 
         particlesId: is only need to detect changes in
@@ -165,7 +196,9 @@ class XmippProtSolidAngles(ProtAnalysis3D):
             Ts = inputParticles.getSamplingRate()
             newTs = self.targetResolution.get() * 0.4
             newTs = max(Ts, newTs)
-            newXdim = Xdim * Ts / newTs
+            newXdim = long(Xdim * Ts / newTs)
+            self.writeInfoField(self._getExtraPath(),"sampling",xmipp.MDL_SAMPLINGRATE,newTs)
+            self.writeInfoField(self._getExtraPath(),"size",xmipp.MDL_XSIZE,newXdim)
             self.runJob("xmipp_image_resize",
                         "-i %s -o %s --save_metadata_stack %s --fourier %d" %
                         (self._getExpParticlesFn(),
@@ -354,11 +387,8 @@ class XmippProtSolidAngles(ProtAnalysis3D):
         fnTmpDir = self._getTmpPath()
         fnDirectional = self._getDirectionalClassesFn()
         inputParticles = self.inputParticles.get()
-        Xdim = inputParticles.getXDim()
-        Ts = inputParticles.getSamplingRate()
-        newTs = self.targetResolution.get() * 0.4
-        newTs = max(Ts, newTs)
-        newXdim = Xdim * Ts / newTs
+        newTs = self.readInfoField(self._getExtraPath(),"sampling",xmipp.MDL_SAMPLINGRATE)
+        newXdim = self.readInfoField(self._getExtraPath(),"size",xmipp.MDL_XSIZE)
 
         # Generate projections
         fnGallery=join(fnTmpDir,"gallery.stk")
@@ -385,26 +415,40 @@ class XmippProtSolidAngles(ProtAnalysis3D):
         args+=" --optimizeShift --max_shift %f"%maxShift
         args+=" --optimizeAngles --max_angular_change %f"%self.angularDistance
         self.runJob("xmipp_angular_continuous_assign2",args,numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
+        moveFile(self._getPath("directional_local_classes.xmd"),self._getDirectionalClassesFn())
         
         cleanPattern(self._getExtraPath("direction_*"))
 
+    def splitVolumeStep(self):
+        newTs = self.readInfoField(self._getExtraPath(),"sampling",xmipp.MDL_SAMPLINGRATE)
+        newXdim = self.readInfoField(self._getExtraPath(),"size",xmipp.MDL_XSIZE)
+        fnMask = ""
+        if self.mask.hasValue():
+            fnMask = self._getExtraPath("mask.vol")
+            img=ImageHandler()
+            img.convert(self.mask.get(), fnMask)
+            self.runJob('xmipp_image_resize',"-i %s --dim %d"%(fnMask,newXdim),numberOfMpi=1)
+            self.runJob('xmipp_transform_threshold',"-i %s --select below 0.5 --substitute binarize"%fnMask,numberOfMpi=1)
+
+        args="-i %s --oroot %s --Nrec %d --Nsamples %d --sym %s --alpha %f"%\
+             (self._getDirectionalClassesFn(),self._getExtraPath("split"),self.Nrec.get(),self.Nsamples.get(),
+              self.symmetryGroup.get(), self.alpha.get())
+        if fnMask!="":
+            args+=" --mask binary_file %s"%fnMask
+        self.runJob("xmipp_classify_first_split",args,numberOfMpi=1)        
+
     def createOutputStep(self):
         inputParticles = self.inputParticles.get()
-        Ts = inputParticles.getSamplingRate()
-        newTs = self.targetResolution.get() * 0.4
-        newTs = max(Ts, newTs)
+        if not self._useSeveralClasses():
+            newTs = inputParticles.getSamplingRate()
+        else:
+            newTs = self.readInfoField(self._getExtraPath(),"sampling",xmipp.MDL_SAMPLINGRATE)
 
-        self.mdClasses = xmipp.MetaData(self._getPath("directional_local_classes.xmd"))
+        self.mdClasses = xmipp.MetaData(self._getDirectionalClassesFn())
         self.mdImages = xmipp.MetaData(self._getDirectionalImagesFn())
 
         classes2D = self._createSetOfClasses2D(inputParticles)
         classes2D.getImages().setSamplingRate(newTs)
-
-        Ts = inputParticles.getSamplingRate()
-        newTs = self.targetResolution.get() * 0.4
-        newTs = max(Ts, newTs)
-        if not self._useSeveralClasses():
-            newTs = Ts
 
         self.averageSet = self._createSetOfAverages()
         self.averageSet.copyInfo(inputParticles)
@@ -437,6 +481,18 @@ class XmippProtSolidAngles(ProtAnalysis3D):
         self._defineOutputs(outputAverages=self.averageSet)
         self._defineSourceRelation(self.inputParticles, classes2D)
         self._defineSourceRelation(self.inputParticles, self.averageSet)
+        
+        if self.splitVolume and self.directionalClasses.get()>1:
+            volumesSet = self._createSetOfVolumes()
+            volumesSet.setSamplingRate(newTs)
+            for i in range(2):
+                vol = Volume()
+                vol.setLocation(1, self._getExtraPath("split_v%d.vol"%(i+1)))
+                volumesSet.append(vol)
+            
+            self._defineOutputs(outputVolumes=volumesSet)
+            self._defineSourceRelation(inputParticles, volumesSet)
+
 
     def _updateHomogeneousItem(self, particle, row):
         count = 0
