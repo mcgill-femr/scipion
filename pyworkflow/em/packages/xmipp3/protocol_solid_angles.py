@@ -29,7 +29,7 @@ import math
 
 import pyworkflow.protocol.params as params
 from pyworkflow import VERSION_1_1
-from pyworkflow.utils.path import makePath
+from pyworkflow.utils.path import makePath, cleanPattern
 from pyworkflow.em.convert import ImageHandler, ALIGN_PROJ
 from pyworkflow.em.data import Image
 from pyworkflow.em.protocol import ProtAnalysis3D
@@ -351,8 +351,42 @@ class XmippProtSolidAngles(ProtAnalysis3D):
         self.runJob("xmipp_metadata_utilities",'-i %s --operate modify_values "particleId=itemId"'%fnHomogeneous,numberOfMpi=1)
 
     def refineAnglesStep(self):
-        # TODO: Implement this step from the current DirectionalClasses protocol
-        pass
+        fnTmpDir = self._getTmpPath()
+        fnDirectional = self._getDirectionalClassesFn()
+        inputParticles = self.inputParticles.get()
+        Xdim = inputParticles.getXDim()
+        Ts = inputParticles.getSamplingRate()
+        newTs = self.targetResolution.get() * 0.4
+        newTs = max(Ts, newTs)
+        newXdim = Xdim * Ts / newTs
+
+        # Generate projections
+        fnGallery=join(fnTmpDir,"gallery.stk")
+        fnGalleryMd=join(fnTmpDir,"gallery.doc")
+        fnVol = self._getInputVolFn()
+        args="-i %s -o %s --sampling_rate %f --sym %s"%\
+             (fnVol,fnGallery,5.0,self.symmetryGroup)
+        args+=" --compute_neighbors --angular_distance -1 --experimental_images %s"%fnDirectional
+        self.runJob("xmipp_angular_project_library",args,numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
+        
+        # Global angular assignment
+        maxShift=0.15*newXdim
+        args='-i %s --initgallery %s --maxShift %d --odir %s --dontReconstruct --useForValidation 0'%\
+             (fnDirectional,fnGalleryMd,maxShift,fnTmpDir)
+        self.runJob('xmipp_reconstruct_significant',args,numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
+        fnAngles = join(fnTmpDir,"angles_iter001_00.xmd")
+        self.runJob("xmipp_metadata_utilities","-i %s --operate drop_column ref"%fnAngles,numberOfMpi=1)
+        self.runJob("xmipp_metadata_utilities","-i %s --set join %s ref2"%(fnAngles,fnDirectional),numberOfMpi=1)
+        
+        # Local angular assignment
+        fnAnglesLocalStk = self._getPath("directional_local_classes.stk")
+        args="-i %s -o %s --sampling %f --Rmax %d --padding %d --ref %s --max_resolution %f --applyTo image1 --Nsimultaneous %d"%\
+           (fnAngles,fnAnglesLocalStk,newTs,newXdim/2,2,fnVol,self.targetResolution,8)
+        args+=" --optimizeShift --max_shift %f"%maxShift
+        args+=" --optimizeAngles --max_angular_change %f"%self.angularDistance
+        self.runJob("xmipp_angular_continuous_assign2",args,numberOfMpi=self.numberOfMpi.get()*self.numberOfThreads.get())
+        
+        cleanPattern(self._getExtraPath("direction_*"))
 
     def createOutputStep(self):
         inputParticles = self.inputParticles.get()
@@ -360,7 +394,7 @@ class XmippProtSolidAngles(ProtAnalysis3D):
         newTs = self.targetResolution.get() * 0.4
         newTs = max(Ts, newTs)
 
-        self.mdClasses = xmipp.MetaData(self._getDirectionalClassesFn())
+        self.mdClasses = xmipp.MetaData(self._getPath("directional_local_classes.xmd"))
         self.mdImages = xmipp.MetaData(self._getDirectionalImagesFn())
 
         classes2D = self._createSetOfClasses2D(inputParticles)
