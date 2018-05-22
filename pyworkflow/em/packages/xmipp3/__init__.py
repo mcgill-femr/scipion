@@ -49,6 +49,7 @@ from viewer_ml2d import XmippML2DViewer
 from viewer_mltomo import XmippMLTomoViewer
 from viewer_movie_alignment import XmippMovieAlignViewer
 from viewer_normalize_strain import XmippNormalizeStrainViewer
+from viewer_ransac import XmippViewerRansac
 from viewer_resolution3d import XmippResolution3DViewer
 from viewer_resolution_monogenic_signal import XmippMonoResViewer
 from viewer_validate_nontilt import XmippValidateNonTiltViewer

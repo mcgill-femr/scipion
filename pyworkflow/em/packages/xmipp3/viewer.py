@@ -335,8 +335,10 @@ class XmippViewer(Viewer):
 
         elif issubclass(cls, XmippProtCompareReprojections):
                 fn = obj.outputParticles.getFileName()
-                labels = 'id enabled _index _xmipp_image._filename _xmipp_imageRef._filename _xmipp_imageResidual._filename _xmipp_imageCovariance._filename _xmipp_cost _xmipp_zScoreResCov _xmipp_zScoreResMean _xmipp_zScoreResVar _xmipp_continuousA _xmipp_continuousB _xmipp_continuousX _xmipp_continuousY'
-                labelRender = "_xmipp_image._filename _xmipp_imageRef._filename _xmipp_imageResidual._filename _xmipp_imageCovariance._filename"
+                # labels = 'id enabled _index _xmipp_image._filename _xmipp_imageRef._filename _xmipp_imageResidual._filename _xmipp_imageCovariance._filename _xmipp_cost _xmipp_zScoreResCov _xmipp_zScoreResMean _xmipp_zScoreResVar _xmipp_continuousA _xmipp_continuousB _xmipp_continuousX _xmipp_continuousY'
+                # labelRender = "_xmipp_image._filename _xmipp_imageRef._filename _xmipp_imageResidual._filename _xmipp_imageCovariance._filename"
+                labels = 'id enabled _index _xmipp_image._filename _xmipp_imageRef._filename  _xmipp_cost _xmipp_continuousA _xmipp_continuousB _xmipp_continuousX _xmipp_continuousY'
+                labelRender = "_xmipp_image._filename _xmipp_imageRef._filename"
                 self._views.append(ObjectView(self._project, obj.outputParticles.strId(), fn,
                                               viewParams={ORDER: labels,
                                                       VISIBLE: labels,
