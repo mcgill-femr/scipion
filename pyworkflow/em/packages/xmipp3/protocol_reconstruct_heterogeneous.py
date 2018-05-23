@@ -103,6 +103,9 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
                       label="Max. Number of Replicates", default=1,
                       expertLevel=LEVEL_ADVANCED,
                       help="Significant alignment is allowed to replicate each image up to this number of times")
+        form.addParam("numberVotes", IntParam, label="Number of votes", default=3,
+                      expertLevel=LEVEL_ADVANCED,
+                      help="Number of votes for classification (maximum 5)")
         form.addParam('stochastic', BooleanParam, label="Stochastic",
                       default=False,
                       help="Stochastic optimization")
@@ -521,9 +524,10 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
         print("A correr",
               "xmipp_classify_significant --id %s --angles %s --ref %s -o %s" % (
               fnImgsId, fnAnglesAll, fnVols, fnOut))
+
         self.runJob("xmipp_classify_significant",
-                    "--id %s --angles %s --ref %s -o %s" % (
-                    fnImgsId, fnAnglesAll, fnVols, fnOut), numberOfMpi=1)
+                    "--id %s --angles %s --ref %s -o %s --votes %d" % (
+                    fnImgsId, fnAnglesAll, fnVols, fnOut, self.numberVotes), numberOfMpi=1)
         # cleanPath(fnVols)
         # cleanPath(fnAnglesAll)
 
