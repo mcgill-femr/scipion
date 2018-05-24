@@ -29,6 +29,7 @@
 #include <data/xmipp_program.h>
 #include "fourier_projection.h"
 #include "fourier_filter.h"
+#include <data/filters.h>
 
 /**@defgroup ClassifySignificant Classify a set of images into a discrete set of classes
    @ingroup ReconsLibrary */
@@ -50,6 +51,10 @@ public:
     int pad;
     /** Min. Weight */
     double wmin;
+    /** Flag to select only the images belonging only to the set intersection */
+    bool onlyIntersection;
+    /** Minimum number of votes to consider an image belonging to a volume */
+    int numVotes;
 public:
     // Fourier projector
     std::vector<FourierProjector *> projector;
@@ -68,7 +73,7 @@ public:
 	// Set of indexes of the projections for a particular image
 	std::vector< std::vector<size_t> > subsetProjectionIdx;
 	// Experimental image
-	Image<double> Iexp;
+	std::vector<Image<double> *> Iexp;
 	// Projection aux
 	Projection Paux;
 public:
@@ -99,7 +104,7 @@ public:
     void generateProjection(size_t volumeIdx, size_t poolIdx, MDRow &currentRow);
 
     /** Choose the subset for particleID and generate its projections */
-    void selectSubset(size_t particleId);
+    void selectSubset(size_t particleId, bool &flagEmpty);
 
     /** Update class */
     void updateClass(int n, double wn);
