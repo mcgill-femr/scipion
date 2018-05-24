@@ -39,15 +39,16 @@ from utils import greenStr, envVarOn
 # The job should be launched from the working directory!
 def runJob(log, programname, params,           
            numberOfMpi=1, numberOfThreads=1, 
-           hostConfig=None, env=None, cwd=None):
+           hostConfig=None, env=None, cwd=None, gpuList=None):
 
-    command = buildRunCommand(programname, params, numberOfMpi, hostConfig, env)
+    command = buildRunCommand(programname, params, numberOfMpi, hostConfig,
+                              env, gpuList=gpuList)
     
     if log is None:
         print "** Running command: %s" % greenStr(command)
     else:
         log.info(greenStr(command), True)
-        
+
     return runCommand(command, env, cwd)
         
 
@@ -62,17 +63,22 @@ def runCommand(command, env=None, cwd=None):
 
     # TODO: maybe have to set PBS_NODEFILE in case it is used by "command"
     # (useful for example with gnu parallel)
-    check_call(command, shell=True, stdout=sys.stdout, stderr=sys.stderr, env=env, cwd=cwd)
+    check_call(command, shell=True, stdout=sys.stdout, stderr=sys.stderr,
+               env=env, cwd=cwd)
     # It would be nice to avoid shell=True and calling buildRunCommand()...
 
     
-def buildRunCommand(programname, params, numberOfMpi, hostConfig=None, env=None):
+def buildRunCommand(programname, params, numberOfMpi, hostConfig=None,
+                    env=None, gpuList=None):
     """ Return a string with the command line to run """
 
     # Convert our list of params to a string, with each element escaped
     # with "" in case there are spaces.
     if not isinstance(params, basestring):
         params = ' '.join('"%s"' % p for p in params)
+
+    if gpuList:
+        params = params % {'GPU': ' '.join(str(g) for g in gpuList)}
 
     if numberOfMpi <= 1:
         return '%s %s' % (programname, params)
@@ -109,13 +115,16 @@ def killWithChilds(pid):
     import psutil
     proc = psutil.Process(pid)
     for c in proc.get_children(recursive=True):
-        print "Terminating child pid: %d" % c.pid
-        c.kill()
-    print "Terminating process pid: %d" % pid
-    proc.kill()
+        if c.pid is not None:
+            print "Terminating child pid: %d" % c.pid
+            c.kill()
+    print "Terminating process pid: %s" % pid
+    if pid is None:
+        print "WARNING! Got None PID!!!"
+    else:
+        proc.kill()
 
 def isProcessAlive(pid):
-
     import psutil
     try:
         proc = psutil.Process(pid)

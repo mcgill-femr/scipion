@@ -4,7 +4,7 @@
 # * Ported to Scipion:
 # *           Vahid Abrishami (vabrishami@cnb.csic.es), Oct 2014
 # *
-# * Refactored/Updated: Josue Gomez-Blanco (jgomez@cnb.csic.es), Jun 2016
+# * Refactored/Updated: Josue Gomez-Blanco (josue.gomez-blanco@mcgill.ca), Jun 2016
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -214,6 +214,8 @@ class XmippProtImageOperateParticles(ProtOperateParticles,
         ProtOperateParticles.__init__(self, **args)
         XmippProcessParticles.__init__(self)
         XmippOperateHelper.__init__(self, **args)
+        self.allowMpi = False
+        self.allowThreads = False
 
     #--------------------------- DEFINE param functions -----------------------
     def _defineProcessParams(self, form):
@@ -302,6 +304,9 @@ class XmippProtImageOperateVolumes(ProtOperateVolumes,
         ProtOperateVolumes.__init__(self, **args)
         XmippProcessVolumes.__init__(self)
         XmippOperateHelper.__init__(self, **args)
+        self.allowMpi = False
+        self.allowThreads = False
+
     
     #--------------------------- DEFINE param functions -----------------------
     def _defineProcessParams(self, form):

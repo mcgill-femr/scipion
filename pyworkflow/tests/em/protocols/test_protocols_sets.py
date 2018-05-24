@@ -40,11 +40,12 @@ from pyworkflow.em.protocol.protocol_import import (
     ProtImportParticles, ProtImportCoordinates)
 
 from pyworkflow.em.protocol.protocol_sets import (
-    ProtSplitSet, ProtSubSet, ProtUnionSet)
+    ProtSplitSet, ProtSubSet, ProtUnionSet, ProtSubSetByMic)
 
 # Used by Roberto's test, where he creates the particles "by hand"
-from pyworkflow.em.data import Particle, SetOfParticles, Acquisition
+from pyworkflow.em.data import Particle, SetOfParticles, Acquisition, CTFModel
 from pyworkflow.utils.utils import prettyDict
+from pyworkflow.object import Float
 
 
 class TestSets(BaseTest):
@@ -62,6 +63,7 @@ class TestSets(BaseTest):
         cls.dataset_xmipp = DataSet.getDataSet('xmipp_tutorial')
         cls.dataset_mda = DataSet.getDataSet('mda')
         cls.dataset_ribo = DataSet.getDataSet('ribo_movies')
+        cls.datasetRelion = DataSet.getDataSet('relion_tutorial')
 
         #
         # Imports
@@ -101,8 +103,21 @@ class TestSets(BaseTest):
         launch(p_imp_particles, wait=True)
         cls.particles = p_imp_particles.outputParticles
 
-        # Coordinates
-        # Oh, I don't know of any example of coordinates imported :(
+        # Particles with micId
+        print magentaStr("\n==> Importing data - particles with micId")
+        relionFile = 'import/case2/relion_it015_data.star'
+        pImpPartMicId = new(ProtImportParticles,
+                               objLabel='from relion (auto-refine 3d)',
+                               importFrom=ProtImportParticles.IMPORT_FROM_RELION,
+                               starFile=cls.datasetRelion.getFile(relionFile),
+                               magnification=10000,
+                               samplingRate=7.08,
+                               haveDataBeenPhaseFlipped=True)
+        launch(pImpPartMicId, wait=True)
+        cls.partMicId = pImpPartMicId.outputParticles
+        cls.micsMicId = pImpPartMicId.outputMicrographs
+
+        # Coordinates  -  Oh, I don't know of any example of coord. import :(
 
     #
     # Helper functions
@@ -189,7 +204,8 @@ class TestSets(BaseTest):
                 for elem in output:
                     self.assertTrue(elem.getObjId() in setFullIds)
                     self.assertTrue(elem.getObjId() in setSubIds,
-                                    'object id %s not in set: %s' % (elem.getObjId(), setSubIds))
+                                    'object id %s not in set: %s' 
+                                    % (elem.getObjId(), setSubIds))
                 
             # Check difference
             outputs = [o for o in self.outputs(p_subset_diff)]
@@ -201,7 +217,6 @@ class TestSets(BaseTest):
                     self.assertTrue(elem.getObjId() in setFullIds)
                     self.assertTrue(elem.getObjId() not in setSubIds)
                 
-                
             self.assertTrue(n >= n1)
             self.assertTrue(n >= n2)            
             self.assertEqual(n, n1+n2)
@@ -212,6 +227,52 @@ class TestSets(BaseTest):
         check(self.movies)
         check(self.particles)
         check(self.particles, n1=3, n2=5)
+
+    def testSubsetByMic(self):
+        """Test that the subset by Mic operation works as expected."""
+        print "\n", greenStr(" Test Subset by Mic".center(75, '-'))
+        "Simple checks on subsets, coming from split sets of setMics."
+        print magentaStr("\n==> Check subset of %s by %s"
+               % (type(self.partMicId).__name__, type(self.micsMicId).__name__))
+
+        # launch the protocol for a certain mics input
+        def launchSubsetByMic(micsSubset):
+            pSubsetbyMic = self.newProtocol(ProtSubSetByMic)
+            pSubsetbyMic.inputParticles.set(self.partMicId)
+            pSubsetbyMic.inputMicrographs.set(micsSubset)
+            self.launchProtocol(pSubsetbyMic)
+            return pSubsetbyMic.outputParticles
+
+        # Check if the Output is generated, the subset size is correct and
+        #  the micId of the particle with certain partId is correct.
+        def checkAsserts(setParts, size, partId, micId):
+            self.assertIsNotNone(setParts, "Output SetOfParticles"
+                                           " were not created.")
+            self.assertEqual(setParts.getSize(), size, "The number of created "
+                                                      "particles is incorrect.")
+            p = setParts[partId]
+            self.assertEqual(p.getMicId(), micId)
+        
+        # Whole set of micrographs
+        setMics = self.micsMicId
+        # Create a subsets of Mics to apply the protocol
+        pSplit = self.split(setMics, n=2, randomize=False)
+        setMics2 = pSplit.outputMicrographs02
+        # Create a subset of a single micrograph to apply the protocol
+        pSplit = self.split(setMics, n=20, randomize=False)
+        setMics3 = pSplit.outputMicrographs03
+
+        # Launch subset by mics protocol with the whole set of Mics
+        partByMic1 = launchSubsetByMic(setMics)
+        # Launch subset by mics protocol with a subset of Mics
+        partByMic2 = launchSubsetByMic(setMics2)
+        # Launch subset by mics protocol with a single SetOfMics
+        partByMic3 = launchSubsetByMic(setMics3)
+
+        # Assertions for the three sets
+        checkAsserts(partByMic1, self.partMicId.getSize(), 1885, 7)
+        checkAsserts(partByMic2, 2638, 4330, 16)
+        checkAsserts(partByMic3, 270, 725, 3)
 
     def testMerge(self):
         """Test that the union operation works as expected."""
@@ -242,25 +303,176 @@ class TestSets(BaseTest):
         check(self.movies)
         check(self.particles)
 
+    def testMergeAlternateColumn(self):
+        """Test that the union operation works as expected.
+        Even if the order of the columns do not match.
+        That is, M1(a,b,c) U M2(a,c,b)"""
+        #create two set of particles
+        inFileNameMetadata1 = self.proj.getTmpPath('particles1.sqlite')
+        inFileNameMetadata2 = self.proj.getTmpPath('particles2.sqlite')
+        imgSet1 = SetOfParticles(filename=inFileNameMetadata1)
+        imgSet2 = SetOfParticles(filename=inFileNameMetadata2)
+
+        inFileNameData = self.proj.getTmpPath('particles.stk')
+        img1 = Particle()
+        img2 = Particle()
+        attrb1 = [11, 12, 13, 14]
+        attrb2 = [21, 22, 23, 24]
+        counter = 0
+
+        for i in range(1, 3):
+            img1.cleanObjId()
+            img1.setLocation(i, inFileNameData)
+            img1.setMicId(i % 3)
+            img1.setClassId(i % 5)
+            img1.setSamplingRate(1.)
+            img1._attrb1 = Float(attrb1[counter])
+            img1._attrb2 = Float(attrb2[counter])
+            imgSet1.append(img1)
+            counter +=1
+
+        for i in range(1, 3):
+            img2.cleanObjId()
+            img2.setLocation(i, inFileNameData)
+            img2.setClassId(i % 5)
+            img2.setMicId(i % 3)
+            img2.setSamplingRate(2.)
+            img2._attrb1= Float(attrb1[counter])
+            img2._attrb2= Float(attrb2[counter])
+            imgSet2.append(img2)
+            counter +=1
+
+        imgSet1.write()
+        imgSet2.write()
+
+        #import them
+        protImport1 = self.newProtocol(ProtImportParticles,
+                                      objLabel='import set1',
+                                      importFrom=ProtImportParticles.IMPORT_FROM_SCIPION,
+                                      sqliteFile=inFileNameMetadata1,
+                                      magnification=10000,
+                                      samplingRate=7.08,
+                                      haveDataBeenPhaseFlipped=True
+                                      )
+        self.launchProtocol(protImport1)
+
+        protImport2 = self.newProtocol(ProtImportParticles,
+                                      objLabel='import set2',
+                                      importFrom=ProtImportParticles.IMPORT_FROM_SCIPION,
+                                      sqliteFile=inFileNameMetadata2,
+                                      magnification=10000,
+                                      samplingRate=7.08,
+                                      haveDataBeenPhaseFlipped=True
+                                      )
+        self.launchProtocol(protImport2)
+
+        #create merge protocol
+        p_union = self.newProtocol(ProtUnionSet,
+                       objLabel='join diff column order',
+                       ignoreExtraAttributes=True)
+        p_union.inputSets.append(protImport1.outputParticles)
+        p_union.inputSets.append(protImport2.outputParticles)
+        self.proj.launchProtocol(p_union, wait=True)
+        #assert
+        counter=0
+        for img in p_union.outputSet:
+            self.assertAlmostEqual(attrb1[counter],img._attrb1,4)
+            self.assertAlmostEqual(attrb2[counter],img._attrb2,4)
+            counter += 1
+
     def testMergeDifferentAttrs(self):
-        """ Test merge from subsets with different attritubes. """
-        partFn = self.dataset_mda.getFile('particles/xmipp_particles.xmd')
-        protImport = self.newProtocol(ProtImportParticles,
-                                      objLabel='import from xmd',
-                                      importFrom=ProtImportParticles.IMPORT_FROM_XMIPP3,
-                                      mdFile=partFn,
-                                      samplingRate=3.5)
+        """ Test merge from subsets with different attritubes.
+        That is, M1(a,b,c) U M2(a,b,c,d)"""
 
-        self.launchProtocol(protImport)
-        protJoin = self.newProtocol(ProtUnionSet,
-                                    objLabel='join different',
-                                    ignoreExtraAttributes=True)
+        #create two set of particles
+        inFileNameMetadata1 = self.proj.getTmpPath('particles11.sqlite')
+        inFileNameMetadata2 = self.proj.getTmpPath('particles22.sqlite')
+        imgSet1 = SetOfParticles(filename=inFileNameMetadata1)
+        imgSet2 = SetOfParticles(filename=inFileNameMetadata2)
 
-        protJoin.inputSets.append(self.particles)
-        protJoin.inputSets.append(protImport.outputParticles)
+        inFileNameData = self.proj.getTmpPath('particles.stk')
+        img1 = Particle()
+        img2 = Particle()
+        attrb1 = [11, 12, 13, 14]
+        attrb2 = [21, 22, 23, 24]
+        attrb3 = [31, 32]
+        counter = 0
+        # Test the join handles different attributes at a second level
+        ctf1 = CTFModel(defocusU=1000, defocusV=1000, defocusAngle=0)
+        ctf2 = CTFModel(defocusU=2000, defocusV=2000, defocusAngle=0)
+        ctf2._myOwnQuality = Float(1.)
+        img1.setCTF(ctf1)
+        img2.setCTF(ctf2)
 
-        self.launchProtocol(protJoin)
+        for i in range(1, 3):
+            img1.cleanObjId()
+            img1.setLocation(i, inFileNameData)
+            img1.setMicId(i % 3)
+            img1.setClassId(i % 5)
+            img1.setSamplingRate(1.)
+            img1._attrb1 = Float(attrb1[counter])
+            img1._attrb2 = Float(attrb2[counter])
+            img1._attrb3 = Float(attrb3[counter])
+            imgSet1.append(img1)
+            counter += 1
 
+        for i in range(1, 3):
+            img2.cleanObjId()
+            img2.setLocation(i, inFileNameData)
+            img2.setClassId(i % 5)
+            img2.setMicId(i % 3)
+            img2.setSamplingRate(2.)
+            img2._attrb1 = Float(attrb1[counter])
+            img2._attrb2 = Float(attrb2[counter])
+            imgSet2.append(img2)
+            counter +=1
+
+        imgSet1.write()
+        imgSet2.write()
+
+        #import them
+        protImport1 = self.newProtocol(ProtImportParticles,
+                                      objLabel='import set1',
+                                      importFrom=ProtImportParticles.IMPORT_FROM_SCIPION,
+                                      sqliteFile=inFileNameMetadata1,
+                                      magnification=10000,
+                                      samplingRate=7.08,
+                                      haveDataBeenPhaseFlipped=True
+                                      )
+        self.launchProtocol(protImport1)
+
+        protImport2 = self.newProtocol(ProtImportParticles,
+                                      objLabel='import set2',
+                                      importFrom=ProtImportParticles.IMPORT_FROM_SCIPION,
+                                      sqliteFile=inFileNameMetadata2,
+                                      magnification=10000,
+                                      samplingRate=7.08,
+                                      haveDataBeenPhaseFlipped=True
+                                      )
+        self.launchProtocol(protImport2)
+
+        #create merge protocol
+        p_union = self.newProtocol(ProtUnionSet,
+                       objLabel='join different attrs',
+                       ignoreExtraAttributes=True)
+        p_union.inputSets.append(protImport1.outputParticles)
+        p_union.inputSets.append(protImport2.outputParticles)
+        self.proj.launchProtocol(p_union, wait=True)
+
+        counter = 0
+
+        for img in p_union.outputSet:
+            self.assertAlmostEqual(attrb1[counter], img._attrb1, 4)
+            self.assertAlmostEqual(attrb2[counter], img._attrb2, 4)
+            self.assertFalse(hasattr(img, '_attrb3'),
+                             "join should not have attrb3")
+            self.assertTrue(hasattr(img, '_attrb2'),
+                            "join should have attrb2")
+            ctf = img.getCTF()
+            self.assertIsNotNone(ctf, "Image should have CTF after join")
+            self.assertFalse(hasattr(ctf, '_myOwnQuality'),
+                             "CTF should not have non common attributes")
+            counter += 1
 
     def testOrderBy(self):
         """ create set of particles and orderby a given attribute
@@ -286,8 +498,8 @@ class TestSets(BaseTest):
 
         for i in range(1, 10):
             img.setLocation(i, inFileNameData)
-            img.setMicId(i%3)
-            img.setClassId(i%5)
+            img.setMicId(i % 3)
+            img.setClassId(i % 5)
             imgSet.append(img)
             img.cleanObjId()
 
@@ -303,7 +515,8 @@ class TestSets(BaseTest):
         self.launchProtocol(prot1)
 
         if prot1.outputParticles is None:
-            raise Exception('Import of images: %s, failed. outputParticles is None.' % inFileNameMetadata)
+            raise Exception('Import of images: %s, failed. outputParticles is None.' 
+                                                % inFileNameMetadata)
         
         protSplitSet   = self.newProtocol(ProtSplitSet,
                                           inputSet=prot1.outputParticles,
@@ -324,7 +537,10 @@ class TestSets(BaseTest):
                 prettyDict(item2.getObjDict())
             self.assertTrue(item1.equalAttributes(item2),  )
 
+    def testEmptiness(self):
 
+        self.assertSetSize(TestSets.particles)
+        self.assertSetSize(TestSets.particles, 76)
 
 if __name__ == '__main__':
     unittest.main()

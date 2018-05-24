@@ -866,7 +866,8 @@ class SqliteFlatMapper(Mapper):
                       , objectFilter=None
                       , orderBy=ID
                       , direction='ASC'
-                      , where='1'):
+                      , where='1'
+                      , limit=None):
         # Just a sanity check for emtpy sets, that doesn't contains 'Properties' table
         if not self.db.hasTable('Properties'):
             return iter([]) if iterate else []
@@ -875,7 +876,8 @@ class SqliteFlatMapper(Mapper):
             self.__loadObjDict()
         objRows = self.db.selectAll(orderBy=orderBy,
                                     direction=direction,
-                                    where=where)
+                                    where=where,
+                                    limit=limit)
         
         return self.__objectsFromRows(objRows, iterate, objectFilter) 
 
@@ -894,10 +896,11 @@ class SqliteFlatMapper(Mapper):
         return results
 
     def count(self):
-        if self.doCreateTables:
-            return 0
-        return self.db.count()   
-    
+        return 0 if self.doCreateTables else self.db.count()
+
+    def maxId(self):
+        return 0 if self.doCreateTables else self.db.maxId()
+
     def __objectsFromIds(self, objIds):
         """Return a list of objects, given a list of id's
         """
@@ -1113,8 +1116,8 @@ class SqliteFlatDb(SqliteDb):
     def insertObject(self, *args):
         """Insert a new object as a row.
         *args: id, label, comment, ...
-        where ... is the values of the objDict from which the tables where created.        
-        """
+        where ... is the values of the objDict from which the tables
+        where created."""
         self.executeCommand(self.INSERT_OBJECT, args)
 
     def updateObject(self, *args):
@@ -1126,7 +1129,8 @@ class SqliteFlatDb(SqliteDb):
         self.executeCommand(self.selectCmd(ID + "=?"), (objId,))
         return self.cursor.fetchone()
 
-    def selectAll(self, iterate=True, orderBy=ID, direction='ASC', where='1'):
+    def selectAll(self, iterate=True, orderBy=ID, direction='ASC',
+                  where='1', limit=None):
         # Handle the specials orderBy values of 'id' and 'RANDOM()'
         # other columns names should be mapped to table column
         # such as: _micId -> c04
@@ -1136,7 +1140,7 @@ class SqliteFlatDb(SqliteDb):
              special columns such as: id or RANDOM(), and
              getting the mapping translation otherwise.
             """
-            if colName in ['id', 'RANDOM()']:
+            if colName in ['id', 'RANDOM()', 'creation']:
                 return colName
             else:
                 return self._columnsMapping[colName]
@@ -1148,9 +1152,9 @@ class SqliteFlatDb(SqliteDb):
         else:
             raise Exception('Invalid type for orderBy: %s' % type(orderBy))
 
-        # Parse the where string to replace the colunm name with
+        # Parse the where string to replace the column name with
         # the real table column name ( for example: _micId -> c01 )
-        # Right now we are asuming a simple where string in the form
+        # Right now we are assuming a simple where string in the form
         # colName=VALUE
         if '=' in where:
             whereCol = where.split('=')[0]
@@ -1161,6 +1165,17 @@ class SqliteFlatDb(SqliteDb):
 
         cmd = self.selectCmd(whereStr,
                              orderByStr=' ORDER BY %s %s' % (orderByCol, direction))
+        # If there is a limit
+        if limit:
+            # if it is a tuple
+            if isinstance(limit, tuple):
+                limit, skipRows = limit  # Extract values from tuple
+            else:
+                skipRows = None
+            # If we need to skip rows
+            skipPart = "%s," % skipRows if skipRows else ""
+            cmd += " LIMIT %s %s" % (skipPart, limit)
+
         self.executeCommand(cmd)
         return self._results(iterate)
 
@@ -1171,17 +1186,16 @@ class SqliteFlatDb(SqliteDb):
         #This cannot be like the following line should be expresed in terms
         #of C1, C2 etc....
         for operation in operations:
-            selectStr += "%s %s(%s) AS %s"%(separator
-                                            , operation
-                                            , self._columnsMapping[operationLabel]
-                                            , operation)
+            selectStr += "%s %s(%s) AS %s" % (separator, operation,
+                                              self._columnsMapping[operationLabel],
+                                              operation)
             separator = ', '
         if groupByLabels is not None:
             groupByStr = 'GROUP BY '
             separator = ' '
             for groupByLabel in groupByLabels:
                 groupByCol = self._columnsMapping[groupByLabel]
-                selectStr += ", %(groupByCol)s as %(groupByLabel)s" % locals()
+                selectStr += ', %(groupByCol)s as "%(groupByLabel)s"' % locals()
                 groupByStr += "%s %s" % (separator, groupByCol)
                 separator = ', '
         else:
@@ -1192,7 +1206,12 @@ class SqliteFlatDb(SqliteDb):
 
     def count(self):
         """ Return the number of element in the table. """
-        self.executeCommand(self.selectCmd('1').replace('*', 'COUNT(*)'))
+        self.executeCommand(self.selectCmd('1').replace('*', 'COUNT(id)'))
+        return self.cursor.fetchone()[0]
+
+    def maxId(self):
+        """ Return the maximum id from the Objects table. """
+        self.executeCommand(self.selectCmd('1').replace('*', 'MAX(id)'))
         return self.cursor.fetchone()[0]
 
     # FIXME: Seems to be duplicated and a subset of selectAll

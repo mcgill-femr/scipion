@@ -123,7 +123,7 @@ class Command:
                 if not self._env.showOnly:
                     os.chdir(self._cwd)
                 print(cyan("cd %s" % self._cwd))
-
+    
             # Actually allow self._cmd to be a list or a
             # '\n'-separated list of commands, and run them all.
             if isinstance(self._cmd, basestring):
@@ -132,17 +132,17 @@ class Command:
                 cmds = [self._cmd]  # a function call
             else:
                 cmds = self._cmd  # already a list of whatever
-
+    
             for cmd in cmds:
                 if self._out is not None:
                     cmd += ' > %s 2>&1' % self._out
                     # TODO: more general, this only works for bash.
-
+        
                 print(cyan(cmd))
-
+        
                 if self._env.showOnly:
                     continue  # we don't really execute the command here
-
+        
                 if callable(cmd):  # cmd could be a function: call it
                     cmd()
                 else:  # if not, it's a command: make a system call
@@ -175,6 +175,7 @@ class Target:
         else:
             c = Command(self._env, cmd, **kwargs)
         self._commandList.append(c)
+
         if kwargs.get('final', False):
             self._finalCommands.append(c)
         return c
@@ -253,14 +254,50 @@ class Environment:
     def getProcessors(self):
         return self._processors
     
-    def getLib(self, name):
-        return 'software/lib/lib%s.%s' % (name, self._libSuffix)
+    @staticmethod
+    def getSoftware():
 
-    def getBin(self, name):
-        return 'software/bin/%s' % name
-    
-    def getEm(self, name):
-        return 'software/em/%s' % name
+        return os.environ.get('SCIPION_SOFTWARE', 'software')
+
+    @staticmethod
+    def getLibFolder():
+        return '%s/lib' % (Environment.getSoftware())
+
+    @staticmethod
+    def getPythonFolder():
+        return Environment.getLibFolder() + '/python2.7'
+
+    @staticmethod
+    def getPythonPackagesFolder():
+        return Environment.getPythonFolder() + '/site-packages'
+
+    @staticmethod
+    def getIncludeFolder():
+        return '%s/include' % (Environment.getSoftware())
+
+    def getLib(self, name):
+        return '%s/lib%s.%s' % (Environment.getLibFolder(),
+                                name, self._libSuffix)
+
+    @staticmethod
+    def getBinFolder():
+        return '%s/bin' % Environment.getSoftware()
+
+    @staticmethod
+    def getBin(name):
+        return '%s/%s' % (Environment.getBinFolder(), name)
+
+    @staticmethod
+    def getTmpFolder():
+        return '%s/tmp' % Environment.getSoftware()
+
+    @staticmethod
+    def getEmFolder():
+        return '%s/em' % Environment.getSoftware()
+
+    @staticmethod
+    def getEm(name):
+        return '%s/%s' % (Environment.getEmFolder(), name)
 
     def addTarget(self, name, *commands, **kwargs):
 
@@ -319,7 +356,7 @@ class Environment:
         tar = kwargs.get('tar', '%s.tgz' % name)
         urlSuffix = kwargs.get('urlSuffix', 'external')
         url = kwargs.get('url', '%s/%s/%s' % (SCIPION_URL_SOFTWARE, urlSuffix, tar))
-        downloadDir = kwargs.get('downloadDir', join('software', 'tmp'))
+        downloadDir = kwargs.get('downloadDir', self.getTmpFolder())
         buildDir = kwargs.get('buildDir',
                               tar.rsplit('.tar.gz', 1)[0].rsplit('.tgz', 1)[0])
         targetDir = kwargs.get('targetDir', buildDir)
@@ -388,9 +425,9 @@ class Environment:
         t = self._addDownloadUntar(name, **kwargs)
         configDir = kwargs.get('configDir', t.buildDir)
 
-        configPath = join('software', 'tmp', configDir)
+        configPath = join(self.getTmpFolder(), configDir)
         makeFile = '%s/%s' % (configPath, configTarget)
-        prefix = abspath('software')
+        prefix = abspath(Environment.getSoftware())
 
         # If we specified the commands to run to obtain the target,
         # that's the only thing we will do.
@@ -444,6 +481,26 @@ class Environment:
 
         return t
 
+    def addPipModule(self, name, version, target=None, default=True, deps=[]):
+        """Add a new module to our built Python .
+        Params in kwargs:
+            name: pip module name
+            version: module version is mandatory to prevent undesired updates.
+            default: True if this module is build by default.
+        """
+
+        target = name if target is None else target
+        t = self.addTarget(name, default=default)
+
+        # Add the dependencies
+        self._addTargetDeps(t, ['pip','python'] + deps)
+
+        # Install using pip
+        t.addCommand('python -m pip install %s==%s' % (name, version),
+                     final=True,
+                     targets=self.getPythonPackagesFolder() + '/' + target)
+        return t
+
     def addModule(self, name, **kwargs):
         """Add a new module to our built Python .
         Params in kwargs:
@@ -458,7 +515,6 @@ class Environment:
         default = kwargs.get('default', True)
         neededProgs = kwargs.get('neededProgs', [])
         libChecks = kwargs.get('libChecks', [])
-        numpyIncludes = kwargs.get('numpyIncludes', False)
 
         if default or name in sys.argv[2:]:
             # Check that we have the necessary programs and libraries in place.
@@ -471,7 +527,7 @@ class Environment:
         deps = kwargs.get('deps', [])
         deps.append('python')
 
-        prefix = abspath('software')
+        prefix = self.getSoftware()
         flags.append('--prefix=%s' % prefix)
 
         modArgs = {'urlSuffix': 'python'}
@@ -483,7 +539,7 @@ class Environment:
             if '/' in x:
                 return x
             else:
-                return 'software/lib/python2.7/site-packages/%s' % x
+                return '%s/%s' % (self.getPythonPackagesFolder(), x)
 
         environ = {
             'PYTHONHOME': prefix,
@@ -491,16 +547,6 @@ class Environment:
             'PATH': '%s/bin:%s' % (prefix, os.environ['PATH']),
             'CPPFLAGS': '-I%s/include' % prefix,
             'LDFLAGS': '-L%s/lib %s' % (prefix, os.environ.get('LDFLAGS', ''))}
-        if numpyIncludes:
-            numpyPath = '%s/lib/python2.7/site-packages/numpy/core' % prefix
-            environ['CPPFLAGS'] = ('%s -I%s/include -I%s/include/numpy' %
-                                   (environ['CPPFLAGS'], numpyPath, numpyPath))
-        # CPPFLAGS cause problems for modules like numpy and scipy (see for
-        # example https://github.com/numpy/numpy/issues/2411
-
-        # Yes, that behavior of numpy is *crazy*. We now modify the
-        # original source, and it should be safe to use our CFLAGS,
-        # CPPFLAGS and LDFLAGS.
 
         envStr = ' '.join('%s="%s"' % (k, v) for k, v in environ.items())
 
@@ -522,6 +568,14 @@ class Environment:
             commands: a list with actions to be executed to install the package
         """
         # Add to the list of available packages, for reference (used in --help).
+        neededProgs = kwargs.get('neededProgs', [])
+
+        if name in sys.argv[2:]:
+            # Check that we have the necessary programs in place.
+            for prog in neededProgs:
+                assert progInPath(prog), ("Cannot find necessary program: %s\n"
+                                          "Please install and try again" % prog)
+
         if name not in self._packages:
             self._packages[name] = []
 
@@ -539,6 +593,15 @@ class Environment:
         # from elsewhere.
         if kwargs.get('pythonMod', False):
             return self.addModule(name, **kwargs)
+        
+        environ = (self.updateCudaEnviron(name)
+                   if kwargs.get('updateCuda', False) else None)
+
+        # Set environment
+        variables = kwargs.get('vars',[])
+        for var,value in variables:
+            environ.update({var: value})
+
 
         # We reuse the download and untar from the addLibrary method
         # and pass the createLink as a new command 
@@ -547,7 +610,7 @@ class Environment:
                               tar.rsplit('.tar.gz', 1)[0].rsplit('.tgz', 1)[0])
         targetDir = kwargs.get('targetDir', buildDir)
   
-        libArgs = {'downloadDir': join('software', 'em'),
+        libArgs = {'downloadDir': self.getEmFolder(),
                    'urlSuffix': 'em',
                    'default': False} # This will be updated with value in kwargs
         libArgs.update(kwargs)
@@ -558,15 +621,17 @@ class Environment:
             if isinstance(tgt, basestring):
                 tgt = [tgt]
             # Take all package targets relative to package build dir
+
             target.addCommand(
                 cmd, targets=[join(target.targetPath, t) for t in tgt],
-                cwd=target.buildPath, final=True)
-
+                cwd=target.buildPath, final=True, environ=environ)
+        
         target.addCommand(Command(self, Link(extName, targetDir),
                                   targets=[self.getEm(extName),
                                            self.getEm(targetDir)],
-                                  cwd=self.getEm('')), final=True)
-
+                                  cwd=self.getEm('')),
+                          final=True)
+        
         # Create an alias with the name for that version
         # this imply that the last package version added will be
         # the one installed by default, so the last versions should
@@ -630,9 +695,9 @@ class Environment:
 
     def _isInstalled(self, name, version):
         """ Return true if the package-version seems to be installed. """
-        pydir = join('software', 'lib', 'python2.7', 'site-packages')
+        pydir = join(self.getLibFolder(), 'python2.7', 'site-packages')
         extName = self._getExtName(name, version)
-        return (exists(join('software', 'em', extName)) or
+        return (exists(join(self.getEmFolder(), extName)) or
                 extName in [x[:len(extName)] for x in os.listdir(pydir)])
 
     def execute(self):
@@ -656,7 +721,6 @@ class Environment:
         # the selected ones, ignore starting with 'xmipp'
         cmdTargets = [a for a in self._args[2:]
                       if a[0].isalpha() and not a.startswith('xmipp')]
-
         if cmdTargets:
             # Check that they are all command targets
             for t in cmdTargets:
@@ -675,8 +739,43 @@ class Environment:
                 self._showTargetTree(targetList)
         else:
             self._executeTargets(targetList)
-            
         
+    def updateCudaEnviron(self, package):
+        """ Update the environment adding CUDA_LIB and/or CUDA_BIN to support
+        packages that uses CUDA.
+        package: package that needs CUDA to compile.
+        """
+        packUpper = package.upper()
+        cudaLib = os.environ.get(packUpper + '_CUDA_LIB')
+        cudaBin = os.environ.get(packUpper + '_CUDA_BIN')
+    
+        if cudaLib is None:
+            cudaLib = os.environ.get('CUDA_LIB')
+            cudaBin = os.environ.get('CUDA_BIN')
+
+        environ = os.environ.copy()
+
+        # If there isn't any CUDA in the environment
+        if cudaLib is None and cudaBin is None:
+            # Exit ...do not update the environment
+            return environ
+
+        elif cudaLib is not None and cudaBin is None:
+            raise Exception("CUDA_LIB (or %s_CUDA_LIB) is defined, but not "
+                            "CUDA_BIN (or %s_CUDA_BIN), please excecute "
+                            "scipion config --update" % (packUpper, packUpper))
+        elif cudaBin is not None and cudaLib is None:
+            raise Exception("CUDA_BIN (or %s_CUDA_BIN) is defined, but not "
+                            "CUDA_LIB (or %s_CUDA_LIB), please excecute "
+                            "scipion config --update" % (packUpper, packUpper))
+        elif os.path.exists(cudaLib) and os.path.exists(cudaBin):
+            environ.update({'LD_LIBRARY_PATH': cudaLib + ":" +
+                                               environ['LD_LIBRARY_PATH']})
+            environ.update({'PATH': cudaBin + ":" + environ['PATH']})
+
+        return environ
+
+
 class Link:
     def __init__(self, packageLink, packageFolder):
         self._packageLink = packageLink

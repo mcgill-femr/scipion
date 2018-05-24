@@ -2,7 +2,7 @@
 # *
 # * Authors:     Roberto Marabini (roberto@cnb.csic.es)
 # *              J.M. De la Rosa Trevin (jmdelarosa@cnb.csic.es)
-# *              Josue Gomez Blanco (jgomez@cnb.csic.es)
+# *              Josue Gomez Blanco (josue.gomez-blanco@mcgill.ca)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -661,8 +661,10 @@ def runFilterVolumeStep(self, iterN, refN, constantToAddToFiltration):
             filterInPxAt = fourierMaxFrequencyOfInterest + constantToAddToFiltration
         else:
             filterInPxAt = constantToAddToFiltration
+    else:
+        filterInPxAt = 1.
     
-    if (filterInPxAt > 0.5):
+    if filterInPxAt > 0.5:
         copyFile(reconstructedVolume, reconstructedFilteredVolume)
     else:
         args = ' -i %(volume)s -o %(filteredVol)s --fourier low_pass %(filter)s'

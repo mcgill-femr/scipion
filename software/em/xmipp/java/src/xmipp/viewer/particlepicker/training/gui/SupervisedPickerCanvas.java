@@ -57,8 +57,7 @@ public class SupervisedPickerCanvas extends ParticlePickerCanvas
 
 		if (frame.isPickingAvailable(e))
 		{
-			if (frame.isEraserMode())
-			{
+			if (frame.isEraserMode(e)){
 				erase(e);
 				return;
 			}
@@ -73,13 +72,11 @@ public class SupervisedPickerCanvas extends ParticlePickerCanvas
 			if (p == null)
 				p = getMicrograph().getAutomaticParticle(x, y, getFrame().getThreshold());
 
-            if (p != null && SwingUtilities.isLeftMouseButton(e))
-			{
-				active = p;
+            if (p != null && SwingUtilities.isLeftMouseButton(e)){
+                active = p;
 				repaint();
 
-			}
-			else if (SwingUtilities.isLeftMouseButton(e)){
+			}else if (SwingUtilities.isLeftMouseButton(e)){
                 addParticle(x, y, true);
             }
         }
@@ -189,7 +186,7 @@ public class SupervisedPickerCanvas extends ParticlePickerCanvas
 			int y = offScreenY(e.getY());
 			if (frame.isPickingAvailable(e))
 			{
-				if (frame.isEraserMode())
+				if (frame.isEraserMode(e))
 				{
 					erase(e);
 					return;
@@ -205,11 +202,10 @@ public class SupervisedPickerCanvas extends ParticlePickerCanvas
 				{
 					getMicrograph().removeParticle(activeParticle, getParticlePicker());
 					active = new ManualParticle(activeParticle.getX(), activeParticle.getY(), picker, micrograph);
-					getMicrograph().addManualParticle(activeParticle, getParticlePicker());
+					getMicrograph().addManualParticle((ManualParticle) active, getParticlePicker());
+					refresh();
 					
-				}
-				else
-				{
+				}else{
 					setActiveMoved(true);
 					moveActiveParticle(x, y);
 				}
@@ -229,7 +225,7 @@ public class SupervisedPickerCanvas extends ParticlePickerCanvas
 		int y = offScreenY(e.getY());
 		if (frame.isPickingAvailable(e))
 		{
-			if (frame.isEraserMode())
+			if (frame.isEraserMode(e))
 			{
 				erase(e);
 				return;
@@ -288,22 +284,26 @@ public class SupervisedPickerCanvas extends ParticlePickerCanvas
 
 		List<ManualParticle> particles;
 		int index;
+		SupervisedParticlePicker picker = getParticlePicker();
 		Color color = picker.getColor();
-		Color autoColor = color.darker();
-		if (!getMicrograph().isEmpty())
-		{
-			particles = getMicrograph().getManualParticles();
-			g2.setColor(color);
+        Color autoColor = picker.getAutomaticColor();
+        Color delColor = picker.getDeletedColor();
+        if (!getMicrograph().isEmpty()) {
+            particles = getMicrograph().getManualParticles();
+            g2.setColor(color);
 
-			for (index = 0; index < particles.size(); index++)
-				drawShape(g2, particles.get(index), false, continuousst);
+            for (index = 0; index < particles.size(); index++)
+                drawShape(g2, particles.get(index), false, thinContinuousSt);
 
-			g2.setColor(autoColor);
-			List<AutomaticParticle> autoparticles = getMicrograph().getAutomaticParticles();
+            List<AutomaticParticle> autoparticles = getMicrograph().getAutomaticParticles();
             for (AutomaticParticle autoparticle : autoparticles)
-                if (!autoparticle.isDeleted() && autoparticle.getCost() >= getFrame().getThreshold())
-                    drawShape(g2, autoparticle, false, continuousst);
-
+                if (!autoparticle.isDeleted() && autoparticle.getCost() >= getFrame().getThreshold()){
+                    g2.setColor(autoColor);
+                    drawShape(g2, autoparticle, false, thinContinuousSt);
+                }else if (autoparticle.isUnavailable() && picker.isShowDeleted()) {
+                    g2.setColor(delColor);
+                    drawShape(g2, autoparticle, false, thinContinuousSt);
+                }
 		}
 		if (active != null)
 		{
@@ -324,11 +324,14 @@ public class SupervisedPickerCanvas extends ParticlePickerCanvas
 		}
 	}
 
-	@Override
+
+
+    @Override
 	public void refreshActive(PickerParticle p)
 	{
 		if (p == null)
-			active = null;
+			// active = null;
+            active = getLastParticle();
 		else
 			active = p;
 		repaint();

@@ -1,8 +1,8 @@
-# *****************************************************************************
+# **************************************************************************
 # *
-# * Authors:    J.M. De la Rosa Trevin (jmdelarosa@cnb.csic.es)
+# * Authors:     J.M. De la Rosa Trevin (delarosatrevin@scilifelab.se) [1]
 # *
-# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
+# * [1] SciLifeLab, Stockholm University
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@
 # *  All comments concerning this program package may be sent to the
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
-# *****************************************************************************
+# **************************************************************************
 
 import numpy as np
 
@@ -34,12 +34,11 @@ from pyworkflow.em.protocol import ProtParticles, IntParam
 
 
 class ProtLocalizedExtraction(ProtParticles):
-    """ Extract computed sub-particles from a SetOfParticles.
-    """
-    
+    """ Extract computed sub-particles from a SetOfParticles. """
     _label = 'localized extraction'
-    _version = VERSION_1_1
-    #--------------------------- DEFINE param functions -----------------------
+    _lastUpdateVersion = VERSION_1_1
+
+    # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('inputParticles', PointerParam,
@@ -61,7 +60,7 @@ class ProtLocalizedExtraction(ProtParticles):
 
         form.addParallelSection(threads=0, mpi=0)
 
-    #--------------------------- INSERT steps functions -----------------------
+    # -------------------------- INSERT steps functions -----------------------
     def _insertAllSteps(self):
         partsId = self.inputParticles.get().getObjId()
         self._insertFunctionStep('createOutputStep',
@@ -69,7 +68,7 @@ class ProtLocalizedExtraction(ProtParticles):
                                  self.inputCoordinates.get().getObjId(),
                                  self.boxSize.get())
     
-    #--------------------------- STEPS functions ------------------------------
+    # -------------------------- STEPS functions ------------------------------
     def createOutputStep(self, particlesId, coordsId, boxSize):
         """ Create the input file in STAR format as expected by Relion.
         Params:
@@ -93,6 +92,7 @@ class ProtLocalizedExtraction(ProtParticles):
 
         i = 0
         outliers = 0
+        partIdExcluded = []
         lastPartId = None
 
         for coord in inputCoords.iterItems(orderBy=['_subparticle._micId',
@@ -105,32 +105,39 @@ class ProtLocalizedExtraction(ProtParticles):
                 particle = inputParticles[partId]
 
                 if particle is None:
-                    raise Exception('Missing particle with id %s from '
-                                    'input particles set' % partId)
+                    partIdExcluded.append(partId)
+                    self.info("WARNING: Missing particle with id %s from "
+                              "input particles set" % partId)
+                else:
+                    # Now load the particle image to extract later sub-particles
+                    img = ih.read(particle)
+                    x, y, _, _ = img.getDimensions()
+                    data = img.getData()
+                
                 lastPartId = partId
-                # Now load the particle image to extract later sub-particles
-                img = ih.read(particle)
-                x, y, _, _ = img.getDimensions()
-                data = img.getData()
 
-            xpos = coord.getX()
-            ypos = coord.getY()
-
-            # Check that the sub-particle will not lay out of the particle
-            if (ypos - b2 < 0 or ypos + b2 > y or
-                xpos - b2 < 0 or xpos + b2 > x):
-                outliers += 1
-                continue
-
-            # Crop the sub-particle data from the whole particle image
-            center[:, :] = data[ypos-b2:ypos+b2, xpos-b2:xpos+b2]
-            outputImg.setData(center)
-            i += 1
-            outputImg.write((i, outputStack))
-            subpart = coord._subparticle
-            subpart.setLocation((i, outputStack)) # Change path to new stack
-            subpart.setObjId(None) # Force to insert as a new item
-            outputSet.append(subpart)
+            # If particle is not in inputParticles, subparticles will not be
+            # generated. Now, subtract from a subset of original particles is
+            # supported.
+            if not partId in partIdExcluded:
+                xpos = coord.getX()
+                ypos = coord.getY()
+    
+                # Check that the sub-particle will not lay out of the particle
+                if (ypos - b2 < 0 or ypos + b2 > y or
+                    xpos - b2 < 0 or xpos + b2 > x):
+                    outliers += 1
+                    continue
+    
+                # Crop the sub-particle data from the whole particle image
+                center[:, :] = data[ypos-b2:ypos+b2, xpos-b2:xpos+b2]
+                outputImg.setData(center)
+                i += 1
+                outputImg.write((i, outputStack))
+                subpart = coord._subparticle
+                subpart.setLocation((i, outputStack)) # Change path to new stack
+                subpart.setObjId(None) # Force to insert as a new item
+                outputSet.append(subpart)
 
         if outliers:
             self.info("WARNING: Discarded %s particles because laid out of the "
@@ -139,7 +146,7 @@ class ProtLocalizedExtraction(ProtParticles):
         self._defineOutputs(outputParticles=outputSet)
         self._defineSourceRelation(self.inputParticles, outputSet)
 
-    #--------------------------- INFO functions -------------------------------
+    # -------------------------- INFO functions -------------------------------
     def _validate(self):
         errors = []
         inputCoords = self.inputCoordinates.get()
@@ -161,7 +168,6 @@ class ProtLocalizedExtraction(ProtParticles):
     def _methods(self):
         return []
     
-    #--------------------------- UTILS functions ------------------------------
+    # -------------------------- UTILS functions ------------------------------
     def _getInputParticles(self):
         return self.inputParticles.get()
-    

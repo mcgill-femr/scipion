@@ -34,7 +34,7 @@ from pyworkflow.em.wizard import EmWizard
 from pyworkflow.em import CoordinatesObjectView
 from pyworkflow.utils import makePath, cleanPath, readProperties
 
-from protocol_picking import DogPickerProtPicking
+from protocol_dogpicker import DogPickerProtPicking
 
 
 #===============================================================================
@@ -43,8 +43,8 @@ from protocol_picking import DogPickerProtPicking
 
 class DogPickerWizard(EmWizard):
     _targets = [(DogPickerProtPicking, ['diameter', 'threshold'])]
-    
-    
+
+
     def show(self, form):
         autopickProt = form.protocol
         micSet = autopickProt.getInputMicrographs()
@@ -85,9 +85,15 @@ class DogPickerWizard(EmWizard):
         convertCommand = %(convert)s --coordinates --from dogpicker --to xmipp --input  %(micsSqlite)s --output %(coordsDir)s
         """ % args)
         f.close()
-        process = CoordinatesObjectView(project, micfn, coordsDir, autopickProt, pickerProps=dogpickerProps).show()
+        process = CoordinatesObjectView(project, micfn, coordsDir, autopickProt,
+                                        mode=CoordinatesObjectView.MODE_AUTOMATIC,
+                                        pickerProps=dogpickerProps).show()
         process.wait()
+        # Check if the wizard changes were accepted or just canceled
+
         myprops = readProperties(dogpickerProps)
-        form.setVar('diameter', myprops['diameter.value'])
-        form.setVar('threshold', myprops['threshold.value'])
+
+        if myprops['applyChanges'] == 'true':
+            form.setVar('diameter', myprops['diameter.value'])
+            form.setVar('threshold', myprops['threshold.value'])
 

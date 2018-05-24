@@ -293,19 +293,52 @@ class TestSqliteFlatMapper(BaseTest):
         self.assertEqual('Micrograph', db.getSelfClassName())  
         # Check the count is equal to 3
         self.assertEqual(3, db.count()) 
+
+        # Check select all with limits
+        items = db.selectAll(iterate=False, limit=2)
+        self.assertEqual(2, len(items), "Select all with limits is not working.")
+        firstItem = items[0]
+        self.assertEqual(1, firstItem[0], "First object unexpected")
+
+        # Check select all with limit and skipping rows
+        items = db.selectAll(iterate=False, limit=(1, 1))
+        self.assertEqual(1, len(items))
+        firstItem = items[0]
+        self.assertEqual(2, firstItem[0], "First object using skipRows unexpected")
+
         db.close()
-        
+
+
     def test_insertObjects(self):
         dbName = self.getOutputPath('images.sqlite')
         print ">>> test_insertObjects: dbName = '%s'" % dbName
         mapper = SqliteFlatMapper(dbName, globals())
+        self.assertEqual(0, mapper.count())
+        self.assertEqual(0, mapper.maxId())
         n = 10
         
         for i in range(n):
             img = Image()
             img.setLocation(i+1, 'images.stk')
-            mapper.store(img)
-            
+            mapper.insert(img)
+
+        self.assertEqual(n, mapper.count())
+        self.assertEqual(n, mapper.maxId())
+
+        # Store one more image with bigger id
+        img = Image()
+        bigId = 1000
+        img.setLocation(bigId, 'images.stk')
+        img.setObjId(bigId)
+        mapper.insert(img)
+        self.assertEqual(bigId, mapper.maxId())
+
+        # Insert another image with None as id, it should take bigId + 1
+        img.setLocation(bigId+1, 'images.stk')
+        img.setObjId(None)
+        mapper.insert(img)
+        self.assertEqual(bigId+1, mapper.maxId())
+
         mapper.setProperty('samplingRate', '3.0')
         mapper.setProperty('defocusU', 1000)
         mapper.setProperty('defocusV', 1000)
@@ -324,11 +357,13 @@ class TestSqliteFlatMapper(BaseTest):
         
         self.assertEqual(mapper2.getProperty('samplingRate'), '3.0')
         self.assertEqual(mapper2.getProperty('defocusU'), '2000')
+
+        # Make sure that maxId() returns the proper value after loading db
+        self.assertEqual(bigId+1, mapper2.maxId())
         
     def test_downloads(self):
         dbName = self.getOutputPath('downloads.sqlite')
-        #dbName = '/tmp/downloads.sqlite'
-        
+
         print ">>> test_downloads: dbName = '%s'" % dbName
         mapper = SqliteFlatMapper(dbName, globals())
         mapper.enableAppend()
@@ -345,20 +380,18 @@ class TestSqliteFlatMapper(BaseTest):
          
     def test_emtpySet(self):
         dbName = self.getOutputPath('empty.sqlite')
-        #dbName = '/tmp/downloads.sqlite'
-        
         print ">>> test empty set: dbName = '%s'" % dbName
         # Check that writing an emtpy set do not fail
         objSet = Set(filename=dbName)      
         objSet.write()
         objSet.close()       
-        
         # Now let's try to open an empty set
         objSet = Set(filename=dbName)
         self.assertEqual(objSet.getSize(), 0)
         items = [obj.clone() for obj in objSet]
         self.assertEqual(len(items), 0)
-        
+
+
 class TestXmlMapper(BaseTest):
     
     @classmethod
@@ -415,4 +448,3 @@ class TestDataSet(BaseTest):
         row = table.getRow(1)
         print row
         self.assertEqual(row.name, 'pepe', "Error updating name in row")
-        

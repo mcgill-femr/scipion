@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:     Josue Gomez Blanco (jgomez@cnb.csic.es)
+# * Authors:     Josue Gomez Blanco (josue.gomez-blanco@mcgill.ca)
 # *
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
@@ -39,13 +39,16 @@ from collections import OrderedDict
 
 import pyworkflow.em as em
 import pyworkflow.em.metadata as md
+from pyworkflow.em.packages.opic import (LOCALREC_HOME, LOCALREC_RELION_HOME,
+                                         RELION_HOME,TMP_RELION_HOME)
 
 from pyworkflow.object import ObjectWrap, String
+from pyworkflow.utils import Environ
 from pyworkflow.utils.path import replaceBaseExt
 
 # This dictionary will be used to map
 # between CTFModel properties and Xmipp labels
-ACQUISITION_DICT = OrderedDict([ 
+ACQUISITION_DICT = OrderedDict([
        ("_amplitudeContrast", md.RLN_CTF_Q0),
        ("_sphericalAberration", md.RLN_CTF_CS),
        ("_voltage", md.RLN_CTF_VOLTAGE),
@@ -99,16 +102,61 @@ ALIGNMENT_DICT = OrderedDict([
        ])
 
 
+def getVersion():
+    path = os.environ[LOCALREC_HOME]
+    for v in getSupportedVersions():
+        if v in path:
+            return v
+    return ''
+
+
+def getSupportedVersions():
+    return ['1.1.0', '1.2.0']
+
+
+def getSupportedRelionVersions():
+    return ['1.4']
+
+
+def getRelionVersion():
+    path = os.environ[LOCALREC_RELION_HOME]
+    for v in getSupportedRelionVersions():
+        if v in path:
+            return v
+    return ''
+
+
+def modRelionHome():
+    os.environ[TMP_RELION_HOME] = os.environ[RELION_HOME]
+    os.environ[RELION_HOME] = os.environ[LOCALREC_RELION_HOME]
+
+
+def restituteRelionHome():
+    os.environ[RELION_HOME] = os.environ[TMP_RELION_HOME]
+
+
 def getRelionEnviron():
     """ Setup the environment variables needed to launch Relion. """
-    from pyworkflow.em.packages.relion import getEnviron
-    return getEnviron()
+    environ = Environ(os.environ)
+    
+    relionHome = os.environ[LOCALREC_RELION_HOME]
+    binPath = join(relionHome, 'bin')
+    libPath = join(relionHome, 'lib') + ":" + join(relionHome, 'lib64')
+    
+    if not binPath in environ['PATH']:
+        environ.update({'PATH': binPath,
+                        'LD_LIBRARY_PATH': libPath,
+                        'SCIPION_MPI_FLAGS': os.environ.get(
+                            'RELION_MPI_FLAGS', ''),
+                        }, position=Environ.BEGIN)
+    return environ
 
 
 def setEnviron():
     """ Setup the environment variables needed to import localrec classes. """
+    modRelionHome()
     os.environ.update(getRelionEnviron())
-    sys.path.append(os.path.join(os.environ["LOCALREC_HOME"], "lib"))
+    sys.path.append(os.path.join(os.environ[LOCALREC_HOME], "lib"))
 
 
 def locationToRelion(index, filename):
@@ -210,8 +258,8 @@ def matrixFromGeometry(shifts, angles, inverseTransform):
     2D shifts in X and Y...and the 3 euler angles.
     """
     from pyworkflow.em.transformations import euler_matrix
-    from numpy import deg2rad
-    radAngles = -deg2rad(angles)
+    #angles list is in radians, but sign changed
+    radAngles = -angles
     
     M = euler_matrix(radAngles[0], radAngles[1], radAngles[2], 'szyz')
     if inverseTransform:

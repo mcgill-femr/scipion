@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:     Josue Gomez BLanco (jgomez@cnb.csic.es)
+# * Authors:     Josue Gomez BLanco (josue.gomez-blanco@mcgill.ca)
 # *              J.M. De la Rosa Trevin (jmdelarosa@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
@@ -31,10 +31,11 @@ import pyworkflow.utils as pwutils
 import pyworkflow.em as em
 import pyworkflow.protocol.params as params
 from grigoriefflab import (CTFFIND_PATH, CTFFINDMP_PATH,
-                           CTFFIND4_PATH, getVersion)
+                           CTFFIND4_PATH, getVersion,
+                           CTFFIND4_HOME, CTFFIND_HOME, CTFFIND4_APP, V4_0_15,
+                           V4_1_10)
 from convert import (readCtfModel, parseCtffindOutput,
                      parseCtffind4Output)
-
 
 
 class ProtCTFFind(em.ProtCTFMicrographs):
@@ -46,6 +47,28 @@ class ProtCTFFind(em.ProtCTFMicrographs):
     http://grigoriefflab.janelia.org/ctffind4
     """
     _label = 'ctffind'
+
+    @classmethod
+    def validateInstallation(cls):
+        """ Check if the installation of this protocol is correct.
+        Can't rely on package function since this is a "multi package" package
+        Returning an empty list means that the installation is correct
+        and there are not errors. If some errors are found, a list with
+        the error messages will be returned.
+        """
+        missingPaths = []
+
+        if not os.path.exists(CTFFIND4_PATH) \
+                and not os.path.exists(CTFFIND_PATH):
+            missingPaths.append("%s, %s : ctffind installation not found"
+                                " - %s or %s" % (CTFFIND_HOME, CTFFIND4_HOME,
+                                                 CTFFIND_PATH, CTFFIND4_PATH))
+        return missingPaths
+
+    def _defineParams(self, form):
+        em.ProtCTFMicrographs._defineParams(self, form)
+        # Define the streaming parameters at the end
+        self._defineStreamingParams(form)
 
     def _defineProcessParams(self, form):
         form.addParam('useCtffind4', params.BooleanParam, default=True,
@@ -90,33 +113,60 @@ class ProtCTFFind(em.ProtCTFMicrographs):
                            'suboptimal fitting. This options resamples micrographs to '
                            'a more reasonable pixel size if needed',
                       expertLevel=params.LEVEL_ADVANCED)
-    
-    #--------------------------- STEPS functions ---------------------------------------------------
+
+        form.addParam('slowSearch', params.BooleanParam, default=True,
+                      expertLevel=params.LEVEL_ADVANCED,
+                      label="Slower, more exhaustive search?",
+                      condition='useCtffind4 and _isNewCtffind4',
+                      help="From version 4.1.5 to 4.1.8 the slow (more precise) "
+                           "search was activated by default because of reports the "
+                           "faster 1D search was significantly less accurate "
+                           "(thanks Rado Danev & Tim Grant). "
+                           "Set this parameters to *No* to get faster fits.")
+
+    # -------------------------- STEPS functions ------------------------------
     def _estimateCTF(self, micFn, micDir, micName):
         """ Run ctffind, 3 or 4, with required parameters """
-        # Create micrograph dir 
-        pwutils.makePath(micDir)
-        downFactor = self.ctfDownFactor.get()
-        scannedPixelSize = self.inputMicrographs.get().getScannedPixelSize()
-        micFnMrc = self._getTmpPath(pwutils.replaceBaseExt(micFn, 'mrc'))
 
-        if downFactor != 1:
-            # Replace extension by 'mrc' because there are some formats
-            # that cannot be written (such as dm3)
-            import pyworkflow.em.packages.xmipp3 as xmipp3
-            args = "-i %s -o %s --step %f --method fourier" % (micFn, micFnMrc, downFactor)
-            self.runJob("xmipp_transform_downsample",
-                        args, env=xmipp3.getEnviron())
-            self._params['scannedPixelSize'] =  scannedPixelSize * downFactor
-        else:
-            micFnMrc = self._getTmpPath(pwutils.replaceBaseExt(micFn, "mrc"))
-            em.ImageHandler().convert(micFn, micFnMrc, em.DT_FLOAT)
+        doneFile = os.path.join(micDir, 'done.txt')
 
-        # Update _params dictionary
-        self._params['micFn'] = micFnMrc
-        self._params['micDir'] = micDir
-        self._params['ctffindOut'] = self._getCtfOutPath(micDir)
-        self._params['ctffindPSD'] = self._getPsdPath(micDir)
+        if self.isContinued() and os.path.exists(doneFile):
+            return
+
+        try:
+            # Create micrograph dir
+            pwutils.makePath(micDir)
+            downFactor = self.ctfDownFactor.get()
+            scannedPixelSize = self.inputMicrographs.get().getScannedPixelSize()
+            micFnMrc = self._getTmpPath(pwutils.replaceBaseExt(micFn, 'mrc'))
+
+            if downFactor != 1:
+                # Replace extension by 'mrc' because there are some formats
+                # that cannot be written (such as dm3)
+                import pyworkflow.em.packages.xmipp3 as xmipp3
+                args = "-i %s -o %s --step %f --method fourier" % (micFn, micFnMrc, downFactor)
+                self.runJob("xmipp_transform_downsample",
+                            args, env=xmipp3.getEnviron())
+                self._params['scannedPixelSize'] =  scannedPixelSize * downFactor
+            else:
+                ih = em.ImageHandler()
+                if ih.existsLocation(micFn):
+                    micFnMrc = self._getTmpPath(pwutils.replaceBaseExt(micFn, "mrc"))
+                    ih.convert(micFn, micFnMrc, em.DT_FLOAT)
+                else:
+                    print >> sys.stderr, "Missing input micrograph %s" % micFn
+
+            # Update _params dictionary
+            self._params['micFn'] = micFnMrc
+            self._params['micDir'] = micDir
+            self._params['ctffindOut'] = self._getCtfOutPath(micDir)
+            self._params['ctffindPSD'] = self._getPsdPath(micDir)
+
+        except Exception, ex:
+            print >> sys.stderr, "Some error happened: %s" % ex
+            import traceback
+            traceback.print_exc()
+
         try:
             self.runJob(self._program, self._args % self._params)
         except Exception, ex:
@@ -124,7 +174,7 @@ class ProtCTFFind(em.ProtCTFMicrographs):
 
         # Let's notify that this micrograph have been processed
         # just creating an empty file at the end (after success or failure)
-        open(os.path.join(micDir, 'done.txt'), 'w')
+        open(doneFile, 'w')
         # Let's clean the temporary mrc micrographs
         pwutils.cleanPath(micFnMrc)
 
@@ -179,7 +229,7 @@ class ProtCTFFind(em.ProtCTFMicrographs):
     def _createOutputStep(self):
         pass
 
-    #--------------------------- INFO functions ----------------------------------------------------
+    # -------------------------- INFO functions -------------------------------
     def _validate(self):
         errors = []
         thr = self.numberOfThreads.get()
@@ -198,6 +248,9 @@ class ProtCTFFind(em.ProtCTFMicrographs):
                 0.10 <= valueMax <= 3.15):
             errors.append('Wrong values for phase shift search.')
 
+        if self._getStreamingBatchSize() > 1:
+            errors.append("Batch steps are not implemented yet for Ctffind. ")
+
         return errors
 
     def _citations(self):
@@ -206,18 +259,15 @@ class ProtCTFFind(em.ProtCTFMicrographs):
     def _methods(self):
         if self.inputMicrographs.get() is None:
             return ['Input micrographs not available yet.']
-        methods = "We calculated the CTF of %s using CTFFind [Midell2003]. " % self.getObjectTag('inputMicrographs')
+        methods = "We calculated the CTF of %s using CTFFind. " % self.getObjectTag('inputMicrographs')
         methods += self.methodsVar.get('')
         methods += 'Output CTFs: %s' % self.getObjectTag('outputCTF')
 
         return [methods]
 
-    #--------------------------- UTILS functions ---------------------------------------------------
+    # -------------------------- UTILS functions ------------------------------
     def _isNewCtffind4(self):
-        if self.useCtffind4 and getVersion('CTFFIND4') != '4.0.15':
-            return True
-        else:
-            return False
+        return self.useCtffind4 and getVersion('CTFFIND4') != V4_0_15
 
     def _prepareCommand(self):
         sampling = self.inputMics.getSamplingRate() * self.ctfDownFactor.get()
@@ -239,10 +289,11 @@ class ProtCTFFind(em.ProtCTFMicrographs):
                 self._params['stepPhaseShift'] = self.stepPhaseShift.get()
             else:
                 self._params['phaseShift'] = "no"
-            if self.resamplePix:  # ctffind v4.1.5
-                self._params['resamplePix'] = "yes"
-            else:
-                self._params['resamplePix'] = "no"
+
+            # ctffind >= v4.1.5
+            self._params['resamplePix'] = "yes" if self.resamplePix else "no"
+
+            self._params['slowSearch'] = "yes" if self.slowSearch else "no"
 
             self._argsCtffind4()
 
@@ -277,10 +328,10 @@ class ProtCTFFind(em.ProtCTFMicrographs):
                 self._params['stepPhaseShift'] = self.stepPhaseShift.get()
             else:
                 self._params['phaseShift'] = "no"
-            if self.resamplePix:  # ctffind v4.1.5
-                self._params['resamplePix'] = "yes"
-            else:
-                self._params['resamplePix'] = "no"
+            # ctffind >= v4.1.5
+            self._params['resamplePix'] = "yes" if self.resamplePix else "no"
+
+            self._params['slowSearch'] = "yes" if self.slowSearch else "no"
 
             self._argsCtffind4()
 
@@ -318,11 +369,11 @@ eof
 %(maxDefocus)f
 %(step_focus)f"""
 
-        if getVersion('CTFFIND4') == '4.1.5':
+        if getVersion(CTFFIND4_APP) in ['4.1.5', '4.1.8', V4_1_10]:
             if self.findPhaseShift:
                 self._args += """
 no
-no
+%(slowSearch)s
 yes
 %(astigmatism)f
 %(phaseShift)s
@@ -336,7 +387,7 @@ eof
             else:
                 self._args += """
 no
-no
+%(slowSearch)s
 yes
 %(astigmatism)f
 %(phaseShift)s
@@ -344,7 +395,7 @@ yes
 %(resamplePix)s
 eof
 """
-        elif getVersion('CTFFIND4') == '4.0.15':
+        elif getVersion(CTFFIND4_APP) == V4_0_15:
             if self.findPhaseShift:
                 self._args += """
 %(astigmatism)f
@@ -385,8 +436,10 @@ eof
 
     def _summary(self):
         summary = em.ProtCTFMicrographs._summary(self)
-        if self.useCtffind4:
-            summary.append("NOTE: ctffind4.1.5 finishes correctly (all output is generated properly),"
-                           " but returns an error code. Disregard error messages until this is fixed."
+        if self.useCtffind4 and getVersion('CTFFIND4') == '4.1.5':
+            summary.append("NOTE: ctffind4.1.5 finishes correctly (all output "
+                           "is generated properly), but returns an error code. "
+                           "Disregard error messages until this is fixed."
                            "http://grigoriefflab.janelia.org/node/5421")
         return summary
+

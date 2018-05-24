@@ -141,7 +141,7 @@ MpiFileMutex::~MpiFileMutex()
 //------------ MPI ---------------------------
 MpiNode::MpiNode(int &argc, char **& argv)
 {
-    MPI::Init(argc, argv);
+    MPI_Init(&argc, &argv);
     int irank, isize;
     MPI_Comm_rank(MPI_COMM_WORLD, &irank);
     MPI_Comm_size(MPI_COMM_WORLD, &isize);
@@ -158,7 +158,7 @@ MpiNode::~MpiNode()
     //active = 0;
     //updateComm();
     //std::cerr << "Send Finalize to: " << rank << std::endl;
-    MPI::Finalize();
+    MPI_Finalize();
 }
 
 bool MpiNode::isMaster() const
@@ -277,7 +277,7 @@ int XmippMpiProgram::tryRun()
     {
         std::cerr << xe;
         errorCode = xe.__errno;
-        MPI::COMM_WORLD.Abort(xe.__errno);
+        MPI_Abort(MPI_COMM_WORLD, xe.__errno);
     }
     return errorCode;
 }
@@ -341,4 +341,29 @@ bool MpiMetadataProgram::getTaskToProcess(size_t &objId, size_t &objIndex)
     return false;
 }
 
-
+void xmipp_MPI_Reduce(
+    void* send_data,
+    void* recv_data,
+    size_t count,
+    MPI_Datatype datatype,
+    MPI_Op op,
+    int root,
+    MPI_Comm communicator,
+	size_t blockSize)
+{
+	int type_size;
+	MPI_Type_size(datatype,&type_size);
+	size_t quotient=count/blockSize;
+	if (quotient>0)
+	{
+		for (size_t c=0; c<quotient; c++)
+			MPI_Reduce((unsigned char*)(send_data)+c*blockSize*size_t(type_size),
+					   (unsigned char*)(recv_data)+c*blockSize*size_t(type_size),
+					   blockSize,datatype,op,root,communicator);
+	}
+	size_t remainder=count%blockSize;
+	if (remainder>0)
+		MPI_Reduce((unsigned char*)(send_data)+quotient*blockSize*size_t(type_size),
+				   (unsigned char*)(recv_data)+quotient*blockSize*size_t(type_size),
+				   remainder,datatype,op,root,communicator);
+}

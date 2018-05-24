@@ -36,6 +36,7 @@ import optparse
 import collections
 
 UPDATE_PARAM = '--update'
+COMPARE_PARAM = '--compare'
 
 try:
     from ConfigParser import ConfigParser, Error
@@ -62,8 +63,13 @@ def main():
         help=("Rewrite the configuration files using the original templates."))
     add(UPDATE_PARAM, action='store_true',
         help=("Updates you local config files with the values in the template, only for those missing values."))
+    add('--notify', action='store_true',
+        help=("Allow Scipion to notify usage data (skips user question)"))
+    add(COMPARE_PARAM, action='store_true',
+        help="Check that the configurations seems reasonably well set up.")
 
     options, args = parser.parse_args()
+
 
     if args:  # no args which aren't options
         sys.exit(parser.format_help())
@@ -84,10 +90,11 @@ def main():
             (os.environ['SCIPION_HOSTS'], 'hosts')]:
             if not exists(fpath) or options.overwrite:
                 createConf(fpath, join(templatesDir, tmplt + '.template'),
-                           remove=localSections)
+                           remove=localSections, notify=options.notify)
             else:
                 checkConf(fpath, join(templatesDir, tmplt + '.template'),
-                          remove=localSections, update=options.update)
+                          remove=localSections, update=options.update,
+                          notify=options.notify)
 
         if not globalIsLocal:  # which is normally the case
             # Local user configuration files (well, only "scipion.conf").
@@ -95,11 +102,14 @@ def main():
                 #  It might make sense to add   "or options.overwrite" ...
                 createConf(os.environ['SCIPION_LOCAL_CONFIG'],
                            join(templatesDir, 'scipion.template'),
-                           keep=localSections)
+                           keep=localSections,
+                           notify=options.notify)
             else:
                 checkConf(os.environ['SCIPION_LOCAL_CONFIG'],
                           join(templatesDir, 'scipion.template'),
-                          keep=localSections, update=options.update)
+                          keep=localSections, update=options.update,
+                          notify=options.notify,
+                          compare=options.compare)
 
         # After all, check some extra things are fine in scipion.conf
         checkPaths(os.environ['SCIPION_CONFIG'])
@@ -114,8 +124,45 @@ def main():
         sys.stderr.write('Error: %s\n' % sys.exc_info()[1])
         sys.exit(1)
 
+def checkNotify(Config, notify=False):
+    "Check if protocol statistics should be collected"
+    if notify:
+        Config.set('VARIABLES','SCIPION_NOTIFY','True')
+        return
+    notifyOn = Config.get('VARIABLES','SCIPION_NOTIFY')
+    if notifyOn=='False':
+        # This works for  Python 2.x. and Python 3
+        if sys.version_info[0] >= 3:
+            get_input = input
+        else:
+            get_input = raw_input
+        print("""-----------------------------------------------------------------
+-----------------------------------------------------------------
+It would be very helpful if you allow Scipion
+to send anonymous usage data. This information will help Scipion's 
+team to identify the more demanded protocols and prioritize 
+support for them.
 
-def createConf(fpath, ftemplate, remove=[], keep=[]):
+The collected usage information is COMPLETELY ANONYMOUS and does NOT
+include protocol parameters, file names or any data that can be used 
+to identify you or your data. In the URL
+https://github.com/I2PC/scipion/wiki/Collecting-Usage-Statistics-for-Scipion
+you may see examples of the transmitted data as well as the
+statistics created with it. You can always deactivate/activate 
+this option by editing the file $HOME/.config/scipion/scipion.conf 
+and setting the variable SCIPION_NOTIFY to False/True respectively.
+
+We understand, of course, that you may not wish to have any 
+information collected from you and we respect your privacy.
+""")
+
+        prompt = get_input("Press <enter> if you don't mind to send USAGE data, otherwise press any key followed by <enter>: ")
+        if prompt == '':
+            Config.set('VARIABLES','SCIPION_NOTIFY','True')
+        print(yellow("Statistics Collection has been set to: %s"%Config.get('VARIABLES','SCIPION_NOTIFY')))
+        print("-----------------------------------------------------------------\n-----------------------------------------------------------------")
+
+def createConf(fpath, ftemplate, remove=[], keep=[], notify=False):
     "Create config file in fpath following the template in ftemplate"
     # Remove from the template the sections in "remove", and if "keep"
     # is used only keep those sections.
@@ -134,6 +181,7 @@ def createConf(fpath, ftemplate, remove=[], keep=[]):
 
     # Read the template configuration file.
     print(yellow("* Creating configuration file: %s" % fpath))
+    print("Please edit it to reflect the configuration of your system.\n")
     cf = ConfigParser()
     cf.optionxform = str  # keep case (stackoverflow.com/questions/1611799)
     assert cf.read(ftemplate) != [], 'Missing file: %s' % ftemplate
@@ -143,16 +191,20 @@ def createConf(fpath, ftemplate, remove=[], keep=[]):
         for section in set(cf.sections()) - set(keep):
             cf.remove_section(section)
 
+
     # Update with our guesses.
     if 'BUILD' in cf.sections():
         for options in [guessJava(), guessMPI()]:
             for key in options:
                 if key in cf.options('BUILD'):
                     cf.set('BUILD', key, options[key])
+    # Collecting Protocol Usage Statistics 
+    elif 'VARIABLES' in cf.sections():
+        checkNotify(cf,notify)
 
     # Create the actual configuration file.
     cf.write(open(fpath, 'w'))
-    print("Please edit it to reflect the configuration of your system.\n")
+    #print("Please edit it to reflect the configuration of your system.\n")
 
 
 def checkPaths(conf):
@@ -196,7 +248,7 @@ def checkPaths(conf):
               "can run: scipion config --overwrite")
 
 
-def checkConf(fpath, ftemplate, remove=[], keep=[], update=False):
+def checkConf(fpath, ftemplate, remove=[], keep=[], update=False,notify=False, compare=False):
     """Check that all the variables in the template are in the config file too"""
     # Remove from the checks the sections in "remove", and if "keep"
     # is used only check those sections.
@@ -221,6 +273,10 @@ def checkConf(fpath, ftemplate, remove=[], keep=[], update=False):
     df = dict([(s, set(cf.options(s))) for s in cf.sections()])
     dt = dict([(s, set(ct.options(s))) for s in ct.sections()])
     # That funny syntax to create the dictionaries works with old pythons.
+
+    if compare:
+        compareConfig(cf, ct, fpath, ftemplate)
+        return
 
     confChanged = False
 
@@ -258,6 +314,8 @@ def checkConf(fpath, ftemplate, remove=[], keep=[], update=False):
                       "parameter to update local config files." % (yellow(s), yellow(o), UPDATE_PARAM))
 
                 if update:
+                    if s=='VARIABLES' and o=='SCIPION_NOTIFY':
+                        checkNotify(ct, notify=notify)
                     # Update config file with missing variable
                     value = ct.get(s, o)
                     cf.set(s, o, value)
@@ -267,17 +325,56 @@ def checkConf(fpath, ftemplate, remove=[], keep=[], update=False):
 
     if update:
         if confChanged:
-            print("Changes detected: writing changes and sorting variables into %s. Please check values." % (fpath))
+            print("Changes detected: writing changes into %s. Please check values." % (fpath))
         else:
-            print("Update requested no changes detected: sorting variables only for %s." % (fpath))
+            print("Update requested no changes detected for %s." % (fpath))
 
-        # Order the content of each section alphabetically
-        for section in cf._sections:
-            cf._sections[section] = collections.OrderedDict(
-                sorted(cf._sections[section].items(), key=lambda t: t[0]))
+        if 'PACKAGES' in cf._sections:
+            # Order the content of packages section alphabetically
+            print("Sorting packages section for %s." %(fpath))
+            cf._sections['PACKAGES'] = collections.OrderedDict(
+                sorted(cf._sections['PACKAGES'].items(), key=lambda t: t[0]))
 
-        with open(fpath, 'wb') as f:
-            cf.write(f)
+        try:
+            with open(fpath, 'wb') as f:
+                cf.write(f)
+        except Exception as e:
+            print("Could not update the config: ", e)
+
+
+def compareConfig(cf, ct,fPath, fTemplate):
+    """ Compare configuration against template values"""
+
+    print(magenta("COMPARING %s to %s" % (fPath, fTemplate)))
+    print(magenta("We expect values to follow the <package>-<version> pattern."
+                  " If you see any value not following this pattern please "
+                  "update it."))
+    # loop through the config
+    for s in cf.sections():
+        # Get the section
+        for variable in cf._sections[s]:
+            # Get values
+            valueInConfig = getConfigVariable(cf, s, variable)
+            valueInTemplate = getConfigVariable(ct, s, variable)
+
+            # Compare value with template
+            compareConfigVariable(s, variable, valueInConfig, valueInTemplate)
+
+
+def getConfigVariable(config, section, variableName):
+    return config._sections[section].get(variableName)
+
+
+def compareConfigVariable(section, variableName, valueInConfig, valueInTemplate):
+
+    if valueInTemplate is None:
+        return
+
+    if valueInConfig != valueInTemplate:
+        print("%s at %s section (%s) differs from the default value in the "
+              "template: %s" % (red(variableName), section, red(valueInConfig),
+                                yellow(valueInTemplate)))
+
 
 def guessJava():
     "Guess the system's Java installation, return a dict with the Java keys"

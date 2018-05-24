@@ -74,28 +74,37 @@ class ProtImportFiles(ProtImport):
                       condition=filesCondition,
                       label="Files directory",
                       help="Directory with the files you want to import.\n\n"
-                           "The path can also contain wildcards to select\n"
-                           "from several folders.\n\n"
-                           "For example:\n"
-                           "  ~/Particles/\n"
-                           "  data/day??_micrographs/")
+                           "The path can also contain wildcards to select"
+                           "from several folders. \n\n"
+                           "Examples:\n"
+                           "  ~/Particles/data/day??_micrographs/\n"
+                           "Each '?' represents one unknown character\n\n"
+                           "  ~/Particles/data/day*_micrographs/\n"
+                           "'*' represents any number of unknown characters\n\n"
+                           "  ~/Particles/data/day#_micrographs/\n"
+                           "'#' represents one digit that will be used as "
+                           "micrograph ID\n\n"
+                           "NOTE: wildcard characters ('*', '?', '#') "
+                           "cannot appear in the actual path.)")
         form.addParam('filesPattern', params.StringParam,
                       label='Pattern', 
                       condition=filesCondition,
                       help="Pattern of the files to be imported.\n\n"
                            "The pattern can contain standard wildcards such as\n"
                            "*, ?, etc, or special ones like ### to mark some\n"
-                           "digits in the filename as ID.")
-
-        form.addParam('copyFiles', params.BooleanParam, default=False, 
+                           "digits in the filename as ID.\n\n"
+                           "NOTE: wildcards and special characters "
+                           "('*', '?', '#', ':', '%') cannot appear in the "
+                           "actual path.")
+        form.addParam('copyFiles', params.BooleanParam, default=False,
                       expertLevel=params.LEVEL_ADVANCED, 
                       label="Copy files?",
-                      help="By default the files are not copied into the\n"
-                           "project to avoid data duplication and to save\n"
-                           "disk space. Instead of copying, symbolic links are\n"
-                           "created pointing to original files. This approach\n"
-                           "has the drawback that if the project is moved to\n"
-                           "another computer, the links need to be restored.\n")
+                      help="By default the files are not copied into the "
+                           "project to avoid data duplication and to save "
+                           "disk space. Instead of copying, symbolic links are "
+                           "created pointing to original files. This approach "
+                           "has the drawback that if the project is moved to "
+                           "another computer, the links need to be restored.")
 
         self._defineImportParams(form)
 
@@ -105,31 +114,32 @@ class ProtImportFiles(ProtImport):
         
         form.addParam('dataStreaming', params.BooleanParam, default=False,
               label="Process data in streaming?",
-              help="Select this option if you want import data as it is\n"
-                   "generated and process on the fly by next protocols."
-                   "In this case the protocol will keep running to check \n"
-                   "new files and will update the output Set, which can \n"
-                   "be used right away by next steps.\n")
-        
-        form.addParam('timeout', params.IntParam, default=7200,
+              help="Select this option if you want import data as it is "
+                   "generated and process on the fly by next protocols. "
+                   "In this case the protocol will keep running to check "
+                   "new files and will update the output Set, which can "
+                   "be used right away by next steps.")
+
+        form.addParam('timeout', params.IntParam, default=43200,
               condition='dataStreaming',
               label="Timeout (secs)",
-              help="Interval of time (in seconds) after which, if no new \n"
-                   "file is detected, the protocol will ends.\n"
-                   "When finished, the output Set will be closed and\n"
-                   "not more data will be added to it. \n")
+              help="Interval of time (in seconds) after which, if no new file "
+                   "is detected, the protocol will end. When finished, "
+                   "the output Set will be closed and no more data will be "
+                   "added to it. \n"
+                    "Note 1:  The default value is  high (12 hours) to avoid "
+                   "the protocol finishes during the aqcuisition of the "
+                   "microscpe. You can also stop it from right click and press "
+                   "STOP_STREAMING.\n"
+                   "Note 2: If you're using individual frames when importing "
+                   "movies, the timeout won't be refreshed until a whole "
+                   "movie is stacked.")
 
         form.addParam('fileTimeout', params.IntParam, default=30,
               condition='dataStreaming',
               label="File timeout (secs)",
-              help="Interval of time (in seconds) after which, if a file \n"
-                   "have not changed, we consider as a new file. \n")
-        
-        form.addParam('endTokenFile', params.StringParam, default=None,
-              condition='dataStreaming',
-              label="End token file",
-              help="Specify an ending file if you want to have more control\n"
-                   "about when to stop the import of files.")
+              help="Interval of time (in seconds) after which, if a file has "
+                   "not changed, we consider it as a new file. \n")
 
     def _defineImportParams(self, form):
         """ Override to add options related to the different types
@@ -189,14 +199,17 @@ class ProtImportFiles(ProtImport):
         else:
             fullPattern = filesPath
 
-
         pattern = expandPattern(fullPattern.replace("$", ""))
         match = re.match('[^#]*(#+)[^#]*', pattern)
         
         if match is not None:
             g = match.group(1)
             n = len(g)
-            self._idRegex = re.compile(pattern.replace(g, '(%s)' % ('\d'*n)))
+            # prepare regex pattern - place ids, handle *, handle ?
+            idregex = pattern.replace(g, '(%s)' % ('[0-9]'*n))
+            idregex = idregex.replace('*','.*')
+            idregex = idregex.replace('?', '.')
+            self._idRegex = re.compile(idregex)
             pattern = pattern.replace(g, '[0-9]'*n)
         
         return pattern   
@@ -207,6 +220,7 @@ class ProtImportFiles(ProtImport):
         """
         if pattern is None:
             pattern = self.getPattern()
+
         filePaths = glob(pattern)
         filePaths.sort()
         self.numberOfFiles = len(filePaths)
@@ -249,7 +263,9 @@ class ProtImportFiles(ProtImport):
                 if match is None:
                     raise Exception("File '%s' doesn't match the pattern '%s'"
                                     % (fileName, self.getPattern()))
+
                 fileId = int(match.group(1))
+
             else:
                 fileId = None
                 

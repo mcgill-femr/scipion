@@ -27,7 +27,9 @@
 
 import sys
 import os
-from os.path import basename, exists, isdir, join, dirname
+import re
+
+from os.path import basename, exists, isdir
 import time
 from datetime import timedelta, datetime
 
@@ -92,8 +94,12 @@ class ProtImportImages(ProtImportFiles):
     
     #--------------------------- INSERT functions ------------------------------
     def _insertAllSteps(self):
-        
-        if self.dataStreaming:
+
+        # Only the import movies has property 'inputIndividualFrames'
+        # so let's query in a non-intrusive manner
+        inputIndividualFrames = getattr(self, 'inputIndividualFrames', False)
+
+        if self.dataStreaming or inputIndividualFrames:
             funcName = 'importImagesStreamStep' 
         else:
             funcName = 'importImagesStep'
@@ -128,9 +134,17 @@ class ProtImportImages(ProtImportFiles):
         img.setAcquisition(acquisition)
         n = 1
         copyOrLink = self.getCopyOrLink()
+        alreadyWarned = False # Use this flag to warn only once
 
         for i, (fileName, fileId) in enumerate(self.iterFiles()):
-            dst = self._getExtraPath(basename(fileName))
+            uniqueFn = self._getUniqueFileName(fileName)
+            dst = self._getExtraPath(uniqueFn)
+            if ' ' in dst:
+                if not alreadyWarned:
+                    self.warning('Warning: your file names have white spaces!')
+                    self.warning('Removing white spaces from copies/symlinks.')
+                    alreadyWarned = True
+                dst = dst.replace(' ', '')
             copyOrLink(fileName, dst)
             # Handle special case of Imagic images, copying also .img or .hed
             self.handleImgHed(copyOrLink, fileName, dst)
@@ -148,8 +162,9 @@ class ProtImportImages(ProtImportFiles):
             else:
                 img.setObjId(fileId)
                 img.setFileName(dst)
-                # Fill the micName if img is a Micrograph.
-                self._fillMicName(img, fileName)
+                # Fill the micName if img is either Micrograph or Movie
+                uniqueFn = uniqueFn.replace(' ', '')
+                self._fillMicName(img, uniqueFn)
                 self._addImageToSet(img, imgSet)
 
             outFiles.append(dst)
@@ -166,35 +181,29 @@ class ProtImportImages(ProtImportFiles):
         
         return outFiles
 
-    def _addImageToSet(self, img, imgSet):
-        """ Add an image to a set, check if the first image to handle
-         some special condition to read dimensions such as .txt or compressed
-         movie files.
-        """
-        if imgSet.isEmpty():
-            self._setupFirstImage(img, imgSet)
-        imgSet.append(img)
-
-    def _setupFirstImage(self, img, imgSet):
-        pass
-
-    def iterNewInputFiles(self):
-        """ Iterate over input files that have not been imported.
-        This function uses the self.importedFiles dict.
-        """
-        for fileName, fileId in self.iterFiles():
-            # If file already imported, skip it
-            if fileName not in self.importedFiles:
-                yield fileName, fileId
-
-    def importImagesStreamStep(self, pattern, voltage, sphericalAberration, 
+    def importImagesStreamStep(self, pattern, voltage, sphericalAberration,
                          amplitudeContrast, magnification):
         """ Copy images matching the filename pattern
         Register other parameters.
         """
         self.info("Using pattern: '%s'" % pattern)
-        createSetFunc = getattr(self, '_create' + self._outputClassName)
-        imgSet = createSetFunc()
+
+        imgSet = self._getOutputSet() if self.isContinued() else None
+        
+        self.importedFiles = set()
+        if imgSet is None:
+            createSetFunc = getattr(self, '_create' + self._outputClassName)
+            imgSet = createSetFunc()
+        elif imgSet.getSize() > 0: # in case of continue
+            imgSet.loadAllProperties()
+            self._fillImportedFiles(imgSet)
+            imgSet.enableAppend()
+        
+        pointerExcludedMovs = getattr(self, 'moviesToExclude', None)
+        if pointerExcludedMovs is not None:
+            excludedMovs = pointerExcludedMovs.get()
+            self._fillImportedFiles(excludedMovs)
+
         imgSet.setIsPhaseFlipped(self.haveDataBeenPhaseFlipped.get())
         acquisition = imgSet.getAcquisition()
         self.fillAcquisition(acquisition)
@@ -207,32 +216,46 @@ class ProtImportImages(ProtImportFiles):
         n = 1
         copyOrLink = self.getCopyOrLink()
         outputName = self._getOutputName()
+        alreadyWarned = False  # Use this flag to warn only once
 
         finished = False
-        self.importedFiles = set()
         # this is only used when creating stacks from frame files
         self.createdStacks = set()
 
         i = 0
         lastDetectedChange = datetime.now()
-        timeout = timedelta(seconds=self.timeout.get())
-        fileTimeout = timedelta(seconds=self.fileTimeout.get())
+
+        # Ignore the timeout variables if we are not really in streaming mode
+        if self.dataStreaming:
+            timeout = timedelta(seconds=self.timeout.get())
+            fileTimeout = timedelta(seconds=self.fileTimeout.get())
+        else:
+            timeout = timedelta(seconds=5)
+            fileTimeout = timedelta(seconds=5)
 
         while not finished:
             time.sleep(3) # wait 3 seconds before check for new files
             someNew = False
             someAdded = False
 
-            for fileName, fileId in self.iterNewInputFiles():
+            for fileName, uniqueFn, fileId in self.iterNewInputFiles():
                 someNew = True
-
                 if self.fileModified(fileName, fileTimeout):
                     continue
-
-                self.info('Importing file: %s' % fileName)
-                self.importedFiles.add(fileName)
-                dst = self._getExtraPath(basename(fileName))
+                
+                dst = self._getExtraPath(uniqueFn)
+                self.importedFiles.add(uniqueFn)
+                if ' ' in dst:
+                    if not alreadyWarned:
+                        self.warning('Warning: your file names have white spaces!')
+                        self.warning('Removing white spaces from copies/symlinks.')
+                        alreadyWarned = True
+                    dst = dst.replace(' ', '')
                 copyOrLink(fileName, dst)
+
+                self.debug('Importing file: %s' % fileName)
+                self.debug("uniqueFn: %s" % uniqueFn)
+                self.debug("dst Fn: %s" % dst)
 
                 if self._checkStacks:
                     _, _, _, n = imgh.getDimensions(dst)
@@ -252,8 +275,10 @@ class ProtImportImages(ProtImportFiles):
                 else:
                     img.setObjId(fileId)
                     img.setFileName(dst)
-                    # Fill the micName if img is a Micrograph.
-                    self._fillMicName(img, fileName)
+                    # Fill the micName if img is either a Micrograph or a Movie
+                    uniqueFn = uniqueFn.replace(' ', '')
+                    self.debug("FILENAME TO fillMicName: %s" % uniqueFn)
+                    self._fillMicName(img, uniqueFn)
                     self._addImageToSet(img, imgSet)
 
                 outFiles.append(dst)
@@ -274,7 +299,11 @@ class ProtImportImages(ProtImportFiles):
                 # inactivity time elapsed (from last event to now) and
                 # if it is greater than the defined timeout, we conclude
                 # the import and close the output set
-                finished = now - lastDetectedChange > timeout
+                # Another option is to check if the protocol have some
+                # special stop condition, this can be used to manually stop
+                # some protocols such as import movies
+                finished = (now - lastDetectedChange > timeout or
+                            self.streamingHasFinished())
                 self.debug("Checking if finished:")
                 self.debug("   Now - Last Change: %s"
                            % pwutils.prettyDelta(now - lastDetectedChange))
@@ -286,13 +315,25 @@ class ProtImportImages(ProtImportFiles):
 
         self._updateOutputSet(outputName, imgSet,
                               state=imgSet.STREAM_CLOSED)
+
+        self._cleanUp()
+
         return outFiles
-    
-    #--------------------------- INFO functions --------------------------------
+
+    @classmethod
+    def validatePath(cls, pathstr):
+        errors = []
+        badChars = ['%', '#', ':']
+        if any(bc in pathstr for bc in badChars):
+            errors.append("File name can't contain these characters:")
+            errors.append('  %s' % " ".join(badChars))
+        return errors
+
+        #--------------------------- INFO functions ----------------------------
     def _validateImages(self):
         errors = []
         ih = ImageHandler()
-        
+
         for imgFn, _ in self.iterFiles():
             
             if isdir(imgFn):
@@ -304,20 +345,23 @@ class ProtImportImages(ProtImportFiles):
                 # Exceptions: 
                 #  - Compressed movies (bz2 or tbz extensions)
                 #  - Importing in streaming, since files may be incomplete
-                if (not self.dataStreaming and 
+                #  - Bad characters in path [':' ,'%', '#']
+                if (not self.dataStreaming and
                     not (imgFn.endswith('bz2') or 
-                         imgFn.endswith('tbz') or 
-                         ih.isImageFile(imgFn))): 
-                    if not errors: # if empty add the first line
+                         imgFn.endswith('tbz') or
+			 ih.isImageFile(imgFn))):
+                    if not errors:  # if empty add the first line
                         errors.append("Error reading the following images:")
                     errors.append('  %s' % imgFn)
+                    errors += ProtImportImages.validatePath(imgFn)
         
         return errors
         
     def _validate(self):
         errors = ProtImportFiles._validate(self)
+
         # Check that files are proper EM images, only when importing from
-        # files and not using streamming. In the later case we could
+        # files and not using streaming. In the later case we could
         # have partial files not completed.
         if (self.importFrom == self.IMPORT_FROM_FILES and
             not self.dataStreaming):
@@ -331,15 +375,17 @@ class ProtImportImages(ProtImportFiles):
         if outputSet is None:
             summary.append("Output " + self._outputClassName + " not ready yet.") 
             if self.copyFiles:
-                summary.append("*Warning*: You select to copy files into your project.\n"
-                               "This will make another copy of your data and may take \n"
-                               "more time to import. ")
+                summary.append("*Warning*: You select to copy files into your "
+                               "project.\n This will make another copy of "
+                               "your data and may take more time to import.")
         else:
             summary.append("*%d* %s imported from %s" % (outputSet.getSize(),
                                                          self._getOutputItemName(),
                                                          self.getPattern()))
-            summary.append("Is the data phase flipped : %s" % outputSet.isPhaseFlipped())
-            summary.append("Sampling rate : *%0.2f* Å/px" % outputSet.getSamplingRate())
+            summary.append("Is the data phase flipped : %s"
+                           % outputSet.isPhaseFlipped())
+            summary.append("Sampling rate : *%0.2f* Å/px"
+                           % outputSet.getSamplingRate())
         
         return summary
     
@@ -347,18 +393,22 @@ class ProtImportImages(ProtImportFiles):
         methods = []
         outputSet = self._getOutputSet()
         if outputSet is not None:
-            methods.append("*%d* %s were imported with a sampling rate of "
-                           "*%0.2f* Å/px (microscope voltage %d kV, "
-                           "magnification %dx). Output set is %s."
+            methods.append(u"*%d* %s were imported with a sampling rate of "
+                           u"*%0.2f* Å/px (microscope voltage %d kV, "
+                           u"magnification %dx). Output set is %s."
                            % (outputSet.getSize(), self._getOutputItemName(),
                               outputSet.getSamplingRate(),
                               round(self.voltage.get()),
                               round(self.magnification.get()),
                               self.getObjectTag(self._getOutputName())))
-            
         return methods
     
     #--------------------------- UTILS functions -------------------------------
+    def _cleanUp(self):
+        """Empty method to override in child classes. E.g. to close socket in
+        ProtImportMovies with streamingSocket."""
+        pass
+
     def getFiles(self):
         outputSet = self._getOutputSet()
         if outputSet is not None:
@@ -412,15 +462,47 @@ class ProtImportImages(ProtImportFiles):
                     result = acq
 
         return result
+    
+    def _addImageToSet(self, img, imgSet):
+        """ Add an image to a set, check if the first image to handle
+         some special condition to read dimensions such as .txt or compressed
+         movie files.
+        """
+        if imgSet.isEmpty():
+            self._setupFirstImage(img, imgSet)
+        imgSet.append(img)
 
-    def _fillMicName(self, img, filename):
+    def _setupFirstImage(self, img, imgSet):
+        pass
+
+    def iterNewInputFiles(self):
+        """ Iterate over input files that have not been imported.
+        This function uses the self.importedFiles dict.
+        """
+        for fileName, fileId in self.iterFiles():
+            # If file already imported, skip it
+            uniqueFn = self._getUniqueFileName(fileName)
+            if uniqueFn not in self.importedFiles:
+                yield fileName, uniqueFn, fileId
+
+    def _fillImportedFiles(self, imgSet):
+        from pyworkflow.em import SetOfMicrographsBase
+        if isinstance(imgSet, SetOfMicrographsBase):
+            for img in imgSet:
+                self.importedFiles.add(img.getMicName())
+
+    def _fillMicName(self, img, uniqueFn):
         from pyworkflow.em import Micrograph
         if isinstance(img, Micrograph):
-            filePaths = self.getMatchFiles()
-            commPath = pwutils.commonPath(filePaths)
-            micName = filename.replace(commPath + "/", "").replace("/", "_")
-            img.setMicName(micName)
+            img.setMicName(uniqueFn)
             
+    def _getUniqueFileName(self, filename, filePaths=None):
+        if filePaths is None:
+            filePaths = [re.split(r'[$*#?]', self.getPattern())[0]]
+        
+        commPath = pwutils.commonPath(filePaths)
+        return filename.replace(commPath + "/", "").replace("/", "_")
+
     def handleImgHed(self, copyOrLink, src, dst):
         """ Check the special case of Imagic files format
         composed by two files: .hed and .img.
@@ -448,3 +530,32 @@ class ProtImportImages(ProtImportFiles):
     def _createOutputSet(self):
         """ Create the output set that will be populated as more data is
         imported. """
+
+    # --------------- Streaming special functions -----------------------
+    def _getStopStreamingFilename(self):
+        return self._getExtraPath("STOP_STREAMING.TXT")
+
+    def getActions(self):
+        """ This method will allow that the 'Stop import' action to appears
+        in the GUI when the user right-click in the protocol import box.
+        It will allow a user to manually stop the streaming.
+        """
+        # Only allow to stop if running and in streaming mode
+        if self.dataStreaming and self.isRunning():
+            return [('STOP STREAMING', self.stopImport)]
+        else:
+            return []
+
+    def stopImport(self):
+        """ Since the actual protocol that is running is in a different
+        process that the one that this method will be invoked from the GUI,
+        we will use a simple mechanism to place an special file to stop
+        the streaming.
+        """
+        # Just place an special file into the run folder
+        f = open(self._getStopStreamingFilename(), 'w')
+        f.close()
+
+    def streamingHasFinished(self):
+        return os.path.exists(self._getStopStreamingFilename())
+    

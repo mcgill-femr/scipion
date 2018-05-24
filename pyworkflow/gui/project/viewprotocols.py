@@ -26,16 +26,17 @@
 # **************************************************************************
 from __future__ import print_function
 
-import time
 
 INIT_REFRESH_SECONDS = 3
 
 """
 View with the protocols inside the main project window.
 """
-
 import os
 import pickle
+import json
+import re
+import tempfile
 from collections import OrderedDict
 import Tkinter as tk
 import ttk
@@ -45,17 +46,21 @@ import pyworkflow.utils as pwutils
 import pyworkflow.protocol as pwprot
 import pyworkflow.gui as pwgui
 import pyworkflow.em as em
-from pyworkflow.config import isAFinalProtocol
+from pyworkflow.config import isAFinalProtocol, getProtocolTag, \
+    PROTOCOL_DISABLED_TAG, PROTOCOL_TAG
 from pyworkflow.em.wizard import ListTreeProvider
 from pyworkflow.gui.dialog import askColor, ListDialog
 from pyworkflow.viewer import DESKTOP_TKINTER, ProtocolViewer
-from pyworkflow.utils.properties import Message, Icon, Color
+from pyworkflow.utils.properties import Message, Icon, Color, KEYSYM
 
 from constants import STATUS_COLORS
+from pyworkflow.gui.project.utils import getStatusColorFromNode
 
 DEFAULT_BOX_COLOR = '#f8f8f8'
 
 ACTION_EDIT = Message.LABEL_EDIT
+ACTION_RENAME = Message.LABEL_RENAME
+ACTION_SELECT_TO = Message.LABEL_SELECT_TO
 ACTION_COPY = Message.LABEL_COPY
 ACTION_DELETE = Message.LABEL_DELETE
 ACTION_REFRESH = Message.LABEL_REFRESH
@@ -83,6 +88,7 @@ VIEW_TREE_SMALL = 2
 
 ActionIcons = {
     ACTION_EDIT: Icon.ACTION_EDIT,
+    ACTION_SELECT_TO: Icon.ACTION_SELECT_TO,
     ACTION_COPY: Icon.ACTION_COPY,
     ACTION_DELETE: Icon.ACTION_DELETE,
     ACTION_REFRESH: Icon.ACTION_REFRESH,
@@ -119,7 +125,6 @@ def populateTree(self, tree, treeItems, prefix, obj, subclassedDict, level=0):
 
         if tag == 'protocol' and text == 'default':
             if prot is None:
-
                 print("Protocol className '%s' not found!!!. \n"
                       "Fix your config/protocols.conf configuration."
                       % protClassName)
@@ -175,17 +180,22 @@ class RunsTreeProvider(pwgui.tree.ProjectRunsTreeProvider):
         else:
             status = None
 
+        stoppable = status in [pwprot.STATUS_RUNNING, pwprot.STATUS_SCHEDULED, 
+                               pwprot.STATUS_LAUNCHED] 
+
         return [(ACTION_EDIT, single),
+                (ACTION_RENAME, single),
                 (ACTION_COPY, True),
                 (ACTION_DELETE, status != pwprot.STATUS_RUNNING),
                 (ACTION_STEPS, single),
                 (ACTION_BROWSE, single),
                 (ACTION_DB, single),
-                (ACTION_STOP, status == pwprot.STATUS_RUNNING and single),
+                (ACTION_STOP, stoppable and single),
                 (ACTION_EXPORT, not single),
                 (ACTION_COLLAPSE, single and status and expanded),
                 (ACTION_EXPAND, single and status and not expanded),
-                (ACTION_LABELS, True)
+                (ACTION_LABELS, True),
+                (ACTION_SELECT_TO, True)
                 ]
 
     def getObjectActions(self, obj):
@@ -195,11 +205,15 @@ class RunsTreeProvider(pwgui.tree.ProjectRunsTreeProvider):
                 text = actionLabel
                 action = actionLabel
                 actionLabel = (text, lambda: self.actionFunc(action),
-                     ActionIcons.get(action, None))
+                               ActionIcons.get(action, None))
             return actionLabel
 
         actions = [addAction(a)
                    for a, cond in self.getActionsFromSelection() if cond]
+
+        if hasattr(obj, 'getActions'):
+            for text, action in obj.getActions():
+                actions.append((text, action, None))
 
         return actions
 
@@ -270,7 +284,8 @@ class StepsWindow(pwgui.browser.BrowserWindow):
 
         toolbar = tk.Frame(self.root)
         toolbar.grid(row=0, column=0, sticky='nw', padx=5, pady=5)
-        btn = tk.Label(toolbar, text="Tree", image=self.getImage(Icon.RUNS_TREE),
+        btn = tk.Label(toolbar, text="Tree",
+                       image=self.getImage(Icon.RUNS_TREE),
                        compound=tk.LEFT, cursor='hand2')
         btn.bind('<Button-1>', self._showTree)
         btn.grid(row=0, column=0, sticky='nw')
@@ -278,7 +293,6 @@ class StepsWindow(pwgui.browser.BrowserWindow):
         browser = pwgui.browser.ObjectBrowser(self.root, provider,
                                               showPreviewTop=False)
         self.setBrowser(browser, row=1, column=0)
-
 
     # noinspection PyUnusedLocal
     def _showTree(self, e=None):
@@ -340,12 +354,18 @@ class SearchProtocolWindow(pwgui.Window):
             if isAFinalProtocol(prot, key):
                 label = prot.getClassLabel().lower()
                 if keyword in label:
-                    protList.append((key, label))
+                    protList.append((key,
+                                     label,
+                                     prot.isInstalled()))
 
+        # Sort by label
         protList.sort(key=lambda x: x[1])  # sort by label
-        for key, label in protList:
+
+        for key, label, installed in protList:
+            tag = getProtocolTag(installed)
+            if not installed: label += " (not installed)"
             self._resultsTree.insert('', 'end', key,
-                                     text=label, tags=('protocol'))
+                                     text=label, tags=(tag))
 
 
 class RunIOTreeProvider(pwgui.tree.TreeProvider):
@@ -388,7 +408,8 @@ class RunIOTreeProvider(pwgui.tree.TreeProvider):
                     self.inputParentDict[key] = inputObj
                 inputs.append(attr)
 
-            outputs = [attr for _, attr in self.protocol.iterOutputAttributes(em.EMObject)]
+            outputs = [attr for _, attr in
+                       self.protocol.iterOutputAttributes(em.EMObject)]
             self.outputStr = pwobj.String(Message.LABEL_OUTPUT)
             objs = inputParents + inputs + [self.outputStr] + outputs
         return objs
@@ -554,12 +575,15 @@ class ProtocolsView(tk.Frame):
         self._lastSelectedProtId = None
         self._lastStatus = None
         self.selectingArea = False
+        self._lastRightClickPos = None  # Keep last right-clicked position
 
         self.style = ttk.Style()
         self.root.bind("<F5>", self.refreshRuns)
         self.root.bind("<Control-f>", self._findProtocol)
         self.root.bind("<Control-a>", self._selectAllProtocols)
         self.root.bind("<Control-t>", self._toggleColorScheme)
+        if pwutils.envVarOn('SCIPION_DEBUG'):
+            self.root.bind("<Control-i>", self._inspectProtocols)
 
         # To bind key press to methods
         # Listen to any key: send event to keyPressed method
@@ -567,7 +591,7 @@ class ProtocolsView(tk.Frame):
         self.keybinds = dict()
 
         # Register key binds
-        self._bindKeyPress('Delete', self._onDelPressed)
+        self._bindKeyPress(KEYSYM.DELETE, self._onDelPressed)
 
         self.__autoRefresh = None
         self.__autoRefreshCounter = INIT_REFRESH_SECONDS  # start by 3 secs
@@ -594,7 +618,6 @@ class ProtocolsView(tk.Frame):
             Right: containing the Runs list
         """
         p = tk.PanedWindow(self, orient=tk.HORIZONTAL, bg='white')
-
         bgColor = Color.LIGHT_GREY_COLOR
         # Left pane, contains Protocols Pane
         leftFrame = tk.Frame(p, bg=bgColor)
@@ -612,7 +635,8 @@ class ProtocolsView(tk.Frame):
         # a Action Buttons TOOLBAR in the top
         # and another vertical Pane with:
         # Runs History (at Top)
-        # Sectected run info (at Bottom)
+
+        # Selected run info (at Bottom)
         rightFrame = tk.Frame(p, bg='white')
         rightFrame.columnconfigure(0, weight=1)
         rightFrame.rowconfigure(1, weight=1)
@@ -682,7 +706,9 @@ class ProtocolsView(tk.Frame):
                          font=self.windows.fontBold)
         label.grid(row=1, column=0, sticky='nw', padx=(15, 0))
 
-        hView = {'sci-open': self._viewObject}
+        hView = {'sci-open': self._viewObject,
+                 'sci-bib': self._bibExportClicked}
+
         self.summaryText = pwgui.text.TaggedText(dframe, width=40, height=5,
                                                  bg='white', bd=0,
                                                  font=self.windows.font,
@@ -692,9 +718,19 @@ class ProtocolsView(tk.Frame):
         # Method tab
         mframe = tk.Frame(tab)
         pwgui.configureWeigths(mframe)
+        # Methods text box
         self.methodText = pwgui.text.TaggedText(mframe, width=40, height=15,
                                                 bg='white', handlers=hView)
         self.methodText.grid(row=0, column=0, sticky='news')
+        # Reference export button
+        # btnExportBib = pwgui.Button(mframe, text=Message.LABEL_BIB_BTN,
+        #                             fg='white', bg=Color.RED_COLOR,
+        #                             image=self.getImage(Icon.ACTION_BROWSE),
+        #                             compound=tk.LEFT,
+        #                             activeforeground='white',
+        #                             activebackground='#A60C0C',
+        #                             command=self._bibExportClicked)
+        # btnExportBib.grid(row=2, column=0, sticky='w', padx=0)
 
         # Logs
         ologframe = tk.Frame(tab)
@@ -714,15 +750,16 @@ class ProtocolsView(tk.Frame):
         #         tab.add(slogframe, text=Message.LABEL_LOGS_SCIPION)
         tab.grid(row=1, column=0, sticky='news')
 
-        v.add(runsFrame, weight=3)
-        v.add(infoFrame, weight=1)
+        v.add(runsFrame, weight=1)
+        v.add(infoFrame, weight=20)
         v.grid(row=1, column=0, sticky='news')
 
         # Add sub-windows to PanedWindows
-        p.add(leftFrame, padx=5, pady=5, sticky='news')
-        p.add(rightFrame, padx=5, pady=5)
-        p.paneconfig(leftFrame, minsize=300)
-        p.paneconfig(rightFrame, minsize=400)
+        p.add(leftFrame, padx=0, pady=0, sticky='news')
+        p.add(rightFrame, padx=0, pady=0)
+        p.paneconfig(leftFrame, minsize=5)
+        leftFrame.config(width=235)
+        p.paneconfig(rightFrame, minsize=10)
 
         return p
 
@@ -771,8 +808,9 @@ class ProtocolsView(tk.Frame):
             self.__autoRefreshCounter = INIT_REFRESH_SECONDS  # start by 3 secs
             if self.__autoRefresh:
                 self.runsTree.after_cancel(self.__autoRefresh)
-                self.__autoRefresh = self.runsTree.after(self.__autoRefreshCounter * 1000,
-                                                         self._automaticRefreshRuns)
+                self.__autoRefresh = self.runsTree.after(
+                    self.__autoRefreshCounter * 1000,
+                    self._automaticRefreshRuns)
 
     # noinspection PyUnusedLocal
     def _automaticRefreshRuns(self, e=None):
@@ -848,9 +886,13 @@ class ProtocolsView(tk.Frame):
         viewChoices = ['List', 'Tree', 'Tree - small']
         self.switchCombo = pwgui.widgets.ComboBox(parent, width=10,
                                                   choices=viewChoices,
-                                                  values=[VIEW_LIST, VIEW_TREE, VIEW_TREE_SMALL],
-                                                  initial=viewChoices[self.runsView],
-                                                  onChange=lambda e: self._runActionClicked(ACTION_SWITCH_VIEW))
+                                                  values=[VIEW_LIST, VIEW_TREE,
+                                                          VIEW_TREE_SMALL],
+                                                  initial=viewChoices[
+                                                      self.runsView],
+                                                  onChange=lambda
+                                                      e: self._runActionClicked(
+                                                      ACTION_SWITCH_VIEW))
         self.switchCombo.grid(row=0, column=1)
 
     def _updateActionToolbar(self):
@@ -863,8 +905,11 @@ class ProtocolsView(tk.Frame):
             # If action present (set color is not in the toolbar but in the context menu)
             if self.actionButtons.has_key(actionToDisplay):
                 if condition:
-                    self.actionButtons[actionToDisplay].grid(row=0, column=column, sticky='sw',
-                                                             padx=(0, 5), ipadx=0)
+                    self.actionButtons[actionToDisplay].grid(row=0,
+                                                             column=column,
+                                                             sticky='sw',
+                                                             padx=(0, 5),
+                                                             ipadx=0)
                 else:
                     self.actionButtons[actionToDisplay].grid_remove()
             else:
@@ -880,9 +925,17 @@ class ProtocolsView(tk.Frame):
                              fieldbackground=background)
         t = pwgui.tree.Tree(parent, show='tree', style='W.Treeview')
         t.column('#0', minwidth=300)
-        t.tag_configure('protocol', image=self.getImage('python_file.gif'))
-        t.tag_bind('protocol', '<Double-1>', self._protocolItemClick)
-        t.tag_bind('protocol', '<Return>', self._protocolItemClick)
+        # Protocol nodes
+        t.tag_configure(PROTOCOL_TAG, image=self.getImage('python_file.gif'))
+        t.tag_bind(PROTOCOL_TAG, '<Double-1>', self._protocolItemClick)
+        t.tag_bind(PROTOCOL_TAG, '<Return>', self._protocolItemClick)
+
+        # Disable protocols (not installed) are allowed to be added.
+        t.tag_configure(PROTOCOL_DISABLED_TAG, image=self.getImage('prot_disabled.gif'))
+        t.tag_bind(PROTOCOL_DISABLED_TAG, '<Double-1>', self._protocolItemClick)
+        t.tag_bind(PROTOCOL_DISABLED_TAG, '<Return>', self._protocolItemClick)
+
+
         t.tag_configure('protocol_base', image=self.getImage('class_obj.gif'))
         t.tag_configure('protocol_group', image=self.getImage('class_obj.gif'))
         t.tag_configure('section', font=self.windows.fontBold)
@@ -967,7 +1020,9 @@ class ProtocolsView(tk.Frame):
     def createRunsGraph(self, parent):
         self.runsGraphCanvas = pwgui.Canvas(parent, width=400, height=400,
                                             tooltipCallback=self._runItemTooltip,
-                                            tooltipDelay=1000, name=ProtocolsView.RUNS_CANVAS_NAME, takefocus=True,
+                                            tooltipDelay=1000,
+                                            name=ProtocolsView.RUNS_CANVAS_NAME,
+                                            takefocus=True,
                                             highlightthickness=0)
 
         self.runsGraphCanvas.onClickCallback = self._runItemClick
@@ -975,6 +1030,7 @@ class ProtocolsView(tk.Frame):
         self.runsGraphCanvas.onRightClickCallback = self._runItemRightClick
         self.runsGraphCanvas.onControlClickCallback = self._runItemControlClick
         self.runsGraphCanvas.onAreaSelected = self._selectItemsWithinArea
+        self.runsGraphCanvas.onMiddleMouseClickCallback = self._runItemMiddleClick
 
         parent.grid_columnconfigure(0, weight=1)
         parent.grid_rowconfigure(0, weight=1)
@@ -1022,7 +1078,7 @@ class ProtocolsView(tk.Frame):
         nodeText = self._getNodeText(node)
 
         # Get status color
-        statusColor = self._getStatusColor(node)
+        statusColor = getStatusColorFromNode(node)
 
         # Get the box color (depends on color mode: label or status)
         boxColor = self._getBoxColor(nodeInfo, statusColor, node)
@@ -1046,61 +1102,74 @@ class ProtocolsView(tk.Frame):
 
     def _getBoxColor(self, nodeInfo, statusColor, node):
 
-        # If the color has to go to the box
-        if self.settings.statusColorMode():
-            boxColor = statusColor
+        try:
 
-        elif self.settings.ageColorMode():
+            # If the color has to go to the box
+            if self.settings.statusColorMode():
+                boxColor = statusColor
 
-            if node.run:
+            elif self.settings.ageColorMode():
 
-                # Get the latest activity timestamp
-                ts = node.run.getObjCreation().datetime(fs=False)
+                if node.run:
 
-                if node.run.initTime.hasValue():
-                    ts = node.run.initTime.datetime()
+                    # Project elapsed time
+                    elapsedTime = node.run.getProject().getElapsedTime()
+                    creationTime = node.run.getProject().getCreationTime()
 
-                if node.run.endTime.hasValue():
+                    # Get the latest activity timestamp
                     ts = node.run.endTime.datetime()
 
-                age = dt.datetime.now() - ts
+                    if elapsedTime is None or creationTime is None or ts is None:
+                        boxColor = DEFAULT_BOX_COLOR
 
-                boxColor = self._ageColor('#6666ff', age.days * 24)
-            else:
-                boxColor = DEFAULT_BOX_COLOR
+                    else:
 
-        # ... box is for the labels.
-        elif self.settings.labelsColorMode():
-            # If there is only one label use the box for the color.
-            if self._getLabelsCount(nodeInfo) == 1:
+                        # tc closer to the end are younger
+                        protAge = ts - creationTime
 
-                labelId = nodeInfo.getLabels()[0]
-                label = self.settings.getLabels().getLabel(labelId)
-
-                # If there is no label (it has been deleted)
-                if label is None:
-                    nodeInfo.getLabels().remove(labelId)
-                    boxColor = DEFAULT_BOX_COLOR
+                        boxColor = self._ageColor('#6666ff', elapsedTime,
+                                                  protAge)
                 else:
-                    boxColor = label.getColor()
+                    boxColor = DEFAULT_BOX_COLOR
 
+            # ... box is for the labels.
+            elif self.settings.labelsColorMode():
+                # If there is only one label use the box for the color.
+                if self._getLabelsCount(nodeInfo) == 1:
+
+                    labelId = nodeInfo.getLabels()[0]
+                    label = self.settings.getLabels().getLabel(labelId)
+
+                    # If there is no label (it has been deleted)
+                    if label is None:
+                        nodeInfo.getLabels().remove(labelId)
+                        boxColor = DEFAULT_BOX_COLOR
+                    else:
+                        boxColor = label.getColor()
+
+                else:
+                    boxColor = DEFAULT_BOX_COLOR
             else:
                 boxColor = DEFAULT_BOX_COLOR
-        else:
-            boxColor = DEFAULT_BOX_COLOR
 
-        return boxColor
+            return boxColor
+        except Exception as e:
+            return DEFAULT_BOX_COLOR
 
     @staticmethod
-    def _ageColor(rgbColor, ageInDays):
+    def _ageColor(rgbColor, projectAge, protocolAge):
 
-        if ageInDays > 255: ageInDays = 255
+        #  Get the ratio
+        ratio = protocolAge.seconds / float(projectAge.seconds)
 
-        # Mek it a percentage: 1 = 100% white, 0 = same rgbColor
-        ageInDays /= 255.
+        # Invert direction: older = white = 100%, newest = rgbColor = 0%
+        ratio = 1 - ratio
+
+        # There are cases coming with protocols older than the project.
+        ratio = 0 if ratio < 0 else ratio
 
         return pwutils.rgb_to_hex(pwutils.lighter(pwutils.hex_to_rgb(rgbColor),
-                                                  ageInDays))
+                                                  ratio))
 
     @staticmethod
     def _getLabelsCount(nodeInfo):
@@ -1116,7 +1185,8 @@ class ProtocolsView(tk.Frame):
         # Show the status as a circle in the top right corner
         if not self.settings.statusColorMode():
             # Option: Status item.
-            (topLeftX, topLeftY, bottomRightX, bottomRightY) = self.runsGraphCanvas.bbox(item.id)
+            (topLeftX, topLeftY, bottomRightX,
+             bottomRightY) = self.runsGraphCanvas.bbox(item.id)
             statusSize = 10
             statusX = bottomRightX - (statusSize + 3)
             statusY = topLeftY + 3
@@ -1128,7 +1198,8 @@ class ProtocolsView(tk.Frame):
         else:
             # Show a black circle if there is any label
             if self._getLabelsCount(item.nodeInfo) > 0:
-                (topLeftX, topLeftY, bottomRightX, bottomRightY) = self.runsGraphCanvas.bbox(item.id)
+                (topLeftX, topLeftY, bottomRightX,
+                 bottomRightY) = self.runsGraphCanvas.bbox(item.id)
                 statusSize = 10
                 statusX = bottomRightX - (statusSize + 3)
                 statusY = topLeftY + 3
@@ -1136,15 +1207,6 @@ class ProtocolsView(tk.Frame):
                 pwgui.Oval(self.runsGraphCanvas, statusX, statusY, statusSize,
                            color='black', anchor=item)
 
-    @staticmethod
-    def _getStatusColor(node):
-
-        # If it is a run node (not PROJECT)
-        if node.run:
-            status = node.run.status.get(pwprot.STATUS_FAILED)
-            return STATUS_COLORS[status]
-        else:
-            return '#ADD8E6'  # Light blue
 
     def _getNodeText(self, node):
 
@@ -1160,6 +1222,8 @@ class ProtocolsView(tk.Frame):
                 nodeText = node.getName() + expandedStr
             else:
                 nodeText = nodeText + expandedStr + '\n' + node.run.getStatusMessage()
+                if node.run.summaryWarnings:
+                    nodeText += u' \u26a0'
 
         return nodeText
 
@@ -1169,7 +1233,8 @@ class ProtocolsView(tk.Frame):
         if self._getLabelsCount(item.nodeInfo) < 2: return
 
         # Get the positions of the box
-        (topLeftX, topLeftY, bottomRightX, bottomRightY) = self.runsGraphCanvas.bbox(item.id)
+        (topLeftX, topLeftY, bottomRightX,
+         bottomRightY) = self.runsGraphCanvas.bbox(item.id)
 
         # Get the width of the box
         boxWidth = bottomRightX - topLeftX
@@ -1215,6 +1280,7 @@ class ProtocolsView(tk.Frame):
             self.runsGraphCanvas.frame.grid_remove()
             self.updateRunsTreeSelection()
             self.viewButtons[ACTION_TREE].grid_remove()
+            self._lastRightClickPos = None
         else:
             self.runsTree.grid_remove()
             self.updateRunsGraph(reorganize=(previousView != VIEW_LIST))
@@ -1255,9 +1321,30 @@ class ProtocolsView(tk.Frame):
             self._selection.append(prot.getObjId())
         self._updateSelection()
 
-
         # self.updateRunsGraph()
         self.drawRunsGraph()
+
+    def _inspectProtocols(self, e=None):
+        objs = self._getSelectedProtocols()
+
+        # We will inspect the selected objects or 
+        #   the whole project is no protocol is selected
+        if len(objs)>0:
+            objs.sort(key=lambda obj: obj._objId, reverse=True)
+            filePath = objs[0]._getLogsPath('inspector.csv')
+            doInspect = True
+        else:
+            obj = self.project
+            filePath = obj.getLogPath('inspector.csv')
+            objs = [obj]
+            doInspect = pwgui.dialog.askYesNo(Message.TITLE_INSPECTOR,
+                                              Message.LABEL_INSPECTOR, self.root)
+
+        if doInspect:
+            inspectObj(objs, filePath)
+            # we open the resulting CSV file with the OS default software
+            pwgui.text.openTextFileEditor(filePath)
+
 
     # NOt used!: pconesa 02/11/2016.
     # def _deleteSelectedProtocols(self, e=None):
@@ -1335,6 +1422,9 @@ class ProtocolsView(tk.Frame):
     def _runItemDoubleClick(self, e=None):
         self._runActionClicked(ACTION_EDIT)
 
+    def _runItemMiddleClick(self, e=None):
+        self._runActionClicked(ACTION_SELECT_TO)
+
     def _runItemRightClick(self, item=None):
         prot = item.node.run
         if prot is None:  # in case it is the main "Project" node
@@ -1345,6 +1435,8 @@ class ProtocolsView(tk.Frame):
         if n <= 1:
             self._deselectItems(item)
             self._selectItemProtocol(prot)
+            self._lastRightClickPos = self.runsGraphCanvas.eventPos
+
         return self.provider.getObjectActions(prot)
 
     def _runItemControlClick(self, item=None):
@@ -1364,6 +1456,11 @@ class ProtocolsView(tk.Frame):
             else:
 
                 item.setSelected(True)
+                if len(self._selection) == 1: #repaint first selected item
+                    firstSelectedNode = self.runsGraph.getNode(str(self._selection[0]))
+                    if hasattr(firstSelectedNode, 'item'):
+                        firstSelectedNode.item.setSelected(False)
+                        firstSelectedNode.item.setSelected(True)
                 self._selection.append(prot.getObjId())
 
                 # Select output data too
@@ -1470,6 +1567,7 @@ class ProtocolsView(tk.Frame):
         protocol = self.getSelectedProtocol()
         workingDir = protocol.getWorkingDir()
         if os.path.exists(workingDir):
+
             window = pwgui.browser.FileBrowserWindow("Browsing: " + workingDir,
                                                      master=self.windows,
                                                      path=workingDir)
@@ -1531,25 +1629,30 @@ class ProtocolsView(tk.Frame):
         self.summaryText.setReadOnly(True)
 
     def _fillMethod(self):
-        self.methodText.setReadOnly(False)
-        self.methodText.clear()
-        self.methodText.addLine("*METHODS:*")
-        cites = OrderedDict()
 
-        for prot in self._iterSelectedProtocols():
-            self.methodText.addLine('> _%s_' % prot.getRunName())
-            for line in prot.getParsedMethods():
-                self.methodText.addLine(line)
-            cites.update(prot.getCitations())
-            cites.update(prot.getPackageCitations())
-            self.methodText.addLine('')
+        try:
+            self.methodText.setReadOnly(False)
+            self.methodText.clear()
+            self.methodText.addLine("*METHODS:*")
+            cites = OrderedDict()
 
-        if cites:
-            self.methodText.addLine('*REFERENCES:*')
-            for cite in cites.values():
-                self.methodText.addLine(cite)
+            for prot in self._iterSelectedProtocols():
+                self.methodText.addLine('> _%s_' % prot.getRunName())
+                for line in prot.getParsedMethods():
+                    self.methodText.addLine(line)
+                cites.update(prot.getCitations())
+                cites.update(prot.getPackageCitations())
+                self.methodText.addLine('')
 
-        self.methodText.setReadOnly(True)
+            if cites:
+                self.methodText.addLine('*REFERENCES:*   '
+                                        ' [[sci-bib:][<<< Open as bibtex >>>]]')
+                for cite in cites.values():
+                    self.methodText.addLine(cite)
+
+            self.methodText.setReadOnly(True)
+        except Exception as e:
+            self.methodText.addLine('Could not load all methods:' + e.getMessage())
 
     def _fillLogs(self):
         prot = self.getSelectedProtocol()
@@ -1590,14 +1693,17 @@ class ProtocolsView(tk.Frame):
         # to be executed in the same thread
         self.windows.enqueue(lambda: self._executeSaveProtocol(prot))
 
-    def _executeSaveProtocol(self, prot, onlySave=False):
+    def _executeSaveProtocol(self, prot, onlySave=False, doSchedule=False):
         if onlySave:
             self.project.saveProtocol(prot)
             msg = Message.LABEL_SAVED_FORM
             # msg = "Protocol successfully saved."
 
         else:
-            self.project.launchProtocol(prot)
+            if doSchedule:
+                self.project.scheduleProtocol(prot)
+            else:
+                self.project.launchProtocol(prot)
             # Select the launched protocol to display its summary, methods..etc
             self._selection.clear()
             self._selection.append(prot.getObjId())
@@ -1674,6 +1780,37 @@ class ProtocolsView(tk.Frame):
                 # self.updateRunsGraph()
                 self.drawRunsGraph()
 
+    def _selectAncestors(self, run=None):
+
+        children = []
+        if run is None:
+            for protId in self._selection:
+                run = self.runsGraph.getNode(str(protId))
+                children.append(run)
+        else:
+            name = run.getName()
+
+            if not name.isdigit():
+                return
+            else:
+                name = int(name)
+
+            # If already selected (may be this should be centralized)
+            if name not in self._selection:
+                children = (run,)
+                self._selection.append(name)
+
+        # Go up .
+        for run in children:
+
+            # Select himself plus ancestors
+            for parent in run.getParents():
+                self._selectAncestors(parent)
+
+        self._updateSelection()
+
+        self.drawRunsGraph()
+
     def _exportProtocols(self):
         protocols = self._getSelectedProtocols()
 
@@ -1687,15 +1824,17 @@ class ProtocolsView(tk.Frame):
             except Exception as ex:
                 self.windows.showError(str(ex))
 
-        browser = pwgui.browser.FileBrowserWindow("Choose .json file to save workflow",
-                                                  master=self.windows,
-                                                  path=self.project.getPath(''),
-                                                  onSelect=_export,
-                                                  entryLabel='File', entryValue='workflow.json')
+        browser = pwgui.browser.FileBrowserWindow(
+            "Choose .json file to save workflow",
+            master=self.windows,
+            path=self.project.getPath(''),
+            onSelect=_export,
+            entryLabel='File', entryValue='workflow.json')
         browser.show()
 
     def _stopProtocol(self, prot):
-        if pwgui.dialog.askYesNo(Message.TITLE_STOP_FORM, Message.LABEL_STOP_FORM, self.root):
+        if pwgui.dialog.askYesNo(Message.TITLE_STOP_FORM,
+                                 Message.LABEL_STOP_FORM, self.root):
             self.project.stopProtocol(prot)
             self._lastStatus = None  # force logs to re-load
             self._scheduleRunsUpdate()
@@ -1737,6 +1876,50 @@ class ProtocolsView(tk.Frame):
         else:
             self.windows.showInfo("Selected protocol hasn't been run yet.")
 
+    def _bibExportClicked(self, e=None):
+        try:
+            bibTexCites = OrderedDict()
+            for prot in self._iterSelectedProtocols():
+                bibTexCites.update(prot.getCitations(bibTexOutput=True))
+                bibTexCites.update(prot.getPackageCitations(bibTexOutput=True))
+
+            if bibTexCites:
+                with tempfile.NamedTemporaryFile(suffix='.bib') as bibFile:
+                    for refId, refDict in bibTexCites.iteritems():
+                        refType = refDict['ENTRYTYPE']
+                        # remove 'type' and 'id' keys
+                        refDict = {k: v for k, v in refDict.items()
+                                   if k not in ['ENTRYTYPE', 'ID']}
+                        jsonStr = json.dumps(refDict, indent=4,
+                                             ensure_ascii=False)[1:]
+                        jsonStr = jsonStr.replace('": "', '"= "')
+                        jsonStr = re.sub('(?<!= )"(\S*?)"', '\\1', jsonStr)
+                        jsonStr = jsonStr.replace('= "', ' = "')
+                        refStr = '@%s{%s,%s\n\n' % (refType, refId, jsonStr)
+                        bibFile.write(refStr.encode('utf-8'))
+                    # flush so we can see content when opening
+                    bibFile.flush()
+                    pwgui.text.openTextFileEditor(bibFile.name)
+                    #pwgui.text.showTextFileViewer("References bibtex",
+                    #                              [bibFile.name],
+                    #                              parent=self.windows)
+
+        except Exception as ex:
+            self.windows.showError(str(ex))
+
+        return
+
+    def _renameProtocol(self, prot):
+        """ Open the EditObject dialog to edit the protocol name. """
+        kwargs = {}
+        if self._lastRightClickPos:
+            kwargs['position'] = self._lastRightClickPos
+
+        dlg = pwgui.dialog.EditObjectDialog(self.runsGraphCanvas, Message.TITLE_EDIT_OBJECT,
+                                            prot, self.project.mapper, **kwargs)
+        if dlg.resultYes():
+            self._updateProtocol(prot)
+
     def _runActionClicked(self, action):
         prot = self.getSelectedProtocol()
         if prot:
@@ -1745,6 +1928,8 @@ class ProtocolsView(tk.Frame):
                     pass
                 elif action == ACTION_EDIT:
                     self._openProtocolForm(prot)
+                elif action == ACTION_RENAME:
+                    self._renameProtocol(prot)
                 elif action == ACTION_COPY:
                     self._copyProtocols()
                 elif action == ACTION_DELETE:
@@ -1775,6 +1960,8 @@ class ProtocolsView(tk.Frame):
                     self._updateActionToolbar()
                 elif action == ACTION_LABELS:
                     self._selectLabels()
+                elif action == ACTION_SELECT_TO:
+                    self._selectAncestors()
 
             except Exception as ex:
                 self.windows.showError(str(ex))
@@ -1809,3 +1996,220 @@ class RunBox(pwgui.TextBox):
     def moveTo(self, x, y):
         pwgui.TextBox.moveTo(self, x, y)
         self.nodeInfo.setPosition(self.x, self.y)
+
+
+
+def inspectObj(obj, filename, prefix='', maxDeep=5, inspectDetail=2,
+               memoryDict={}):
+    """ Creates a .CSV file in the filename path with
+        all its members and recursibely with a certain maxDeep,
+        if maxDeep=0 means no maxDeep (untils all members are inspected).
+        
+        inspectDetail can be:
+         - 1: All attributes are shown
+         - 2: All attributes are shown and iterable values are also inspected
+
+        prefix and memoryDict will be updated in the recursibe entries:
+         - prefix is to compond the two first columns (DEEP and Tree)
+         - memoryDict is a dictionary with the memory adress and an identifier
+    """ 
+
+    END_LINE   = '\n'  # end of line char
+    COL_DELIM  = '\t'  # column delimiter
+    INDENT_COUNTER = '/'  # character append in each indention (it's not writed)
+
+    NEW_CHILD = '  |------>  '  # new item indention
+    BAR_CHILD = '  | ' + INDENT_COUNTER  # bar indention
+    END_CHILD =('       -- '+COL_DELIM)*4 + END_LINE  # Child ending
+    column1  = '    - Name - ' + COL_DELIM
+    column2  = '    - Type - ' + COL_DELIM
+    column3  = '    - Value - ' + COL_DELIM
+    column4  = '  - Memory Address -'
+
+    #  Constants to distinguish the first, last and middle rows
+    IS_FIRST = 1
+    IS_LAST = -1
+    IS_MIDDLE = 0
+
+    def writeRow(name, value, prefix, posList=False):
+        """ Writes a row item. """
+        # we will avoid to recursively print the items wrote before 
+        #  (ie. with the same memory address), thus we store a dict with the
+        #  addresses and the flag isNew is propertly set
+        if str(hex(id(value))) in memoryDict:
+            memorySTR = memoryDict[str(hex(id(value)))]
+            isNew = False
+        else:
+            # if the item is new, we save its memory address in the memoryDict
+            #   and we pass the name and the line on the file as a reference.
+            memorySTR = str(hex(id(value)))
+            file = open(filename, 'r')
+            lineNum = str(len(file.readlines())+1)
+            file.close()
+            nameDict = str(name)[0:15]+' ...' if len(str(name))>25 else str(name)
+            memoryDict[str(hex(id(value)))] = '>>> '+nameDict + ' - L:'+lineNum
+            isNew = True
+        
+        if posList:
+            # if we have a List, the third column is 'pos/lenght'
+            thirdCol = posList
+        else:
+            # else, we print the value avoiding the EndOfLine char (// instead)
+            thirdCol = str(value).replace(END_LINE,' // ')
+
+        # we will print the indetion deep number in the first row
+        indentionDeep = prefix.count(INDENT_COUNTER)
+        deepStr = str(indentionDeep) + COL_DELIM
+
+        # the prefix without the indentCounters is 
+        #   the tree to be printed in the 2nd row
+        prefixToWrite = prefix.replace(INDENT_COUNTER,'') 
+        
+        file = open(filename, 'a')   
+        file.write( deepStr + prefixToWrite + COL_DELIM +
+                    str(name) + COL_DELIM + 
+                    str(type(value)) + COL_DELIM + 
+                    thirdCol + COL_DELIM + 
+                    memorySTR + END_LINE)
+        file.close()
+
+        return isNew
+
+    def recursivePrint(value, prefix, isFirstOrLast):
+        """ We print the childs items of tuples, lists, dicts and classes. """ 
+
+        # if it's the last item, its childs has not the bar indention
+        if isFirstOrLast == IS_LAST:  # void indention when no more items
+            prefixList = prefix.split(INDENT_COUNTER)
+            prefixList[-2]=prefixList[-2].replace('|',' ') 
+            prefix = INDENT_COUNTER.join(prefixList)
+
+        # recursive step with the new prefix and memory dict.
+        inspectObj(value, filename, prefix+BAR_CHILD, maxDeep, inspectDetail, 
+                   memoryDict)
+        
+        
+        if isFirstOrLast == IS_FIRST:
+            deepStr = str(indentionDeep) + COL_DELIM
+        else:
+            # When it was not the first item, the deep is encreased 
+            #   to improve the readability when filter 
+            deepStr = str(indentionDeep+1) + COL_DELIM
+
+        prefix = prefix.replace(INDENT_COUNTER,'') + COL_DELIM
+
+        # We introduce the end of the child and 
+        #   also the next header while it is not the last
+        file = open(filename, 'a')
+        file.write(deepStr + prefix + END_CHILD)
+        if isFirstOrLast != IS_LAST:
+            # header
+            file.write(deepStr + prefix + 
+                       column1 + column2 + column3 + column4 + END_LINE)
+        file.close()
+
+    def isIterable(obj):
+        """ Returns true if obj is a tuple, list, dict or calss. """
+        isTupleListDict = ( type(obj)==type(tuple()) or 
+                            type(obj)==type(dict())  or
+                            type(obj)==type(list()) ) and len(value)>1
+
+        # FIX ME: I don't know how to assert if is a class or not... 
+        isClass = str(type(obj))[1]=='c'
+
+        return isClass or (isTupleListDict and inspectDetail<2)
+
+    indentionDeep = prefix.count(INDENT_COUNTER)
+    if indentionDeep==0:
+        prefix = ' - Root - '
+
+        # dict with name and value pairs of the members
+        if len(obj)==1: 
+            # if only one obj is passed in the input list,
+            #   we directly inspect that obj.
+            obj_dict = obj[0].__dict__
+            obj = obj[0]
+
+        #  setting the header row
+        treeHeader = ' - Print on ' + str(dt.datetime.now())
+        prefixHeader = '-DEEP-' + COL_DELIM + treeHeader + COL_DELIM
+        col1 = '    - Name - (value for Lists and Tuples)' + COL_DELIM
+        col3 = '    - Value - (Pos./Len for Lists and Tuples) ' + COL_DELIM
+
+        #  writting the header row
+        file = open(filename, 'w')
+        file.write(prefixHeader + col1 + column2 + col3 + column4 + END_LINE)
+        file.close()
+
+        #  writting the root object
+        writeRow(obj.__class__.__name__, obj, prefix)
+        #  adding the child bar to the prefix
+        prefix = '  ' + BAR_CHILD
+    else:
+        # firsts settings depending on the type of the obj
+        if str(type(obj))[1]=='c':
+            obj_dict = obj.__dict__
+        elif (type(obj)==type(tuple()) or
+              type(obj)==type(list())):
+            column1 = '    - Value - ' + COL_DELIM
+            column3 = '  - Pos./Len. - ' + COL_DELIM
+        elif type(obj)==type(dict()):
+            column1 = '    - Key - ' + COL_DELIM
+            obj_dict = obj
+        else:  # if is not of the type above it not make sense to continue
+            return
+
+    indentionDeep = prefix.count(INDENT_COUNTER)
+    deepStr = str(indentionDeep) + COL_DELIM
+    isBelowMaxDeep = indentionDeep < maxDeep if maxDeep > 0 else True 
+
+    prefixToWrite = prefix.replace(INDENT_COUNTER,'') + COL_DELIM
+    file = open(filename, 'a')
+    file.write(deepStr + prefixToWrite + 
+               column1 + column2 + column3 + column4 + END_LINE)
+    file.close()
+
+    #  we update the prefix to put the NEW_CHILD string  ( |----> )
+    prefixList = prefix.split(INDENT_COUNTER)
+    prefixList[-2] = NEW_CHILD
+    #  we return to the string structure
+    #    with a certain indention if it's the root
+    prefixToWrite = '  ' + INDENT_COUNTER.join(prefixList) if indentionDeep == 1 \
+                     else  INDENT_COUNTER.join(prefixList)
+
+    isNew = True
+    if str(type(obj))[1]=='c' or type(obj)==type(dict()):
+        counter = 0
+        for key, value in obj_dict.items():
+            counter+=1
+            # write the variable
+            isNew = writeRow(key, value, prefixToWrite)
+
+            # managing the extrems of the loop
+            if counter==1:
+                isFirstOrLast = IS_FIRST
+            elif counter==len(obj_dict):
+                isFirstOrLast = IS_LAST
+            else:
+                isFirstOrLast = IS_MIDDLE
+
+            # show attributes for objects and items for lists and tuples 
+            if isBelowMaxDeep and isNew and isIterable(value):
+                recursivePrint(value, prefix, isFirstOrLast)
+    else:
+        for i in range(0,len(obj)): 
+            # write the variable
+            isNew = writeRow(obj[i], obj[i], prefixToWrite, 
+                             str(i+1)+'/'+str(len(obj)))
+
+            # managing the extrems of the loop
+            if i==0:
+                isFirstOrLast = IS_FIRST
+            elif len(obj)==i+1:
+                isFirstOrLast = IS_LAST
+            else:
+                isFirstOrLast = IS_MIDDLE
+
+            # show attributes for objects and items for lists and tuples 
+            if isBelowMaxDeep and isNew and isIterable(obj[i]):
+                recursivePrint(obj[i], prefix, isFirstOrLast)

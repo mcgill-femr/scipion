@@ -1,6 +1,6 @@
 # *****************************************************************************
 # *
-# * Authors:     Josue Gomez Blanco (jgomez@cnb.csic.es)
+# * Authors:     Josue Gomez Blanco (josue.gomez-blanco@mcgill.ca)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -24,9 +24,8 @@
 # *
 # *****************************************************************************
 
+import os
 import math
-
-from os.path import join, exists
 
 from pyworkflow import VERSION_1_1
 from pyworkflow.protocol.params import (PointerParam, BooleanParam, StringParam,
@@ -35,31 +34,32 @@ from pyworkflow.protocol.params import (PointerParam, BooleanParam, StringParam,
 from pyworkflow.em.protocol import ProtParticles, ProtParticlePicking
 from pyworkflow.em.data import Coordinate, SetOfCoordinates
 
-from pyworkflow.utils.path import replaceBaseExt
+from convert import (particleToRow, rowToSubcoordinate, setEnviron,
+                     restituteRelionHome)
 
-from convert import particleToRow, rowToSubcoordinate, setEnviron
-
+from convert import getVersion, getRelionVersion
 
 CMM = 0
 HAND = 1
 
 
 class ProtLocalizedRecons(ProtParticlePicking, ProtParticles):
-    """ This class cointains a re-implementation to a method for the
+    """ This class contains a re-implementation to a method for the
     localized three-dimensional reconstruction of such subunits. 
     After determining the particle orientations, local areas 
     corresponding to the subunits can be extracted and treated as 
     single particles.
     """
     _label = 'localized subparticles'
-    _version = VERSION_1_1
+    _lastUpdateVersion = VERSION_1_1
     
     def __init__(self, **args):
         ProtParticlePicking.__init__(self, **args)
         ProtParticles.__init__(self, **args)
-        
-    
-    #--------------------------- DEFINE param functions -----------------------
+        self.allowMpi = False
+        self.allowThreads = False
+
+    # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('inputParticles', PointerParam,
@@ -93,8 +93,7 @@ class ProtLocalizedRecons(ProtParticlePicking, ProtParticles):
         group.addParam('defineVector',  EnumParam, default=CMM,
                       label='Is vector defined by?',
                       choices=['cmm file', 'string'],
-                      display=EnumParam.DISPLAY_HLIST,
-                      help='')
+                      display=EnumParam.DISPLAY_HLIST)
         group.addParam('vector', NumericRangeParam, default='0,0,1',
                       label='Location vectors', condition="defineVector==1",
                       help='Vector defining the location of the '
@@ -143,16 +142,16 @@ class ProtLocalizedRecons(ProtParticlePicking, ProtParticles):
 
         form.addParallelSection(threads=0, mpi=0)
     
-    #--------------------------- INSERT steps functions -----------------------
+    # -------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         self._insertFunctionStep('createOutputStep')
     
-    #--------------------------- STEPS functions ------------------------------
+    # -------------------------- STEPS functions -----------------------------
     def createOutputStep(self):
         setEnviron() # Set the environment to access localrec modules
         import localrec
         import pyrelion
-
+        # return
         inputSet = self._getInputParticles()
         outputSet = self._createSetOfCoordinates(inputSet)
         params = {"symmetryGroup" : self.symmetryGroup.get(),
@@ -173,9 +172,9 @@ class ProtLocalizedRecons(ProtParticlePicking, ProtParticles):
             cmmFn = params["vectorFile"]
             vector = " "
         else:
-            cmmFn = " "
+            cmmFn = ""
             vector = params["vector"]
-            
+        
         subpartVectorList = localrec.load_vectors(cmmFn, vector,
                                                   params["length"],
                                                   params["pxSize"])
@@ -190,30 +189,31 @@ class ProtLocalizedRecons(ProtParticlePicking, ProtParticles):
             partItem = pyrelion.Item()
             particleToRow(part, partItem)
             
-            subparticles, _ = localrec.create_subparticles(partItem,
-                                                     symMatrices,
-                                                     subpartVectorList,
-                                                     params["dim"],
-                                                     self.relaxSym,
-                                                     self.randomize,
-                                                     "subparticles",
-                                                     params["unique"],
-                                                     0,
-                                                     self.alignSubparticles,
-                                                     "",
-                                                     True,
-                                                     filters)
+            subparticles = self.getSubparticles(localrec, partItem,
+                                                symMatrices, params,
+                                                subpartVectorList, filters)
             for subpart in subparticles:
                 rowToSubcoordinate(subpart, coord, part)
                 coord.setObjId(None) # Force to insert as a new item
                 outputSet.append(coord)
-        
+                if part.hasAttribute('_rlnRandomSubset'):
+                    coord._subparticle.copyAttributes(part, '_rlnRandomSubset')
+
+        restituteRelionHome()
         self._defineOutputs(outputCoordinates=outputSet)
         self._defineSourceRelation(self.inputParticles, outputSet)
     
-    #--------------------------- INFO functions -------------------------------
+    # -------------------------- INFO functions --------------------------------
     def _validate(self):
         errors = []
+        relionPath = os.environ['LOCALREC_RELION_HOME']
+        if getRelionVersion() != '1.4':
+            errors.append("Relion version must be 1.4. Please add "
+                          "LOCALREC_RELION_HOME = path/to/relion-1.4 into your "
+                          "config file.")
+        if not os.path.exists(relionPath):
+            errors.append("%s does not exists. Contact with your system manager"
+                          " to install relion-1.4 or relion-1.4f" % relionPath)
         return errors
     
     def _citations(self):
@@ -226,19 +226,18 @@ class ProtLocalizedRecons(ProtParticlePicking, ProtParticles):
     def _methods(self):
         return []
     
-    #--------------------------- UTILS functions ------------------------------
+    # -------------------------- UTILS functions ------------------------------
     def _getInputParticles(self):
         return self.getInputParticlesPointer().get()
     
     def _getSymMatrices(self):
         pass
-        #matricesObjs = lr.matrix_from_symmetry(self.symmetryGroup.get())
+        # matricesObjs = lr.matrix_from_symmetry(self.symmetryGroup.get())
         # We implement the binding to remove the dependency with relion. When
         # we test the new implementation (code below) and the results were
-        # different. THe nunmber of particles removed are diverge in dependency of
-        # how you obtain the symmetry matrices.
+        # different. THe nunmber of particles removed are diverge in dependency
+        # of how you obtain the symmetry matrices.
         # There aren't any obvious bug in the matrices.
-        
         
 #         matricesObjs = []
 #         matrices = md.getSymmetryMatrices(self.symmetryGroup.get())
@@ -289,3 +288,35 @@ class ProtLocalizedRecons(ProtParticlePicking, ProtParticles):
             maxCounter = max(counter, maxCounter)
 
         return str(maxCounter+1) if maxCounter > 0 else '' # empty if not outputs
+    
+    def getSubparticles(self, localrec, partItem, symMatrices,
+                        params, subpartVectorList, filters):
+        if getVersion() == '1.1.0':
+            subparticles, _ = localrec.create_subparticles(partItem,
+                                                           symMatrices,
+                                                           subpartVectorList,
+                                                           params["dim"],
+                                                           self.relaxSym,
+                                                           self.randomize,
+                                                           "subparticles",
+                                                           params["unique"],
+                                                           0,
+                                                           self.alignSubparticles,
+                                                           "",
+                                                           True,
+                                                           filters)
+        else:
+            subparticles, _ = localrec.create_subparticles(partItem,
+                                                           symMatrices,
+                                                           subpartVectorList,
+                                                           params["dim"],
+                                                           self.randomize,
+                                                           "subparticles",
+                                                           params["unique"],
+                                                           0,
+                                                           self.alignSubparticles,
+                                                           "",
+                                                           False,
+                                                           filters)
+
+        return subparticles
