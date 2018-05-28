@@ -59,8 +59,13 @@ class Prot3DVariance(ProtAnalysis3D):
         form.addParam('doCTFCorrection', BooleanParam, default=False,  important=False,
                       label='Use CTF information?',
                       help="The images will be deconvolved by the CTF information.")
-        form.addParam('inputVolume', PointerParam, pointerClass='Volume',important=True, 
+        form.addParam('doReconstruct', BooleanParam, default=True,
+                      label='Do internal reconstruction?',
+                      help="If YES provide a 3D reconstruction will be done (preferred)."
+                           "If NO provide a 3DEM map reconstruction from the input particles.")
+        form.addParam('inputVolume', PointerParam, pointerClass='Volume', 
                       label="Volume",
+                      condition='not doReconstruct',
                       help='Reconstructed volume from the input particles')
         form.addParam('Mask', PointerParam, pointerClass='VolumeMask',allowsNull=True, 
                       label="Binary Mask",
@@ -117,7 +122,8 @@ class Prot3DVariance(ProtAnalysis3D):
         paramRecons = self.params
         paramRecons += '  -o %s' % self._getFileName('output_volume')
         
-        #self._insertFunctionStep('reconstructStep', paramRecons)
+        if (self.doReconstruct):
+            self._insertFunctionStep('reconstructStep', paramRecons)
 
     def _insertVarianceStep(self):
 
@@ -137,8 +143,7 @@ class Prot3DVariance(ProtAnalysis3D):
         from pyworkflow.em.convert import ImageHandler
         img = ImageHandler()
         img.convert(self.inputVolume.get(), self._getFileName('output_volume'))
-        #TODO: This only writes metadata what about binary file
-        #it should
+
         writeSetOfParticles(imgSet, particlesMd)
 
     def reconstructStep(self, params):
