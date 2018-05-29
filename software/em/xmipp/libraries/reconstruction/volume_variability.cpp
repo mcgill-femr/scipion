@@ -1,7 +1,6 @@
 /***************************************************************************
  *
  * Authors:     Javier Vargas (javier.vargasbalbuena@mcgill.ca)
- *              Vahid Abrishami (vabrishami@cnb.csic.es)
  *
  *
  * Department of Anatomy and Cell Biology, McGill University
@@ -88,6 +87,8 @@ void ProgVolVariability::defineParams()
  //   JV QUESTIONS;
     // NiterWeight por defecto esta a 1, pero en muchos puntos se hace la comparacion con NiterWeight == 0, y me da la sensacion
     // 			   que NiterWeight == 0, deberia ser NiterWeight == 1 mirar por ejem lineas 186-189
+    // Tiene sentido usar numThreads para la FFT y forzar que numThreads es 1 para la parte de reconstruccion?
+    // usar prepare_fsc para calcular FSC con los halves ids bien. Usar metadata _rln_halfid
 }
 
 // Read arguments ==========================================================
@@ -153,7 +154,7 @@ void ProgVolVariability::show()
         << "\n   blrad                 : "  << blob.radius
         << "\n   blord                 : "  << blob.order
         << "\n   blalpha               : "  << blob.alpha
-        //<< "\n sampling_rate           : "  << sampling_rate
+        << "\n sampling_rate           : "  << Ts
         << "\n max_resolution          : "  << maxResolution
         << "\n -----------------------------------------------------------------" << std::endl;
 
@@ -245,19 +246,8 @@ void ProgVolVariability::produceSideinfo()
 
     volPadSizeX = volPadSizeY = volPadSizeZ=(int)(Xdim*padding_factor_vol);
 
-#ifdef DEBUG
-    Vin().printShape();
-#endif
-
     //use threads for volume inverse fourier transform, plan is created in setReal()
     transformerVol.setThreadsNumber(numThreads);
-
-
-#ifdef DEBUG
-	std::cout << A3D_ELEM(fftVin, 0, 0, 0) << std::endl;
-	std::cout << A3D_ELEM(fftVin, 1, 1, 1) << std::endl;
-	std::cout << A3D_ELEM(fftVin, 2, 1, 1) << std::endl;
-#endif
 
     Vout().initZeros(volPadSizeZ,volPadSizeY,volPadSizeX);
     transformerVol.cleanup();
@@ -347,7 +337,7 @@ void ProgVolVariability::produceSideinfo()
 
     // ~JV
     //Read the input average map
-    // Input volume
+    //Input volume Vin
     Image<double> Vin;
     Vin.read(fn_vol);
     Vin().setXmippOrigin();
@@ -382,7 +372,7 @@ void ProgVolVariability::produceSideinfo()
         FOR_ALL_ELEMENTS_IN_ARRAY3D(mVin)
         A3D_ELEM(mVin,k,i,j) /= meanFactor2;  //JV changed!
     }
-    //JV Finish here Vin distortion by FT of Blob
+    //JV: Finish here Vin distortion by FT of Blob
 
     //Padding of Vin
     MultidimArray<double> localPaddedVin;
@@ -412,9 +402,6 @@ void ProgVolVariability::produceSideinfo()
 
     randomize_random_generator();
     localPaddedVin.clear();
-
-    //KK
-    std::cout << corr3D_2D << " " << imgSize << std::endl;
 
 #ifdef DEBUG
     Image< std::complex<double> > save;
@@ -1328,14 +1315,16 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     }
 #endif
 
-//PROCESS_WEIGHTS
+    //PROCESS_WEIGHTS
     threadOpCode = PROCESS_WEIGHTS;
     // Awake threads
     barrier_wait( &barrier );
     // Threads are working now, wait for them to finish
     barrier_wait( &barrier );
 
-//~JV MONTE CARLO SIMULATION
+//~JV
+
+    //MONTE CARLO SIMULATION
     MultidimArray< std::complex<double> > VoutFourierTmp2;
     VoutFourierTmp2 = VoutFourier;
     std::complex<double>  mean = 0;
@@ -1452,15 +1441,16 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 
     std::cout << std::endl;
 
-    #ifdef DEBUG_VOL2
-    {
+
+//    #ifdef DEBUG_VOL2
+//    {
     	Vintemp /=(double)it;
         Image<double> save;
         save().alias( Vintemp );
         save.write((std::string) fn_out + "Vintemp.vol");
         Vin.write((std::string) fn_out + "Vin.vol");
-    }
-    #endif
+//    }
+//    #endif
 
 }
 

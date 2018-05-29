@@ -1,7 +1,6 @@
 /***************************************************************************
  *
  * Authors:     Javier Vargas (javier.vargasbalbuena@mcgill.ca)
- *              Vahid Abrishami (vabrishami@cnb.csic.es)
  *
  *
  * Department of Anatomy and Cell Biology, McGill University

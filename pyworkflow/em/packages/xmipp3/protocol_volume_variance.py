@@ -38,7 +38,7 @@ class Prot3DVariance(ProtAnalysis3D):
     Obtains the 3D variance in real and fourier spaces from a given set of particles.
     First obtained a 3D reconstruction using Xmipp reconstruct Fourier method.
     """
-    _label = '3d_variance'
+    _label = '3d variance'
     
     #--------------------------- DEFINE param functions --------------------------------------------   
     def _defineParams(self, form):
@@ -64,7 +64,7 @@ class Prot3DVariance(ProtAnalysis3D):
                       help="If YES provide a 3D reconstruction will be done (preferred)."
                            "If NO provide a 3DEM map reconstruction from the input particles.")
         form.addParam('inputVolume', PointerParam, pointerClass='Volume', 
-                      label="Volume",
+                      label="Volume",allowsNull=True,
                       condition='not doReconstruct',
                       help='Reconstructed volume from the input particles')
         form.addParam('Mask', PointerParam, pointerClass='VolumeMask',allowsNull=True, 
@@ -77,7 +77,7 @@ class Prot3DVariance(ProtAnalysis3D):
                       label='Extra parameters: ', 
                       help='Extra parameters to *xmipp_reconstruct_fourier-xmipp_volume_variability* programs:\n')
 
-        form.addParallelSection(threads=1, mpi=4)
+        form.addParallelSection(mpi=4)
 
     #--------------------------- INSERT steps functions --------------------------------------------
 
