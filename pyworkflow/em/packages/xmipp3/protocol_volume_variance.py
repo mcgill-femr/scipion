@@ -115,7 +115,6 @@ class Prot3DVariance(ProtAnalysis3D):
             
         self.params += ' --max_resolution %0.3f' %digRes
         self.params += ' --padding %0.3f' % self.pad.get()
-        self.params += ' --thr %d' % self.numberOfThreads.get()
         self.params += ' --sampling %f' % self.inputParticles.get().getSamplingRate()
         self.params += ' %s' % self.extraParams.get()
         
@@ -127,6 +126,7 @@ class Prot3DVariance(ProtAnalysis3D):
 
     def _insertVarianceStep(self):
 
+        self.params += ' --thrFFT %d' % self.numberOfThreads.get()
         self.params += '  --vol %s' % self._getFileName('output_volume')
         self.params += '  -o %s' % self._getFileName('variability')
         

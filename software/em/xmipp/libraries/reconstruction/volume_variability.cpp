@@ -74,6 +74,7 @@ void ProgVolVariability::defineParams()
     addParamsLine("  [--max_resolution <p=0.5>]     : Max resolution (Nyquist=0.5)");
     addParamsLine("  [--weight]                     : Use weights stored in the image metadata");
     addParamsLine("  [--thr <threads=1> <rows=1>]   : Number of concurrent threads and rows processed at time by a thread");
+    addParamsLine("  [--thrFFT <threadsFFT=1>]   	: Number of concurrent threads for FFT calculations");
     addParamsLine("  [--blob <radius=1.9> <order=0> <alpha=15>] : Blob parameters");
     addParamsLine("                                 : radius in pixels, order of Bessel function in blob and parameter alpha");
     addParamsLine("  [--useCTF]                     : Use CTF information if present");
@@ -114,6 +115,7 @@ void ProgVolVariability::readParams()
     maxResolution = getDoubleParam("--max_resolution");
     numThreads = getIntParam("--thr");
     thrWidth = getIntParam("--thr", 1);
+    numThreadsFFT = getIntParam("--thrFFT");
     NiterWeight = getIntParam("--iter");
     useCTF = checkParam("--useCTF");
     phaseFlipped = checkParam("--phaseFlipped");
@@ -247,7 +249,7 @@ void ProgVolVariability::produceSideinfo()
     volPadSizeX = volPadSizeY = volPadSizeZ=(int)(Xdim*padding_factor_vol);
 
     //use threads for volume inverse fourier transform, plan is created in setReal()
-    transformerVol.setThreadsNumber(numThreads);
+    transformerVol.setThreadsNumber(numThreadsFFT);
 
     Vout().initZeros(volPadSizeZ,volPadSizeY,volPadSizeX);
     transformerVol.cleanup();
@@ -391,6 +393,7 @@ void ProgVolVariability::produceSideinfo()
 
     CenterFFT(localPaddedVin,true);
     FourierTransformer transformerVol2;
+    transformerVol2.setThreadsNumber(numThreadsFFT);
     fftVin.initZeros(volPadSizeZ,volPadSizeY,volPadSizeX);
     transformerVol2.FourierTransform(localPaddedVin, fftVin, true);
     transformerVol2.clear();
@@ -1336,11 +1339,11 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     double mean_err = 1000;
 
     int it = 1;
-    int maxIter = 200;
+    int maxIter =400;
     std::cout << "Monte Carlo simulation: " << std::endl;
     //init_progress_bar(numIters);
 
-    while( (mean_err > 0.01*3*Vin().computeStddev()) )
+    while( (mean_err > 0.001*3*Vin().computeStddev()) )
     {
     	if (it > maxIter)
     		break;
@@ -1389,7 +1392,7 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 	            A3D_ELEM(mVout,k,i,j) /= (ipad_relation*factor);
 	    }
 
-	    if (NiterWeight!=0)
+	    if (NiterWeight!=0) //Esto esta mal tiene que estar dentro de un bucle xq aqui k,i,j no tienen sentido
 	    {
 	        meanFactor2/=MULTIDIM_SIZE(mVout);
 	        FOR_ALL_ELEMENTS_IN_ARRAY3D(mVout)
@@ -1397,13 +1400,13 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 	    }
 
 	    int numElem = 0;
-	    FOR_ALL_ELEMENTS_IN_ARRAY3D(Vmc)
+	    FOR_ALL_ELEMENTS_IN_ARRAY3D(Vmc) //Esto deberia juntarlo con el bucle superior
 	    {
 	    	//This is variance
 	    	A3D_ELEM(Vout(),k,i,j) += ((A3D_ELEM(Vmc,k,i,j)-A3D_ELEM(Vin(),k,i,j))*(A3D_ELEM(Vmc,k,i,j)-A3D_ELEM(Vin(),k,i,j)));
 	    	A3D_ELEM(Vintemp,k,i,j) += (A3D_ELEM(Vmc,k,i,j));
 
-			if (fn_mask != "")
+			if (fn_mask != "") //incluir en el if las lineas anteriores para acelear el procesamiento
 	    		if ( A3D_ELEM(mask(),k,i,j) != 0 )
 	    		{
 	    			error += (std::abs(A3D_ELEM(Vintemp,k,i,j)/(double)it - A3D_ELEM(Vin(),k,i,j)));
@@ -1432,7 +1435,7 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     FileName fn_variance = fn_out.removeFileFormat().removeLastExtension()+"_variance.vol";
     Vout.write(fn_variance);
 
-//    FOR_ALL_ELEMENTS_IN_ARRAY3D(Vintemp)
+//    FOR_ALL_ELEMENTS_IN_ARRAY3D(Vintemp) //esto volver a activarlo!
 //    	A3D_ELEM(Vintemp,k,i,j) = std::sqrt(A3D_ELEM(Vout(),k,i,j));
 
     fn_variance = fn_out.removeFileFormat().removeLastExtension()+ "_std.vol";
@@ -1442,7 +1445,7 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     std::cout << std::endl;
 
 
-//    #ifdef DEBUG_VOL2
+//    #ifdef DEBUG_VOL2 //poner estas lineas
 //    {
     	Vintemp /=(double)it;
         Image<double> save;

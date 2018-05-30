@@ -159,6 +159,9 @@ public:
     /// Number of threads to use in parallel to process a single image
     int numThreads;
 
+    /// Number of threads to be used in FFT calculations
+    int numThreadsFFT;
+
     /// IDs for the threads
     pthread_t * th_ids;
 
