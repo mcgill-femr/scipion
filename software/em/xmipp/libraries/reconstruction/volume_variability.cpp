@@ -1336,11 +1336,11 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     double mean_err = 1000;
 
     int it = 1;
-    int maxIter = 100;
+    int maxIter = 200;
     std::cout << "Monte Carlo simulation: " << std::endl;
     //init_progress_bar(numIters);
 
-    while( (mean_err > 3*Vin().computeStddev()) )
+    while( (mean_err > 0.01*3*Vin().computeStddev()) )
     {
     	if (it > maxIter)
     		break;
@@ -1432,8 +1432,8 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     FileName fn_variance = fn_out.removeFileFormat().removeLastExtension()+"_variance.vol";
     Vout.write(fn_variance);
 
-    FOR_ALL_ELEMENTS_IN_ARRAY3D(Vintemp)
-    	A3D_ELEM(Vintemp,k,i,j) = std::sqrt(A3D_ELEM(Vout(),k,i,j));
+//    FOR_ALL_ELEMENTS_IN_ARRAY3D(Vintemp)
+//    	A3D_ELEM(Vintemp,k,i,j) = std::sqrt(A3D_ELEM(Vout(),k,i,j));
 
     fn_variance = fn_out.removeFileFormat().removeLastExtension()+ "_std.vol";
     Vout() = Vintemp;
