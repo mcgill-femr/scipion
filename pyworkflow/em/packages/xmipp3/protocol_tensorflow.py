@@ -34,13 +34,39 @@ from keras.datasets import cifar10
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+import mrcfile
+import glob
+from keras.applications import VGG19
+
+'''for image in glob.glob('/home/javiermota/Desktop/asimov2/ScipionUserData/projects/ribosome/Runs/001564_ProtRelionExtractSubtomograms/Particles/extra/*.mrc'):
+with mrcfile.open(image) as mrc:
+    a = mrc.data'''
+
+vgg_conv = VGG19(weights='imagenet',include_top=False)
+
+for layer in vgg_conv.layers[:-4]:
+    layer.trainable = False
+    print layer, layer.trainable
+
+model = Sequential()
+
+model.add(vgg_conv)
+model.add(Flatten())
+model.add(Dense(1024, activation='relu'))
+model.add(Dropout(0.5))
+model.add(Dense(3, activation='softmax'))
+
+
+
+
+
 
 num_classes = 10
 # Generate dummy data
 '''x_train = np.random.random((100, 100, 100, 3))
 y_train = keras.utils.to_categorical(np.random.randint(10, size=(100, 1)), num_classes=10)
 x_test = np.random.random((20, 100, 100, 3))
-y_test = keras.utils.to_categorical(np.random.randint(10, size=(20, 1)), num_classes=10)'''
+y_test = keras.utils.to_categorical(np.random.randint(10, size=(20, 1)), num_classes=10)
 
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 
@@ -85,18 +111,18 @@ history = model.fit(x_train, y_train, validation_split=0.2, batch_size=32, epoch
 print history.history.keys()
 score = model.evaluate(x_test, y_test, batch_size=32)
 print score
-'''prediction = model.predict_classes(x_test, batch_size=32)
+prediction = model.predict_classes(x_test, batch_size=32)
 ok = 0
 for i, x in enumerate(prediction):
     if x == np.where(y_test[i]==np.max(y_test[i]))[0]:
         ok += 1
 
 accuracy = ok/float(len(y_test))
-print accuracy'''
+print accuracy
 plt.figure()
 plt.plot(history.history['loss'])
 plt.figure()
 plt.plot(history.history['acc'])
 plt.figure()
 plt.plot(history.history['val_acc'])
-plt.show()
+plt.show()'''
