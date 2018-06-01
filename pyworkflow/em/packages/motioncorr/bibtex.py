@@ -41,7 +41,7 @@ _bibtexStr = """
   pages="584-590",
   year="2013",
   publisher="Nature Publishing Group",
-  doi = {http://dx.doi.org/10.1038/nmeth.2727}
+  doi = {http://dx.doi.org/10.1038/nmeth.2472}
 }
 
 @article{Zheng2017,
