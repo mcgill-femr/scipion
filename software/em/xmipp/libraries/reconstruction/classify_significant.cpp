@@ -218,7 +218,7 @@ void ProgClassifySignificant::selectSubset(size_t particleId, bool &flagEmpty)
 
 void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double> &I2, MultidimArray<double> &Iexp1,
 		MultidimArray<double> &Iexp2, double &corr1exp, double &corr2exp, bool I1isEmpty, bool I2isEmpty, int xdim,
-		bool onlyIntersection, int numVotes)
+		bool onlyIntersection, int numVotes, size_t id, std::ofstream *fs)
 {
 
 	MultidimArray<double> Idiff, I2Aligned, Iexp2Aligned;
@@ -512,19 +512,24 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 		votes+=1;
 	else if (imedN1exp>imedN2exp)
 		votes-=1;
+	if (corrN1exp<corrI2exp1)
+		votes-=1;
+	else if (corrN2exp<corrI1exp2)
+		votes+=1;
 
-	if(votes>=numVotes && corrN1exp>corrI2exp1){
+	if(votes>=numVotes){
 		corr1exp = corrN1exp;
 		corr2exp = -1;
 	}
-	else if(votes<=-numVotes && corrN2exp>corrI1exp2){
+	else if(votes<=-numVotes){
 		corr2exp= corrN2exp;
 		corr1exp=-1;
 	}
 
-	/*std::cout << "corr1exp= " << corr1exp << " corrN1exp: " << corrN1exp << " corrM1exp=" << corrM1exp << " corrW1exp=" << corrW1exp << " corrWI2exp1=" << corrWI2exp1 << " corrI2exp1=" << corrI2exp1 << " imedN1exp=" << imedN1exp << std::endl;
-	std::cout << "corr2exp= " << corr2exp << " corrN2exp: " << corrN2exp << " corrM2exp=" << corrM2exp << " corrW2exp=" << corrW2exp << " corrWI1exp2=" << corrWI1exp2 << " corrI1exp2=" << corrI1exp2 << " imedN2exp=" << imedN2exp << std::endl;
-	std::cout << "votes= " << votes << std::endl;*/
+	//(*fs) << id << " " << corr1exp << " " << corrN1exp << " " << corrM1exp << " " << corrW1exp << " " << corrI2exp1 << " " << corrWI2exp1 << " " << corr2exp << " " << corrN2exp << " " << corrM2exp << " " << corrW2exp << " " << corrI1exp2 << " " << corrWI1exp2 << std::endl;
+	//std::cout << "corr1exp= " << corr1exp << " corrN1exp: " << corrN1exp << " corrM1exp=" << corrM1exp << " corrW1exp=" << corrW1exp << " corrWI2exp1=" << corrWI2exp1 << " corrI2exp1=" << corrI2exp1 << " imedN1exp=" << imedN1exp << std::endl;
+	//std::cout << "corr2exp= " << corr2exp << " corrN2exp: " << corrN2exp << " corrM2exp=" << corrM2exp << " corrW2exp=" << corrW2exp << " corrWI1exp2=" << corrWI1exp2 << " corrI1exp2=" << corrI1exp2 << " imedN2exp=" << imedN2exp << std::endl;
+	//std::cout << "votes= " << votes << std::endl;
 }
 
 void ProgClassifySignificant::updateClass(int n, double wn)
@@ -555,6 +560,8 @@ void ProgClassifySignificant::run()
 {
 	show();
 	produceSideInfo();
+
+	std::ofstream fs("./correlations.txt", std::ofstream::out);
 
 	if (verbose>0)
 	{
@@ -627,7 +634,8 @@ void ProgClassifySignificant::run()
 
 						//if (!I1isEmpty && !I2isEmpty)
 						//{
-							computeWeightedCorrelation(I1, I2, Iexp1, Iexp2, corr1exp, corr2exp, I1isEmpty, I2isEmpty, xdim, onlyIntersection, numVotes);
+							computeWeightedCorrelation(I1, I2, Iexp1, Iexp2, corr1exp, corr2exp, I1isEmpty, I2isEmpty,
+									xdim, onlyIntersection, numVotes, id, &fs);
 							if (isnan(corr1exp))
 								corr1exp=-1.0;
 							if (isnan(corr2exp))
@@ -669,14 +677,16 @@ void ProgClassifySignificant::run()
 						save()=I1;
 						save.write("PPP1.xmp");
 						save()=I2;
-						save.write("PPP2.xmp");*/
-						//std::cout << id << " " << corr1exp << " " << corr2exp << " " << I1isEmpty << " " << I2isEmpty << std::endl;
-						//std::cout << "winning=" << winning << std::endl;
-						//std::cout << "corrDiff=" << corrDiff << std::endl;
+						save.write("PPP2.xmp");
+						std::cout << id << " " << corr1exp << " " << corr2exp << " " << I1isEmpty << " " << I2isEmpty << std::endl;
+						std::cout << "winning=" << winning << std::endl;
+						std::cout << "corrDiff=" << corrDiff << std::endl;
 
-						/*char c;
+						if (winning[0]==0 && winning[1]==0){
+						char c;
 						std::cout << "Press any key" << std::endl;
-						std::cin >> c;*/
+						std::cin >> c;
+						}*/
 
 						i2++;
 					}while(i2<subset2.size());
@@ -733,5 +743,9 @@ void ProgClassifySignificant::run()
 			REPORT_ERROR(ERR_VALUE_EMPTY,formatString("Class %d have been depleted of images. Cannot continue processing",ivol));
 		md.write(formatString("class%06d_images@%s",ivol+1,fnOut.c_str()),MD_APPEND);
 	}
+
+	fs.close();
+
 }
+
 #undef DEBUG
