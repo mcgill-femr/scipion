@@ -48,6 +48,8 @@ import pyworkflow.em as em
 from convert import writeSetOfParticles, readSetOfParticles
 import xmipp
 from xmipp import MetaData
+from pyworkflow.em.metadata.utils import iterRows
+from pyworkflow.em.metadata.constants import MD_APPEND, MDL_CLASS_COUNT
 
 
 class XmippProtReconstructHeterogeneous(ProtClassify3D):
@@ -530,6 +532,10 @@ class XmippProtReconstructHeterogeneous(ProtClassify3D):
                     fnImgsId, fnAnglesAll, fnVols, fnOut, self.numberVotes), numberOfMpi=1)
         # cleanPath(fnVols)
         # cleanPath(fnAnglesAll)
+
+        #AJ testing
+        #copyFile("./correlations.txt", join(fnDirCurrent, "correlations.txt"))
+
 
     def reconstruct(self, iteration):
         fnDirCurrent = self._getExtraPath("Iter%03d" % iteration)
