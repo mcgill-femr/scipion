@@ -25,7 +25,7 @@
 # **************************************************************************
 
 
-from pyworkflow.protocol.params import (PointerParam, FloatParam,  
+from pyworkflow.protocol.params import (PointerParam, FloatParam,   
                                         StringParam, BooleanParam, LEVEL_ADVANCED)
 from pyworkflow.em.data import Volume
 from pyworkflow.em.protocol import ProtAnalysis3D
@@ -70,8 +70,10 @@ class Prot3DVariance(ProtAnalysis3D):
         form.addParam('Mask', PointerParam, pointerClass='VolumeMask',allowsNull=True, 
                       label="Binary Mask",
                       help='Binary mask that determines which points are specimen'
-                      ' and which are not')  
-        form.addParam('pad', FloatParam, default=2,
+                      ' and which are not')
+        form.addParam('NumMCIter', FloatParam, default=100,expertLevel=LEVEL_ADVANCED,
+                      label="Number of Monte Carlo simulations")  
+        form.addParam('pad', FloatParam, default=2,expertLevel=LEVEL_ADVANCED,
                       label="Padding factor")
         form.addParam('extraParams', StringParam, default='', expertLevel=LEVEL_ADVANCED,
                       label='Extra parameters: ', 
@@ -128,7 +130,8 @@ class Prot3DVariance(ProtAnalysis3D):
 
         self.params += ' --thrFFT %d' % self.numberOfThreads.get()
         self.params += '  --vol %s' % self._getFileName('output_volume')
-        self.params += '  -o %s' % self._getFileName('variability')
+        self.params += '  -o %s' % self._getFileName('variability') 
+        self.params += ' --iterMC %0.3f' % self.NumMCIter.get()
         
         if (self.Mask.get() is not None):
             self.params += '   --mask %s' %  self.Mask.get().getFileName()
@@ -142,7 +145,9 @@ class Prot3DVariance(ProtAnalysis3D):
         
         from pyworkflow.em.convert import ImageHandler
         img = ImageHandler()
-        img.convert(self.inputVolume.get(), self._getFileName('output_volume'))
+        
+        if (self.inputVolume.get() is not None):
+            img.convert(self.inputVolume.get(), self._getFileName('output_volume'))
 
         writeSetOfParticles(imgSet, particlesMd)
 
