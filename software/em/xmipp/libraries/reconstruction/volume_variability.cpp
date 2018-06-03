@@ -83,6 +83,8 @@ void ProgVolVariability::defineParams()
     addParamsLine("  [--phaseFlipped]               : Give this flag if images have been already phase flipped");
     addParamsLine("  [--minCTF <ctf=0.01>]          : Minimum value of the CTF that will be inverted");
     addParamsLine("                                 : CTF values (in absolute value) below this one will not be corrected");
+    addParamsLine("  [--iterMC <iterations=100>]    : Number of Monte Carlo iterations");
+
  //   addExampleLine("For reconstruct enforcing i3 symmetry and using stored weights:", false);
  //   addExampleLine("   xmipp_reconstruct_fourier  -i reconstruction.sel --sym i3 --weight");
  //   JV QUESTIONS;
@@ -117,6 +119,7 @@ void ProgVolVariability::readParams()
     thrWidth = getIntParam("--thr", 1);
     numThreadsFFT = getIntParam("--thrFFT");
     NiterWeight = getIntParam("--iter");
+    NiterMC = getIntParam("--iterMC");
     useCTF = checkParam("--useCTF");
     phaseFlipped = checkParam("--phaseFlipped");
     minCTF = getDoubleParam("--minCTF");
@@ -912,13 +915,13 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                             }
                                             else
                                             {
-                                                double wEffective=w*wCTF;
+//                                                double wEffective=w*wCTF;
                                                 size_t memIdx=fixSize + ixp;//YXSIZE(VoutFourier)*(izp)+((iyp)*XSIZE(VoutFourier))+(ixp);
 
                                                 double *ptrOut=(double *)&(DIRECT_A1D_ELEM(VoutFourier, memIdx));
                                                 double *ptrInVol=(double *)&(DIRECT_A1D_ELEM(parent->fftVin, memIdx));
 
-                                                  ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0]));
+                                                  ptrOut[0] += w * ((wCTF*ptrIn[0]-ptrInVol[0])*(wCTF*ptrIn[0]-ptrInVol[0]));
 //                                                ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0])+(ptrIn[1]-ptrInVol[1])*(ptrIn[1]-ptrInVol[1]));
 //                                                ptrOut[0] += wEffective * (ptrIn[0]);
 //                                                ptrOut[0] += wEffective * std::abs(ptrIn[0] - ptrInVol[0]);
@@ -926,16 +929,16 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                                 DIRECT_A1D_ELEM(fourierWeights, memIdx) += w;
                                                 if (conjugate)
 //                                                	 ptrOut[1]-=wEffective * (ptrIn[1]);
-                                                	ptrOut[1]+=wEffective*((-ptrIn[1]-ptrInVol[1])*(-ptrIn[1]-ptrInVol[1]));
+                                                	ptrOut[1]+=w *((-wCTF*ptrIn[1]-ptrInVol[1])*(-wCTF*ptrIn[1]-ptrInVol[1]));
 //                                                	ptrOut[1]-=wEffective * (ptrInVol[1]);
-                                               else
+                                                else
 //                                            	   ptrOut[1]+=wEffective * (ptrIn[1]);
-                                            	   ptrOut[1]+=wEffective*((ptrIn[1]-ptrInVol[1])*(ptrIn[1]-ptrInVol[1]));
+                                            	   ptrOut[1]+=w *((wCTF*ptrIn[1]-ptrInVol[1])*(wCTF*ptrIn[1]-ptrInVol[1]));
 //                                            	   ptrOut[1]+=wEffective * (ptrInVol[1]);
 //                                            	   ptrOut[1]+=wEffective * std::abs(ptrIn[1]- ptrInVol[1]);
 
 //                                                if (memIdx == 0*0*0)
-//                                                	std::cout << ptrIn[0] << " " << ptrInVol[0] << " " << ptrIn[1] << " " << ptrInVol[1] << " " << w << std::endl;
+//                                                	std::cout << ptrIn[0] << " " << ptrInVol[0] << " " << ptrIn[1] << " " << ptrInVol[1] << " " << w << " " << wCTF << conjugate << std::endl;
                                             }
                                         }
                                     }
@@ -1339,25 +1342,26 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     double mean_err = 1000;
 
     int it = 1;
-    int maxIter =400;
     std::cout << "Monte Carlo simulation: " << std::endl;
     //init_progress_bar(numIters);
 
-    while( (mean_err > 0.001*3*Vin().computeStddev()) )
+    while( it < NiterMC )
     {
-    	if (it > maxIter)
-    		break;
 
 		FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourierTmp2)  // Simulated Volume
 		{
 			mean = A3D_ELEM(fftVin, k, i, j)*corr2D_3D;
 			stddev = std::sqrt(A3D_ELEM(VoutFourierTmp2, k, i, j)); // We compute the std from the variance
+			//stddev.real(0.*std::sqrt(stddev.real()));
+			//stddev.imag(0.*std::sqrt(stddev.imag()));
+
 			rand_normal(((double*) &mean)[0], ((double*) &stddev)[0],
 					((double*) &result)[0]);
 			rand_normal(((double*) &mean)[1], ((double*) &stddev)[1],
 					((double*) &result)[1]);
 			A3D_ELEM(VoutFourier,k,i,j) = result;//result; // A3D_ELEM(fftVin,k,i,j);
-		}  										   // Simulated Volume
+			//std::cout << result << std::endl;
+		} 		// Simulated Volume
 
 //Fourier Transform of simulated volume
 	    transformerVol.inverseFourierTransform();
@@ -1379,6 +1383,7 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 	    double meanFactor2=0;
 	    FOR_ALL_ELEMENTS_IN_ARRAY3D(mVout)
 	    {
+
 	        double radius=sqrt((double)(k*k+i*i+j*j));
 	        double aux=radius*iDeltaFourier;
 	        double factor = Fourier_blob_table(ROUND(aux));
@@ -1396,7 +1401,7 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 	    {
 	        meanFactor2/=MULTIDIM_SIZE(mVout);
 	        FOR_ALL_ELEMENTS_IN_ARRAY3D(mVout)
-	        A3D_ELEM(mVout,k,i,j) *= meanFactor2;
+	        	A3D_ELEM(mVout,k,i,j) *= meanFactor2;
 	    }
 
 	    int numElem = 0;
@@ -1421,8 +1426,8 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 	    	}
 	    }
 
-	    mean_err = (error/(it*numElem))*100.0;
-	    std::cout << "Iteration MC : " << it << " Max iter: " << maxIter << " Error : " << mean_err << std::endl;
+	    mean_err = (error/(numElem))*100.0;
+	    std::cout << "Iteration MC : " << it << " Max iter: " << NiterMC << " Error : " << mean_err << std::endl;
 	    Vmc.initZeros(volPadSizeZ,volPadSizeY,volPadSizeX); //we want to reuse the Vin() memory
 	    Vmc.setXmippOrigin();
 	    error = 0.0;
@@ -1435,8 +1440,12 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     FileName fn_variance = fn_out.removeFileFormat().removeLastExtension()+"_variance.vol";
     Vout.write(fn_variance);
 
-//    FOR_ALL_ELEMENTS_IN_ARRAY3D(Vintemp) //esto volver a activarlo!
-//    	A3D_ELEM(Vintemp,k,i,j) = std::sqrt(A3D_ELEM(Vout(),k,i,j));
+    fn_variance = fn_out.removeFileFormat().removeLastExtension()+ "_mean.vol";
+    Vin() = Vintemp/(double)it;
+    Vin.write(fn_variance);
+
+    FOR_ALL_ELEMENTS_IN_ARRAY3D(Vintemp)
+    	A3D_ELEM(Vintemp,k,i,j) = std::sqrt(A3D_ELEM(Vout(),k,i,j));
 
     fn_variance = fn_out.removeFileFormat().removeLastExtension()+ "_std.vol";
     Vout() = Vintemp;
@@ -1503,6 +1512,7 @@ void ProgVolVariability::rand_normal(double& mean, double& stddev, double& resul
 {//Box muller method
     static double n2 = 0.0;
     static int n2_cached = 0;
+
     if (!n2_cached)
     {
         double x, y, r;

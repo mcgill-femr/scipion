@@ -156,6 +156,9 @@ public:
     /// Number of iterations for the weight
     int NiterWeight;
 
+    /// Number of Monte Carlo iterations
+    int NiterMC;
+
     /// Number of threads to use in parallel to process a single image
     int numThreads;
 
