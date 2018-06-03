@@ -915,7 +915,7 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                             }
                                             else
                                             {
-//                                                double wEffective=w*wCTF;
+//                                              double wEffective=w*wCTF;
                                                 size_t memIdx=fixSize + ixp;//YXSIZE(VoutFourier)*(izp)+((iyp)*XSIZE(VoutFourier))+(ixp);
 
                                                 double *ptrOut=(double *)&(DIRECT_A1D_ELEM(VoutFourier, memIdx));
@@ -1351,10 +1351,10 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 		FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourierTmp2)  // Simulated Volume
 		{
 			mean = A3D_ELEM(fftVin, k, i, j)*corr2D_3D;
-			stddev = std::sqrt(A3D_ELEM(VoutFourierTmp2, k, i, j)); // We compute the std from the variance
-			//stddev.real(0.*std::sqrt(stddev.real()));
-			//stddev.imag(0.*std::sqrt(stddev.imag()));
+			stddev = (A3D_ELEM(VoutFourierTmp2, k, i, j)); // We compute the std from the variance
 
+			stddev.real( std::sqrt( std::abs(stddev.real())) );
+			stddev.imag( std::sqrt( std::abs(stddev.imag())) );
 			rand_normal(((double*) &mean)[0], ((double*) &stddev)[0],
 					((double*) &result)[0]);
 			rand_normal(((double*) &mean)[1], ((double*) &stddev)[1],
@@ -1362,6 +1362,7 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 			A3D_ELEM(VoutFourier,k,i,j) = result;//result; // A3D_ELEM(fftVin,k,i,j);
 			//std::cout << result << std::endl;
 		} 		// Simulated Volume
+
 
 //Fourier Transform of simulated volume
 	    transformerVol.inverseFourierTransform();
@@ -1454,15 +1455,15 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     std::cout << std::endl;
 
 
-//    #ifdef DEBUG_VOL2 //poner estas lineas
-//    {
+    #ifdef DEBUG_VOL2 //poner estas lineas
+    {
     	Vintemp /=(double)it;
         Image<double> save;
         save().alias( Vintemp );
         save.write((std::string) fn_out + "Vintemp.vol");
         Vin.write((std::string) fn_out + "Vin.vol");
-//    }
-//    #endif
+    }
+    #endif
 
 }
 
