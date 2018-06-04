@@ -516,6 +516,10 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 		votes-=1;
 	else if (corrN2exp<corrI1exp2)
 		votes+=1;
+//	if ((corrN1exp-corrI2exp1)>(corrN2exp-corrI1exp2))
+//		votes+=1;
+//	else if ((corrN1exp-corrI2exp1)<(corrN2exp-corrI1exp2))
+//		votes-=1;
 
 	if(votes>=numVotes){
 		corr1exp = corrN1exp;
@@ -527,9 +531,9 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 	}
 
 	//(*fs) << id << " " << corr1exp << " " << corrN1exp << " " << corrM1exp << " " << corrW1exp << " " << corrI2exp1 << " " << corrWI2exp1 << " " << corr2exp << " " << corrN2exp << " " << corrM2exp << " " << corrW2exp << " " << corrI1exp2 << " " << corrWI1exp2 << std::endl;
-	//std::cout << "corr1exp= " << corr1exp << " corrN1exp: " << corrN1exp << " corrM1exp=" << corrM1exp << " corrW1exp=" << corrW1exp << " corrWI2exp1=" << corrWI2exp1 << " corrI2exp1=" << corrI2exp1 << " imedN1exp=" << imedN1exp << std::endl;
-	//std::cout << "corr2exp= " << corr2exp << " corrN2exp: " << corrN2exp << " corrM2exp=" << corrM2exp << " corrW2exp=" << corrW2exp << " corrWI1exp2=" << corrWI1exp2 << " corrI1exp2=" << corrI1exp2 << " imedN2exp=" << imedN2exp << std::endl;
-	//std::cout << "votes= " << votes << std::endl;
+//	std::cout << "corr1exp= " << corr1exp << " corrN1exp: " << corrN1exp << " corrM1exp=" << corrM1exp << " corrW1exp=" << corrW1exp << " corrWI2exp1=" << corrWI2exp1 << " corrI2exp1=" << corrI2exp1 << " imedN1exp=" << imedN1exp << std::endl;
+//	std::cout << "corr2exp= " << corr2exp << " corrN2exp: " << corrN2exp << " corrM2exp=" << corrM2exp << " corrW2exp=" << corrW2exp << " corrWI1exp2=" << corrWI1exp2 << " corrI1exp2=" << corrI1exp2 << " imedN2exp=" << imedN2exp << std::endl;
+//	std::cout << "votes= " << votes << std::endl;
 }
 
 void ProgClassifySignificant::updateClass(int n, double wn)
@@ -682,11 +686,9 @@ void ProgClassifySignificant::run()
 						std::cout << "winning=" << winning << std::endl;
 						std::cout << "corrDiff=" << corrDiff << std::endl;
 
-						if (winning[0]==0 && winning[1]==0){
 						char c;
 						std::cout << "Press any key" << std::endl;
-						std::cin >> c;
-						}*/
+						std::cin >> c;*/
 
 						i2++;
 					}while(i2<subset2.size());
