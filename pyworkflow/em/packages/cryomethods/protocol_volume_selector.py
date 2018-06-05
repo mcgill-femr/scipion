@@ -106,7 +106,14 @@ class ProtInitialVolumeSelector(ProtocolBase):
         """ Should be overwritten in subclasses to
         return summary message for NORMAL EXECUTION.
         """
-        return []
+        msj = ['\n\n*Input parameters summary:*\n']
+        msj.append('target resolution:     %0.2f A' % self.targetResol.get())
+        msj.append('mask diameter:       %0.2f A' % self.maskDiameterA.get())
+        msj.append('symmetry:              %s' % self.symmetryGroup.get())
+        msj.append('Map low-pass filter: %0.2f A' %
+                   self.initialLowPassFilterA.get())
+
+        return msj
 
     def _methods(self):
         """ Should be overwritten in each protocol.
