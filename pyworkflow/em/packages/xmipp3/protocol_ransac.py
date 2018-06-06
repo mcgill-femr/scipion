@@ -115,6 +115,30 @@ class XmippProtRansac(ProtInitialVolume):
                       label='Use all images to refine', 
                       help=' When refining a RANSAC volume, use all images to refine it instead of only inliers')
         
+        form.addParam('minRot', IntParam, default=-180, expertLevel=LEVEL_ADVANCED,
+                      label='Min Rot angle (degrees)', 
+                      help=' Minimum rotation angle in (degrees) to assign randomly to the averages')
+        
+        form.addParam('maxRot', IntParam, default=180, expertLevel=LEVEL_ADVANCED,
+                      label='Max Rot angle (degrees)', 
+                      help=' Maximum rotation angle in (degrees) to assign randomly to the averages')
+        
+        form.addParam('minTilt', IntParam, default=0, expertLevel=LEVEL_ADVANCED,
+                      label='Min Tilt angle (degrees)', 
+                      help=' Minimum tilt angle in (degrees) to assign randomly to the averages')
+        
+        form.addParam('maxTilt', IntParam, default=180, expertLevel=LEVEL_ADVANCED,
+                      label='Max Tilt angle (degrees)', 
+                      help=' Maximum tilt angle in (degrees) to assign randomly to the averages')
+        
+        form.addParam('minPsi', IntParam, default=0, expertLevel=LEVEL_ADVANCED,
+                      label='Min Psi angle (degrees)', 
+                      help=' Minimum psi angle in (degrees) to assign randomly to the averages')
+        
+        form.addParam('maxPsi', IntParam, default=360, expertLevel=LEVEL_ADVANCED,
+                      label='Max Psi angle (degrees)', 
+                      help=' Maximum psi angle in (degrees) to assign randomly to the averages')
+        
         form.addParallelSection(threads=8, mpi=1)
             
          
@@ -215,9 +239,9 @@ class XmippProtRansac(ProtInitialVolume):
             self.runJob("xmipp_transform_dimred","-i %s --randomSample %s.xmd  %d -m LTSA "%(fnOutputReducedClass,fnRoot,self.numGrids.get()))
         else:        
             self.runJob("xmipp_metadata_utilities","-i %s -o %s.xmd  --operate random_subset %d --mode overwrite "%(fnOutputReducedClass,fnRoot,self.numSamples.get()))
-            self.runJob("xmipp_metadata_utilities","-i %s.xmd --fill angleRot rand_uniform -180 180 "%(fnRoot))
-            self.runJob("xmipp_metadata_utilities","-i %s.xmd --fill angleTilt rand_uniform 0 180 "%(fnRoot))
-            self.runJob("xmipp_metadata_utilities","-i %s.xmd --fill anglePsi  rand_uniform 0 360 "%(fnRoot)) 
+            self.runJob("xmipp_metadata_utilities","-i %s.xmd --fill angleRot rand_uniform %d %d " %(fnRoot, self.minRot.get(),self.maxRot.get()))
+            self.runJob("xmipp_metadata_utilities","-i %s.xmd --fill angleTilt rand_uniform %d %d " %(fnRoot, self.minTilt.get(),self.maxTilt.get()))
+            self.runJob("xmipp_metadata_utilities","-i %s.xmd --fill anglePsi  rand_uniform %d %d " %(fnRoot, self.minPsi.get(),self.maxPsi.get()))
     
         # If there is an initial volume, assign angles        
         if self.initialVolume.hasValue():
@@ -232,8 +256,10 @@ class XmippProtRansac(ProtInitialVolume):
         
         # Generate projections from this reconstruction
         fnGallery=self._getTmpPath('gallery_'+fnBase+'.stk')
-        self.runJob("xmipp_angular_project_library", "-i %s -o %s --sampling_rate %f --sym %s --method fourier 1 0.25 bspline --compute_neighbors --angular_distance -1 --experimental_images %s --max_tilt_angle 90"\
-                    %(fnVol,fnGallery,self.angularSampling.get(),self.symmetryGroup.get(),fnOutputReducedClass))
+        self.runJob("xmipp_angular_project_library", "-i %s -o %s --sampling_rate %f --sym %s --method fourier 1 0.25 bspline --compute_neighbors --angular_distance -1 --experimental_images %s --min_tilt_angle %d --max_tilt_angle %d "\
+                    %(fnVol,fnGallery,self.angularSampling.get(),self.symmetryGroup.get(),fnOutputReducedClass,self.minTilt.get(),self.maxTilt.get()))
+        
+        
             
         # Assign angles to the rest of images
         fnAngles=self._getTmpPath('angles_'+fnBase+'.xmd')
@@ -356,8 +382,9 @@ class XmippProtRansac(ProtInitialVolume):
             fnOutputReducedClass = self._getExtraPath("reducedClasses.xmd") 
             
             AngularSampling=max(self.angularSampling.get()/2.0,7.5);
-            self.runJob("xmipp_angular_project_library", "-i %s.vol -o %s --sampling_rate %f --sym %s --method fourier 1 0.25 bspline --compute_neighbors --angular_distance -1 --experimental_images %s"\
-                                  %(fnRoot,fnGallery,float(AngularSampling),self.symmetryGroup.get(),fnOutputReducedClass))
+            self.runJob("xmipp_angular_project_library", "-i %s.vol -o %s --sampling_rate %f --sym %s --method fourier 1 0.25 bspline "
+                        " --compute_neighbors --angular_distance -1 --experimental_images %s --min_tilt_angle %d --max_tilt_angle %d "\
+                        %(fnRoot,fnGallery,float(AngularSampling),self.symmetryGroup.get(),fnOutputReducedClass,self.minTilt.get(),self.maxTilt.get()))
         
             self.runJob("xmipp_angular_projection_matching", "-i %s.xmd -o %s.xmd --ref %s --Ri 0 --Ro %s --max_shift %s --append"\
                    %(fnRoot,fnRoot,fnGallery,str(self.Xdim/2),str(self.Xdim/20)))
@@ -406,8 +433,8 @@ class XmippProtRansac(ProtInitialVolume):
         self.runJob("xmipp_image_resize","-i %s --dim %d %d"%(fnOutputInitVolume,self.Xdim2,self.Xdim2))
         fnGallery=self._getTmpPath('gallery_InitialVolume.stk')
         fnOutputReducedClass = self._getExtraPath("reducedClasses.xmd") 
-        self.runJob("xmipp_angular_project_library", "-i %s -o %s --sampling_rate %f --sym %s --method fourier 1 0.25 bspline --compute_neighbors --angular_distance -1 --experimental_images %s"\
-                              %(fnOutputInitVolume,fnGallery,self.angularSampling.get(),self.symmetryGroup.get(),fnOutputReducedClass))
+        self.runJob("xmipp_angular_project_library", "-i %s -o %s --sampling_rate %f --sym %s --method fourier 1 0.25 bspline --compute_neighbors --angular_distance -1 --experimental_images %s --min_tilt_angle %d --max_tilt_angle %d" \
+                              %(fnOutputInitVolume,fnGallery,self.angularSampling.get(),self.symmetryGroup.get(),fnOutputReducedClass,self.minTilt.get(),self.maxTilt.get()))
    
     def _postprocessVolume(self, vol, row):
         self._counter += 1
