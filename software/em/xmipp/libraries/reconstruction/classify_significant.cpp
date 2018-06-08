@@ -512,14 +512,14 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 		votes+=1;
 	else if (imedN1exp>imedN2exp)
 		votes-=1;
-	if (corrN1exp<corrI2exp1)
-		votes-=1;
-	else if (corrN2exp<corrI1exp2)
-		votes+=1;
-//	if ((corrN1exp-corrI2exp1)>(corrN2exp-corrI1exp2))
-//		votes+=1;
-//	else if ((corrN1exp-corrI2exp1)<(corrN2exp-corrI1exp2))
+//	if (corrN1exp<corrI2exp1)
 //		votes-=1;
+//	else if (corrN2exp<corrI1exp2)
+//		votes+=1;
+	if ((corrN1exp-corrI2exp1)>(corrN2exp-corrI1exp2))
+		votes+=1;
+	else if ((corrN1exp-corrI2exp1)<(corrN2exp-corrI1exp2))
+		votes-=1;
 
 	if(votes>=numVotes){
 		corr1exp = corrN1exp;
