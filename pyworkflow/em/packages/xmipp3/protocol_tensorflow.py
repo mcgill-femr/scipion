@@ -55,7 +55,6 @@ batch_size = 8
 
 noisyImage = []
 for im in glob.glob(train_data_dir):
-    print im
     image = cv2.imread(im,0)
     noise = np.random.normal(loc=0.0, scale=200, size=np.shape(image))
     noiseimage = image+noise
