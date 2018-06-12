@@ -26,6 +26,8 @@
 
 import numpy as np
 import keras
+import tensorflow as tf
+from keras.preprocessing.image import ImageDataGenerator
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Flatten, BatchNormalization, Activation
 from keras.layers import Conv2D, MaxPooling2D, ZeroPadding2D
@@ -34,13 +36,52 @@ from keras.datasets import cifar10
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 import mrcfile
 import glob
 from keras.applications import VGG19
+import cv2
 
-'''for image in glob.glob('/home/javiermota/Desktop/asimov2/ScipionUserData/projects/ribosome/Runs/001564_ProtRelionExtractSubtomograms/Particles/extra/*.mrc'):
-with mrcfile.open(image) as mrc:
-    a = mrc.data'''
+# dimensions of our images.
+img_width, img_height = 100, 100
+
+train_data_dir = '/home/javiermota/Downloads/images/Train/cats/*.jpg'
+validation_data_dir = '/home/javiermota/images_tensorflow/Validation'
+test_data_dir = '/home/javiermota/images_tensorflow/Test'
+nb_train_samples = 30
+nb_validation_samples = 18
+epochs = 50
+batch_size = 8
+
+noisyImage = []
+for im in glob.glob(train_data_dir):
+    print im
+    image = cv2.imread(im,0)
+    noise = np.random.normal(loc=0.0, scale=200, size=np.shape(image))
+    noiseimage = image+noise
+    noisyImage.append(noiseimage)
+    #plt.imshow(noiseimage,cmap = plt.get_cmap('gray'))
+
+noisyImage = np.asarray(noisyImage)
+
+#train = ImageDataGenerator().flow_from_directory(train_data_dir, target_size=(img_width,img_height),  classes=['views'], batch_size=batch_size)
+#validation = ImageDataGenerator().flow_from_directory(validation_data_dir, target_size=(img_width,img_height), classes=['views'], batch_size=batch_size/2)
+#test = ImageDataGenerator().flow_from_directory(test_data_dir, target_size=(img_width,img_height), classes=['views'], batch_size=batch_size)
+
+
+
+'''
+def getImages(path):
+    for image in glob.glob(path):
+        with mrcfile.open(image) as mrc:
+            a = mrc.data
+        yield a
+
+images = getImages('/home/javiermota/CCTData/Extract/job057/Micrographs/*.mrcs')
+
+for i in images:
+    print i
+
 
 vgg_conv = VGG19(weights='imagenet',include_top=False)
 
@@ -56,18 +97,7 @@ model.add(Dense(1024, activation='relu'))
 model.add(Dropout(0.5))
 model.add(Dense(3, activation='softmax'))
 
-
-
-
-
-
 num_classes = 10
-# Generate dummy data
-'''x_train = np.random.random((100, 100, 100, 3))
-y_train = keras.utils.to_categorical(np.random.randint(10, size=(100, 1)), num_classes=10)
-x_test = np.random.random((20, 100, 100, 3))
-y_test = keras.utils.to_categorical(np.random.randint(10, size=(20, 1)), num_classes=10)
-
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 
 y_train = keras.utils.to_categorical(y_train, num_classes)
