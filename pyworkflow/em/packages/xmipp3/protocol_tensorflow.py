@@ -28,11 +28,11 @@ import numpy as np
 import keras
 import tensorflow as tf
 from keras.preprocessing.image import ImageDataGenerator
-from keras.models import Sequential
+from keras.models import Sequential, Model
 from keras.layers import Dense, Dropout, Flatten, BatchNormalization, Activation
-from keras.layers import Conv2D, MaxPooling2D, ZeroPadding2D
+from keras.layers import Conv2D, MaxPooling2D, ZeroPadding2D, Input
 from keras.optimizers import SGD
-from keras.datasets import cifar10
+from keras.datasets import cifar10, mnist
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
@@ -53,16 +53,40 @@ nb_validation_samples = 18
 epochs = 50
 batch_size = 8
 
+(x_train, _), (x_test, _) = mnist.load_data()
+x_train = x_train.astype('float32') / 255.
+x_test = x_test.astype('float32') / 255.
+x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
+x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
+print x_train.shape
+print x_test.shape
+
 noisyImage = []
 for im in glob.glob(train_data_dir):
     image = cv2.imread(im,0)
     noise = np.random.normal(loc=0.0, scale=200, size=np.shape(image))
-    noiseimage = image+noise
-    noisyImage.append(noiseimage)
+    noiseimage = cv2.resize(image+noise,(100,100))
+    noisyImage.append(np.ravel(noiseimage))
     #plt.imshow(noiseimage,cmap = plt.get_cmap('gray'))
 
 noisyImage = np.asarray(noisyImage)
 
+input_img = Input(shape=(784,))
+encoded = Dense(128, activation='relu')(input_img)
+encoded = Dense(64, activation='relu')(encoded)
+encoded = Dense(32, activation='relu')(encoded)
+
+decoded = Dense(64, activation='relu')(encoded)
+decoded = Dense(128, activation='relu')(decoded)
+decoded = Dense(784, activation='sigmoid')(decoded)
+
+autoencoder = Model(input_img, decoded)
+autoencoder.compile(optimizer='adam', loss='binary_crossentropy')
+
+autoencoder.fit(x_train, x_train,
+                epochs=100,
+                batch_size=256,
+                shuffle=True)
 #train = ImageDataGenerator().flow_from_directory(train_data_dir, target_size=(img_width,img_height),  classes=['views'], batch_size=batch_size)
 #validation = ImageDataGenerator().flow_from_directory(validation_data_dir, target_size=(img_width,img_height), classes=['views'], batch_size=batch_size/2)
 #test = ImageDataGenerator().flow_from_directory(test_data_dir, target_size=(img_width,img_height), classes=['views'], batch_size=batch_size)
