@@ -1393,6 +1393,7 @@ class XmippProtReconstructHighRes(ProtRefine3D, HelicalFinder):
             cleanPath(fnFsc)
             if removeMask:
                 cleanPath(fnMask)
+                fnMask=""
 
         # Difference evaluation and production of a consensus average
         if self.postDifference:
