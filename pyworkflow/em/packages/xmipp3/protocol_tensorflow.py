@@ -30,8 +30,9 @@ import tensorflow as tf
 from keras.preprocessing.image import ImageDataGenerator
 from keras.models import Sequential, Model
 from keras.layers import Dense, Dropout, Flatten, BatchNormalization, Activation
-from keras.layers import Conv2D, MaxPooling2D, ZeroPadding2D, Input
+from keras.layers import Conv2D, MaxPooling2D, ZeroPadding2D, Input, UpSampling2D
 from keras.optimizers import SGD
+from keras.callbacks import TensorBoard
 from keras.datasets import cifar10, mnist
 import matplotlib
 matplotlib.use('TkAgg')
@@ -56,37 +57,57 @@ batch_size = 8
 (x_train, _), (x_test, _) = mnist.load_data()
 x_train = x_train.astype('float32') / 255.
 x_test = x_test.astype('float32') / 255.
-x_train = x_train.reshape((len(x_train), np.prod(x_train.shape[1:])))
-x_test = x_test.reshape((len(x_test), np.prod(x_test.shape[1:])))
+x_train = x_train.reshape((len(x_train), 28,28,1))
+x_test = x_test.reshape((len(x_test), 28,28,1))
 print x_train.shape
 print x_test.shape
 
-noisyImage = []
+noise_factor = 0.5
+x_train_noisy = x_train + noise_factor * np.random.normal(loc=0.0, scale=1.0, size=x_train.shape)
+x_test_noisy = x_test + noise_factor * np.random.normal(loc=0.0, scale=1.0, size=x_test.shape)
+
+x_train_noisy = np.clip(x_train_noisy, 0., 1.)
+x_test_noisy = np.clip(x_test_noisy, 0., 1.)
+
+'''noisyImage = []
 for im in glob.glob(train_data_dir):
     image = cv2.imread(im,0)
-    noise = np.random.normal(loc=0.0, scale=200, size=np.shape(image))
-    noiseimage = cv2.resize(image+noise,(100,100))
+    noise = np.random.normal(loc=0.0, scale=1, size=np.shape(image))
+    noiseimage = cv2.resize(image+noise,(128,128))
     noisyImage.append(np.ravel(noiseimage))
     #plt.imshow(noiseimage,cmap = plt.get_cmap('gray'))
 
 noisyImage = np.asarray(noisyImage)
+noisyImage.astype('float32')/255.
+noisyImage = np.reshape(noisyImage,(len(noisyImage),128,128,1))'''
 
-input_img = Input(shape=(784,))
-encoded = Dense(128, activation='relu')(input_img)
-encoded = Dense(64, activation='relu')(encoded)
-encoded = Dense(32, activation='relu')(encoded)
+input_img = Input(shape=(28,28,1))
 
-decoded = Dense(64, activation='relu')(encoded)
-decoded = Dense(128, activation='relu')(decoded)
-decoded = Dense(784, activation='sigmoid')(decoded)
+x = Conv2D(32, (3, 3), activation='relu', padding='same')(input_img)
+x = MaxPooling2D((2, 2), padding='same')(x)
+x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
+encoded = MaxPooling2D((2, 2), padding='same')(x)
+
+# at this point the representation is (7, 7, 32)
+
+x = Conv2D(32, (3, 3), activation='relu', padding='same')(encoded)
+x = UpSampling2D((2, 2))(x)
+x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
+x = UpSampling2D((2, 2))(x)
+decoded = Conv2D(1, (3, 3), activation='sigmoid', padding='same')(x)
 
 autoencoder = Model(input_img, decoded)
+image = tf.reshape(autoencoder[:1],[-1,28,28,1])
+tf.summary.image("image", image)
 autoencoder.compile(optimizer='adam', loss='binary_crossentropy')
 
-autoencoder.fit(x_train, x_train,
+autoencoder.fit(x_train_noisy, x_train,
                 epochs=100,
-                batch_size=256,
-                shuffle=True)
+                batch_size=128,
+                shuffle=True,
+                validation_data=(x_test_noisy, x_test),
+                callbacks=[TensorBoard(log_dir='/tmp/tb', histogram_freq=0, write_graph=False, write_images=True)])
+
 #train = ImageDataGenerator().flow_from_directory(train_data_dir, target_size=(img_width,img_height),  classes=['views'], batch_size=batch_size)
 #validation = ImageDataGenerator().flow_from_directory(validation_data_dir, target_size=(img_width,img_height), classes=['views'], batch_size=batch_size/2)
 #test = ImageDataGenerator().flow_from_directory(test_data_dir, target_size=(img_width,img_height), classes=['views'], batch_size=batch_size)
