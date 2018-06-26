@@ -47,6 +47,8 @@ public:
     FileName fnAngles;
     /** Output file */
     FileName fnOut;
+    /** FSC file */
+    FileName fnFsc;
     /** Padding factor */
     int pad;
     /** Min. Weight */
@@ -55,6 +57,8 @@ public:
     bool onlyIntersection;
     /** Minimum number of votes to consider an image belonging to a volume */
     int numVotes;
+    /** To check if there is FSC provided by user */
+    bool isFsc;
 public:
     // Fourier projector
     std::vector<FourierProjector *> projector;
@@ -76,6 +80,8 @@ public:
 	std::vector<Image<double> *> Iexp;
 	// Projection aux
 	Projection Paux;
+	// FSC values
+	std::vector<double> setFsc;
 public:
     /// Destructor
     ~ProgClassifySignificant();

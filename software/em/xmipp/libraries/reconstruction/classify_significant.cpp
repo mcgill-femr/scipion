@@ -48,6 +48,9 @@ void ProgClassifySignificant::readParams()
     wmin = getDoubleParam("--minWeight");
     onlyIntersection = checkParam("--onlyIntersection");
     numVotes = getIntParam("--votes");
+    isFsc = checkParam("--fsc");
+    if (isFsc)
+    	fnFsc = getParam("--fsc");
 }
 
 // Show ====================================================================
@@ -79,6 +82,7 @@ void ProgClassifySignificant::defineParams()
     addParamsLine("  [--onlyIntersection]         : Flag to select only the images belonging only to the set intersection");
     addParamsLine("  [--padding <p=2>]            : Padding factor");
     addParamsLine("  [--minWeight <w=0.1>]        : Minimum weight");
+    addParamsLine("  [--fsc <metadata>]           : Metadata with FSC values to take into account the SNR in the correlation measure");
 }
 
 // Produce side information ================================================
@@ -111,6 +115,13 @@ void ProgClassifySignificant::produceSideInfo()
         subsetAngles.push_back(*(new VMetaData()));
         subsetProjectionIdx.push_back(* (new std::vector<size_t>));
         i+=1;
+    }
+
+    //Read FSC if present
+    MetaData mdFcs;
+    if(isFsc){
+    	mdFcs.read(fnFsc);
+    	mdFcs.getColumnValues(MDL_RESOLUTION_FRC,setFsc);
     }
 
     // Read the Ids
@@ -216,9 +227,249 @@ void ProgClassifySignificant::selectSubset(size_t particleId, bool &flagEmpty)
 }
 #undef DEBUG
 
+
+
+
+void calculateRadialAvg(MultidimArray<double> &I, MultidimArray< std::complex<double> > &fftI,
+		MultidimArray<double> &radialAvg, bool power2){
+
+	MultidimArray<double> iu;
+
+	////////////////////////////
+	iu.initZeros(fftI);
+
+	double uy, ux, u2, uy2;
+	long n=0;
+
+	for(size_t i=0; i<YSIZE(fftI); ++i)
+	{
+		FFT_IDX2DIGFREQ(i,YSIZE(I),uy);
+		uy2=uy*uy;
+
+		for(size_t j=0; j<XSIZE(fftI); ++j)
+		{
+			FFT_IDX2DIGFREQ(j,XSIZE(I),ux);
+			u2=uy2+ux*ux;
+			DIRECT_MULTIDIM_ELEM(iu,n) = sqrt(u2);
+			++n;
+		}
+	}
+
+	double uz_inf, uz_sup;
+	FFT_IDX2DIGFREQ(0,XSIZE(I),uz_inf)
+	int N;
+	radialAvg.initZeros(XSIZE(fftI));
+	if (power2)
+		DIRECT_MULTIDIM_ELEM(radialAvg,0) = std::abs(A3D_ELEM(fftI, 0,0,0))*std::abs(A3D_ELEM(fftI, 0,0,0));
+	else
+		DIRECT_MULTIDIM_ELEM(radialAvg,0) = std::abs(A3D_ELEM(fftI, 0,0,0));
+	//std::cout << DIRECT_MULTIDIM_ELEM(radialAvg,0) << std::endl;
+	for(size_t k=1; k<XSIZE(fftI); ++k)
+	{
+		FFT_IDX2DIGFREQ(k-1,XSIZE(I),uz_inf);
+		if (k<XSIZE(fftI)-1){
+			FFT_IDX2DIGFREQ(k+1,XSIZE(I),uz_sup);
+		}else{
+			FFT_IDX2DIGFREQ(k,XSIZE(I),uz_sup);
+		}
+		double cum_mean = 0;
+		N = 0;
+		FOR_ALL_DIRECT_ELEMENTS_IN_MULTIDIMARRAY(fftI)
+		{
+			double u = DIRECT_MULTIDIM_ELEM(iu,n);
+			if ((u<uz_sup) && (u>=uz_inf))
+			{
+				if (power2)
+					cum_mean += std::abs(DIRECT_MULTIDIM_ELEM(fftI,n))*std::abs(DIRECT_MULTIDIM_ELEM(fftI,n));
+				else
+					cum_mean += std::abs(DIRECT_MULTIDIM_ELEM(fftI,n));
+				++N;
+			}
+		}
+		double freq;
+		FFT_IDX2DIGFREQ(k,XSIZE(I),freq);
+		DIRECT_MULTIDIM_ELEM(radialAvg,k) = cum_mean/N;
+		//std::cout << DIRECT_MULTIDIM_ELEM(radialAvg,k) << " " << freq << std::endl;
+	}
+
+
+}
+
+
+void calculateNewCorrelation(MultidimArray<double> &Iproj1, MultidimArray<double> &Iproj2, MultidimArray<double> &Iexp1,
+		MultidimArray<double> &Iexp2, double &ccI1Iexp1, double &ccI1Iexp2, double &ccI2Iexp2, double &ccI2Iexp1,
+		bool isFsc, std::vector<double> setFsc){
+
+	double w1=0;
+	double w2=0.5;
+	double w12=w1*w1;
+	double w22=w2*w2;
+
+	MultidimArray< std::complex<double> > fftIproj1, fftIproj2, fftIexp1, fftIexp2;
+	//MultidimArray<double> cc;
+	FourierTransformer transformer;
+	transformer.FourierTransform(Iproj1, fftIproj1);
+	transformer.FourierTransform(Iproj2, fftIproj2);
+	transformer.FourierTransform(Iexp1, fftIexp1);
+	transformer.FourierTransform(Iexp2, fftIexp2);
+
+	//1 step: calculate term for whitened
+	MultidimArray<double> radialAvgIproj1, radialAvgIproj2, radialAvgIexp1, radialAvgIexp2;
+	calculateRadialAvg(Iproj1, fftIproj1, radialAvgIproj1, true);
+	calculateRadialAvg(Iproj1, fftIproj2, radialAvgIproj2, true);
+	calculateRadialAvg(Iexp1, fftIexp1, radialAvgIexp1, true);
+	calculateRadialAvg(Iexp2, fftIexp2, radialAvgIexp2, true);
+
+	//2 step: calculate snr v1
+	if (!isFsc){
+
+		MultidimArray<double> radialAvgErrorI1;
+		MultidimArray< std::complex<double> > fftErrorI1Sq;
+		fftErrorI1Sq.initZeros(fftIproj1);
+		FOR_ALL_DIRECT_ELEMENTS_IN_MULTIDIMARRAY(fftIproj1){
+			DIRECT_MULTIDIM_ELEM(fftErrorI1Sq,n) = DIRECT_MULTIDIM_ELEM(fftIproj1,n) - DIRECT_MULTIDIM_ELEM(fftIexp1,n);
+		}
+		calculateRadialAvg(Iproj1, fftErrorI1Sq, radialAvgErrorI1, true);
+
+		MultidimArray<double> radialAvgErrorI2;
+		MultidimArray< std::complex<double> > fftErrorI2Sq;
+		fftErrorI2Sq.initZeros(fftIproj2);
+		FOR_ALL_DIRECT_ELEMENTS_IN_MULTIDIMARRAY(fftIproj2){
+			DIRECT_MULTIDIM_ELEM(fftErrorI2Sq,n) = DIRECT_MULTIDIM_ELEM(fftIproj2,n) - DIRECT_MULTIDIM_ELEM(fftIexp2,n);
+		}
+		calculateRadialAvg(Iproj2, fftErrorI2Sq, radialAvgErrorI2, true);
+
+		long nn=0;
+		for(size_t ii=0; ii<YSIZE(fftIproj1); ++ii)
+		{
+			for(size_t jj=0; jj<XSIZE(fftIproj1); ++jj)
+			{
+				double snrTermIexp1 = sqrt(1+(DIRECT_MULTIDIM_ELEM(radialAvgIproj1, jj)/DIRECT_MULTIDIM_ELEM(radialAvgErrorI1, jj)));
+				double snrTermIproj1 = sqrt((DIRECT_MULTIDIM_ELEM(radialAvgIproj1, jj)/DIRECT_MULTIDIM_ELEM(radialAvgErrorI1, jj)));
+				DIRECT_MULTIDIM_ELEM(fftIexp1, nn) = DIRECT_MULTIDIM_ELEM(fftIexp1, nn)*snrTermIexp1/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIexp1, jj));
+				DIRECT_MULTIDIM_ELEM(fftIproj1, nn) = DIRECT_MULTIDIM_ELEM(fftIproj1, nn)*snrTermIproj1/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIproj1, jj));
+
+				double snrTermIexp2 = sqrt(1+(DIRECT_MULTIDIM_ELEM(radialAvgIproj2, jj)/DIRECT_MULTIDIM_ELEM(radialAvgErrorI2, jj)));
+				double snrTermIproj2 = sqrt((DIRECT_MULTIDIM_ELEM(radialAvgIproj2, jj)/DIRECT_MULTIDIM_ELEM(radialAvgErrorI2, jj)));
+				DIRECT_MULTIDIM_ELEM(fftIexp2, nn) = DIRECT_MULTIDIM_ELEM(fftIexp2, nn)*snrTermIexp2/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIexp2, jj));
+				DIRECT_MULTIDIM_ELEM(fftIproj2, nn) = DIRECT_MULTIDIM_ELEM(fftIproj2, nn)*snrTermIproj2/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIproj2, jj));
+	/*
+				std::cout << jj << " snrTermIexp1 " << snrTermIexp1 << " snrTermIproj1 " << snrTermIproj1 << " radialAvgIexp1 " << DIRECT_MULTIDIM_ELEM(radialAvgIexp1, jj) << " radialAvgIproj1 " << DIRECT_MULTIDIM_ELEM(radialAvgIproj1, jj) << std::endl;
+				std::cout << " snrTermIexp2 " << snrTermIexp2 << " snrTermIproj2 " << snrTermIproj2 << " radialAvgIexp2 " << DIRECT_MULTIDIM_ELEM(radialAvgIexp2, jj) << " radialAvgIproj2 " << DIRECT_MULTIDIM_ELEM(radialAvgIproj2, jj) << std::endl;
+				std::cout << " fftIexp1 " << std::abs(DIRECT_MULTIDIM_ELEM(fftIexp1, nn)) << " fftIproj1 " << std::abs(DIRECT_MULTIDIM_ELEM(fftIproj1, nn)) << std::endl;
+				std::cout << " fftIexp2 " << std::abs(DIRECT_MULTIDIM_ELEM(fftIexp2, nn)) << " fftIproj2 " << std::abs(DIRECT_MULTIDIM_ELEM(fftIproj2, nn)) << std::endl;
+	*/
+				nn++;
+			}
+		}
+
+	}else{
+
+		//2 step: calculate snr v2
+		long nn=0;
+		double fY, fX, R, fscValue;
+		for(size_t ii=0; ii<YSIZE(fftIproj1); ++ii)
+		{
+			FFT_IDX2DIGFREQ_FAST(ii, YSIZE(Iproj1),YSIZE(Iproj1)/2, 1.0/YSIZE(Iproj1), fY);
+			double fz2_fy2=fY*fY;
+
+			for(size_t jj=0; jj<XSIZE(fftIproj1); ++jj)
+			{
+				FFT_IDX2DIGFREQ_FAST(jj, XSIZE(Iproj1), XSIZE(Iproj1)/2, 1.0/XSIZE(Iproj1), fX);
+				double R2 =fz2_fy2 + fX*fX;
+				if (R2>0.5)
+					continue;
+
+				R = sqrt(R2);
+				int idx = (int)round(R * XSIZE(Iproj1));
+				if(idx>=setFsc.size())
+					idx=setFsc.size()-1;
+				fscValue = setFsc[idx];
+
+				//std::cout << " fsc[" << idx << "] = " << fscValue << std::endl;
+
+				double snrTermIexp1 = sqrt(1+((2*fscValue)/(1-fscValue)));
+				double snrTermIproj1 = sqrt(((2*fscValue)/(1-fscValue)));
+				DIRECT_MULTIDIM_ELEM(fftIexp1, nn) = DIRECT_MULTIDIM_ELEM(fftIexp1, nn)*snrTermIexp1/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIexp1, jj));
+				DIRECT_MULTIDIM_ELEM(fftIproj1, nn) = DIRECT_MULTIDIM_ELEM(fftIproj1, nn)*snrTermIproj1/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIproj1, jj));
+
+				double snrTermIexp2 = sqrt(1+((2*fscValue)/(1-fscValue)));
+				double snrTermIproj2 = sqrt(((2*fscValue)/(1-fscValue)));
+				DIRECT_MULTIDIM_ELEM(fftIexp2, nn) = DIRECT_MULTIDIM_ELEM(fftIexp2, nn)*snrTermIexp2/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIexp2, jj));
+				DIRECT_MULTIDIM_ELEM(fftIproj2, nn) = DIRECT_MULTIDIM_ELEM(fftIproj2, nn)*snrTermIproj2/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIproj2, jj));
+
+				nn++;
+			}
+		}
+
+	}
+
+	//cc.initZeros(fftI1);
+
+	double auxI1I1=0;
+	double auxIexp1Iexp1=0;
+	double auxI2I2=0;
+	double auxIexp2Iexp2=0;
+	double numI1Iexp1=0;
+	double numI1Iexp2=0;
+	double numI2Iexp2=0;
+	double numI2Iexp1=0;
+
+	double uy, ux, u2, uz2y2, freqI;
+	long n=0;
+	for(size_t ii=0; ii<YSIZE(fftIproj1); ++ii)
+	{
+		FFT_IDX2DIGFREQ(ii,YSIZE(fftIproj1),uy);
+		uz2y2=uy*uy;
+
+		for(size_t jj=0; jj<XSIZE(fftIproj1); ++jj)
+		{
+			FFT_IDX2DIGFREQ(jj,XSIZE(fftIproj1),ux);
+			u2=uz2y2+ux*ux;
+
+			if(u2>=w12 && u2<w22){
+
+				//CC: I1 and Iexp1
+				numI1Iexp1 += std::real(std::conj(DIRECT_MULTIDIM_ELEM(fftIproj1, n))*DIRECT_MULTIDIM_ELEM(fftIexp1, n));
+				auxI1I1 += std::abs(DIRECT_MULTIDIM_ELEM(fftIproj1, n))*std::abs(DIRECT_MULTIDIM_ELEM(fftIproj1, n));
+				auxIexp1Iexp1 += std::abs(DIRECT_MULTIDIM_ELEM(fftIexp1, n))*std::abs(DIRECT_MULTIDIM_ELEM(fftIexp1, n));
+
+				//CC: I1 and Iexp2
+				//numI1Iexp2 += std::real(std::conj(DIRECT_MULTIDIM_ELEM(fftIproj1, n))*DIRECT_MULTIDIM_ELEM(fftIexp2, n));
+
+				//CC: I2 and Iexp2
+				numI2Iexp2 += std::real(std::conj(DIRECT_MULTIDIM_ELEM(fftIproj2, n))*DIRECT_MULTIDIM_ELEM(fftIexp2, n));
+				auxI2I2 += std::abs(DIRECT_MULTIDIM_ELEM(fftIproj2, n))*std::abs(DIRECT_MULTIDIM_ELEM(fftIproj2, n));
+				auxIexp2Iexp2 += std::abs(DIRECT_MULTIDIM_ELEM(fftIexp2, n))*std::abs(DIRECT_MULTIDIM_ELEM(fftIexp2, n));
+
+				//CC: I2 and Iexp1
+				//numI2Iexp1 += std::real(std::conj(DIRECT_MULTIDIM_ELEM(fftIproj2, n))*DIRECT_MULTIDIM_ELEM(fftIexp1, n));
+			}
+
+			n++;
+		}
+	}
+
+	ccI1Iexp1 = numI1Iexp1/sqrt(auxI1I1*auxIexp1Iexp1);
+	//ccI1Iexp2 = numI1Iexp2/sqrt(auxI1I1*auxIexp2Iexp2);
+	ccI2Iexp2 = numI2Iexp2/sqrt(auxI2I2*auxIexp2Iexp2);
+	//ccI2Iexp1 = numI2Iexp1/sqrt(auxI2I2*auxIexp1Iexp1);
+
+	/*std::cout << " ccI1Iexp1 " << ccI1Iexp1 << " ccI1Iexp2 " << ccI1Iexp2 << " ccI2Iexp2 " << ccI2Iexp2 << " ccI2Iexp1 " << ccI2Iexp1 << std::endl;
+	char c;
+	std::cout << "Press any key" << std::endl;
+	std::cin >> c;*/
+
+}
+
+
+
+
+
+
 void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double> &I2, MultidimArray<double> &Iexp1,
 		MultidimArray<double> &Iexp2, double &corr1exp, double &corr2exp, bool I1isEmpty, bool I2isEmpty, int xdim,
-		bool onlyIntersection, int numVotes, size_t id, std::ofstream *fs)
+		bool onlyIntersection, int numVotes, size_t id, std::ofstream *fs, double ccI1Iexp1=-1.0, double ccI2Iexp2=-1.0)
 {
 
 	MultidimArray<double> Idiff, I2Aligned, Iexp2Aligned;
@@ -521,6 +772,15 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 	else if ((corrN1exp-corrI2exp1)<(corrN2exp-corrI1exp2))
 		votes-=1;
 
+	//AJ NEW MEASURE
+	if(ccI1Iexp1!=-1.0 && ccI2Iexp2!=-1.0){
+		if(ccI1Iexp1>ccI2Iexp2)
+			votes+=1;
+		else if (ccI1Iexp1<ccI2Iexp2)
+			votes-=1;
+	}
+	//END AJ NEW MEASURE
+
 	if(votes>=numVotes){
 		corr1exp = corrN1exp;
 		corr2exp = -1;
@@ -531,8 +791,8 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 	}
 
 	//(*fs) << id << " " << corr1exp << " " << corrN1exp << " " << corrM1exp << " " << corrW1exp << " " << corrI2exp1 << " " << corrWI2exp1 << " " << corr2exp << " " << corrN2exp << " " << corrM2exp << " " << corrW2exp << " " << corrI1exp2 << " " << corrWI1exp2 << std::endl;
-//	std::cout << "corr1exp= " << corr1exp << " corrN1exp: " << corrN1exp << " corrM1exp=" << corrM1exp << " corrW1exp=" << corrW1exp << " corrWI2exp1=" << corrWI2exp1 << " corrI2exp1=" << corrI2exp1 << " imedN1exp=" << imedN1exp << std::endl;
-//	std::cout << "corr2exp= " << corr2exp << " corrN2exp: " << corrN2exp << " corrM2exp=" << corrM2exp << " corrW2exp=" << corrW2exp << " corrWI1exp2=" << corrWI1exp2 << " corrI1exp2=" << corrI1exp2 << " imedN2exp=" << imedN2exp << std::endl;
+//	std::cout << "corr1exp= " << corr1exp << " corrN1exp: " << corrN1exp << " corrM1exp=" << corrM1exp << " corrW1exp=" << corrW1exp << " corrWI2exp1=" << corrWI2exp1 << " corrI2exp1=" << corrI2exp1 << " imedN1exp=" << imedN1exp << " ccI1Iexp1= " << ccI1Iexp1 << std::endl;
+//	std::cout << "corr2exp= " << corr2exp << " corrN2exp: " << corrN2exp << " corrM2exp=" << corrM2exp << " corrW2exp=" << corrW2exp << " corrWI1exp2=" << corrWI1exp2 << " corrI1exp2=" << corrI1exp2 << " imedN2exp=" << imedN2exp << " ccI2Iexp2= " << ccI2Iexp2 << std::endl;
 //	std::cout << "votes= " << votes << std::endl;
 }
 
@@ -636,59 +896,87 @@ void ProgClassifySignificant::run()
 							//std::cout << "subset2[i2]" << subset2[i2] << std::endl;
 						}
 
-						//if (!I1isEmpty && !I2isEmpty)
-						//{
-							computeWeightedCorrelation(I1, I2, Iexp1, Iexp2, corr1exp, corr2exp, I1isEmpty, I2isEmpty,
-									xdim, onlyIntersection, numVotes, id, &fs);
-							if (isnan(corr1exp))
-								corr1exp=-1.0;
-							if (isnan(corr2exp))
-								corr2exp=-1.0;
+						////////////////////////////////////
+						//AJ ADDING NEW CORRELATION MEASURE
+						double ccI1Iexp1;
+						double ccI1Iexp2;
+						double ccI2Iexp1;
+						double ccI2Iexp2;
+						calculateNewCorrelation(I1, I2, Iexp1, Iexp2, ccI1Iexp1, ccI1Iexp2, ccI2Iexp2, ccI2Iexp1, isFsc, setFsc);
+						if (isnan(ccI1Iexp1))
+							ccI1Iexp1=-1.0;
+						if (isnan(ccI2Iexp2))
+							ccI2Iexp2=-1.0;
 
-							double corrDiff12=corr1exp-corr2exp;
-							if (corrDiff12>0 && corr1exp>0)
+						//////////////////////////////////
+						//AJ ORIGINAL CORRELATION MEASURE
+						computeWeightedCorrelation(I1, I2, Iexp1, Iexp2, corr1exp, corr2exp, I1isEmpty, I2isEmpty,
+								xdim, onlyIntersection, numVotes, id, &fs, ccI1Iexp1, ccI2Iexp2);
+
+						if (isnan(corr1exp))
+							corr1exp=-1.0;
+						if (isnan(corr2exp))
+							corr2exp=-1.0;
+
+						double corrDiff12=corr1exp-corr2exp;
+						if (corrDiff12>0 && corr1exp>0)
+						{
+							VEC_ELEM(winning,ivol1)+=1;
+							VEC_ELEM(corrDiff,ivol1)+=corrDiff12;
+							VEC_ELEM(corrDiff,ivol2)-=corrDiff12;
+						}
+						else if (corrDiff12<0 && corr2exp>0)
+						{
+							VEC_ELEM(winning,ivol2)+=1;
+							VEC_ELEM(corrDiff,ivol2)-=corrDiff12;
+							VEC_ELEM(corrDiff,ivol1)+=corrDiff12;
+						}
+
+/*
+							/////////////////////////////
+							//AJ NEW CORRELATION MEASURE
+							double ccI1Iexp1;
+							double ccI1Iexp2;
+							double ccI2Iexp1;
+							double ccI2Iexp2;
+							calculateNewCorrelation(I1, I2, Iexp1, Iexp2, ccI1Iexp1, ccI1Iexp2, ccI2Iexp2, ccI2Iexp1, isFsc, setFsc);
+							if (isnan(ccI1Iexp1))
+								ccI1Iexp1=-1.0;
+							if (isnan(ccI2Iexp2))
+								ccI2Iexp2=-1.0;
+
+							double corrDiff12=ccI1Iexp1-ccI2Iexp2;
+							if (corrDiff12>0 && ccI1Iexp1>0)
 							{
 								VEC_ELEM(winning,ivol1)+=1;
 								VEC_ELEM(corrDiff,ivol1)+=corrDiff12;
 								VEC_ELEM(corrDiff,ivol2)-=corrDiff12;
 							}
-							else if (corrDiff12<0 && corr2exp>0)
+							else if (corrDiff12<0 && ccI2Iexp2>0)
 							{
 								VEC_ELEM(winning,ivol2)+=1;
 								VEC_ELEM(corrDiff,ivol2)-=corrDiff12;
 								VEC_ELEM(corrDiff,ivol1)+=corrDiff12;
 							}
-						//}
-						/*else if (!I1isEmpty)
-						{
+							/////////////////////////////
+*/
+							/*Image<double> save;
+							save()=Iexp1;
+							save.write("PPPexp1.xmp");
+							save()=Iexp2;
+							save.write("PPPexp2.xmp");
+							save()=I1;
+							save.write("PPP1.xmp");
+							save()=I2;
+							save.write("PPP2.xmp");
+							std::cout << id << " " << ccI1Iexp1 << " " << ccI2Iexp2 << " " << I1isEmpty << " " << I2isEmpty << std::endl;
+							std::cout << "winning=" << winning << std::endl;
+							std::cout << "corrDiff=" << corrDiff << std::endl;
 
-							VEC_ELEM(winning,ivol1)+=1;
-							VEC_ELEM(corrDiff,ivol1)+=corr1exp;
-							VEC_ELEM(corrDiff,ivol2)-=corr1exp;
-						}
-						else if (!I2isEmpty)
-						{
-							VEC_ELEM(winning,ivol2)+=1;
-							VEC_ELEM(corrDiff,ivol1)-=corr2exp;
-							VEC_ELEM(corrDiff,ivol2)+=corr2exp;
-						}*/
+							char c;
+							std::cout << "Press any key" << std::endl;
+							std::cin >> c;*/
 
-						/*Image<double> save;
-						save()=Iexp1;
-						save.write("PPPexp1.xmp");
-						save()=Iexp2;
-						save.write("PPPexp2.xmp");
-						save()=I1;
-						save.write("PPP1.xmp");
-						save()=I2;
-						save.write("PPP2.xmp");
-						std::cout << id << " " << corr1exp << " " << corr2exp << " " << I1isEmpty << " " << I2isEmpty << std::endl;
-						std::cout << "winning=" << winning << std::endl;
-						std::cout << "corrDiff=" << corrDiff << std::endl;
-
-						char c;
-						std::cout << "Press any key" << std::endl;
-						std::cin >> c;*/
 
 						i2++;
 					}while(i2<subset2.size());
