@@ -158,8 +158,14 @@ class ProtUnionSet(ProtSets):
 
         for itemSet in self.inputSets:
             if set1.getClassName() == 'Volume':
-                newObj = itemSet.get()
-                newObj.setSamplingRate(itemSet.get().getSamplingRate())
+                if self.ignoreExtraAttributes:
+                    newObj = outputSet.ITEM_TYPE()
+                    newObj.copyAttributes(itemSet.get(), *copyAttrs)
+                    self.cleanExtraAttributes(newObj, commonAttrs)
+                    if not cleanIds:
+                        newObj.setObjId(itemSet.get().getObjId())
+                else:
+                    newObj = itemSet.get()
                 outputSet.setSamplingRate(itemSet.get().getSamplingRate())
                 outputSet.append(newObj)
             else:
