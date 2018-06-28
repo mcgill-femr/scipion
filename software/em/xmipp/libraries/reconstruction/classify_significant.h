@@ -48,7 +48,7 @@ public:
     /** Output file */
     FileName fnOut;
     /** FSC file */
-    FileName fnFsc;
+    FileName fnFsc1, fnFsc2;
     /** Padding factor */
     int pad;
     /** Min. Weight */
@@ -59,6 +59,7 @@ public:
     int numVotes;
     /** To check if there is FSC provided by user */
     bool isFsc;
+
 public:
     // Fourier projector
     std::vector<FourierProjector *> projector;
@@ -81,7 +82,7 @@ public:
 	// Projection aux
 	Projection Paux;
 	// FSC values
-	std::vector<double> setFsc;
+	std::vector<double> setFsc1, setFsc2;
 public:
     /// Destructor
     ~ProgClassifySignificant();

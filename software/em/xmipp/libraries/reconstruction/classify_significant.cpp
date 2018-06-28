@@ -49,8 +49,10 @@ void ProgClassifySignificant::readParams()
     onlyIntersection = checkParam("--onlyIntersection");
     numVotes = getIntParam("--votes");
     isFsc = checkParam("--fsc");
-    if (isFsc)
-    	fnFsc = getParam("--fsc");
+    if (isFsc){
+    	fnFsc1 = getParam("--fsc", 0);
+    	fnFsc2 = getParam("--fsc", 1);
+    }
 }
 
 // Show ====================================================================
@@ -82,7 +84,7 @@ void ProgClassifySignificant::defineParams()
     addParamsLine("  [--onlyIntersection]         : Flag to select only the images belonging only to the set intersection");
     addParamsLine("  [--padding <p=2>]            : Padding factor");
     addParamsLine("  [--minWeight <w=0.1>]        : Minimum weight");
-    addParamsLine("  [--fsc <metadata>]           : Metadata with FSC values to take into account the SNR in the correlation measure");
+    addParamsLine("  [--fsc <md1> <md2>]           : Metadata with FSC values to take into account the SNR in the correlation measure");
 }
 
 // Produce side information ================================================
@@ -118,10 +120,14 @@ void ProgClassifySignificant::produceSideInfo()
     }
 
     //Read FSC if present
-    MetaData mdFcs;
+    MetaData mdFsc1, mdFsc2;
     if(isFsc){
-    	mdFcs.read(fnFsc);
-    	mdFcs.getColumnValues(MDL_RESOLUTION_FRC,setFsc);
+    	mdFsc1.read(fnFsc1);
+    	mdFsc1.getColumnValues(MDL_RESOLUTION_FRC,setFsc1);
+    	mdFsc2.read(fnFsc2);
+    	mdFsc2.getColumnValues(MDL_RESOLUTION_FRC,setFsc2);
+    	std::cout << " fnFsc1: " << fnFsc1 << std::endl;
+    	std::cout << " fnFsc2: " << fnFsc2 << std::endl;
     }
 
     // Read the Ids
@@ -231,11 +237,9 @@ void ProgClassifySignificant::selectSubset(size_t particleId, bool &flagEmpty)
 
 
 void calculateRadialAvg(MultidimArray<double> &I, MultidimArray< std::complex<double> > &fftI,
-		MultidimArray<double> &radialAvg, bool power2){
+		MultidimArray<double> &radialAvg){
 
 	MultidimArray<double> iu;
-
-	////////////////////////////
 	iu.initZeros(fftI);
 
 	double uy, ux, u2, uy2;
@@ -259,10 +263,8 @@ void calculateRadialAvg(MultidimArray<double> &I, MultidimArray< std::complex<do
 	FFT_IDX2DIGFREQ(0,XSIZE(I),uz_inf)
 	int N;
 	radialAvg.initZeros(XSIZE(fftI));
-	if (power2)
-		DIRECT_MULTIDIM_ELEM(radialAvg,0) = std::abs(A3D_ELEM(fftI, 0,0,0))*std::abs(A3D_ELEM(fftI, 0,0,0));
-	else
-		DIRECT_MULTIDIM_ELEM(radialAvg,0) = std::abs(A3D_ELEM(fftI, 0,0,0));
+	DIRECT_MULTIDIM_ELEM(radialAvg,0) = std::abs(A3D_ELEM(fftI, 0,0,0))*std::abs(A3D_ELEM(fftI, 0,0,0));
+
 	//std::cout << DIRECT_MULTIDIM_ELEM(radialAvg,0) << std::endl;
 	for(size_t k=1; k<XSIZE(fftI); ++k)
 	{
@@ -279,10 +281,7 @@ void calculateRadialAvg(MultidimArray<double> &I, MultidimArray< std::complex<do
 			double u = DIRECT_MULTIDIM_ELEM(iu,n);
 			if ((u<uz_sup) && (u>=uz_inf))
 			{
-				if (power2)
-					cum_mean += std::abs(DIRECT_MULTIDIM_ELEM(fftI,n))*std::abs(DIRECT_MULTIDIM_ELEM(fftI,n));
-				else
-					cum_mean += std::abs(DIRECT_MULTIDIM_ELEM(fftI,n));
+				cum_mean += std::abs(DIRECT_MULTIDIM_ELEM(fftI,n))*std::abs(DIRECT_MULTIDIM_ELEM(fftI,n));
 				++N;
 			}
 		}
@@ -298,7 +297,7 @@ void calculateRadialAvg(MultidimArray<double> &I, MultidimArray< std::complex<do
 
 void calculateNewCorrelation(MultidimArray<double> &Iproj1, MultidimArray<double> &Iproj2, MultidimArray<double> &Iexp1,
 		MultidimArray<double> &Iexp2, double &ccI1Iexp1, double &ccI1Iexp2, double &ccI2Iexp2, double &ccI2Iexp1,
-		bool isFsc, std::vector<double> setFsc){
+		bool isFsc, std::vector<double> setFsc1, std::vector<double> setFsc2){
 
 	double w1=0;
 	double w2=0.5;
@@ -315,10 +314,10 @@ void calculateNewCorrelation(MultidimArray<double> &Iproj1, MultidimArray<double
 
 	//1 step: calculate term for whitened
 	MultidimArray<double> radialAvgIproj1, radialAvgIproj2, radialAvgIexp1, radialAvgIexp2;
-	calculateRadialAvg(Iproj1, fftIproj1, radialAvgIproj1, true);
-	calculateRadialAvg(Iproj1, fftIproj2, radialAvgIproj2, true);
-	calculateRadialAvg(Iexp1, fftIexp1, radialAvgIexp1, true);
-	calculateRadialAvg(Iexp2, fftIexp2, radialAvgIexp2, true);
+	calculateRadialAvg(Iproj1, fftIproj1, radialAvgIproj1);
+	calculateRadialAvg(Iproj1, fftIproj2, radialAvgIproj2);
+	calculateRadialAvg(Iexp1, fftIexp1, radialAvgIexp1);
+	calculateRadialAvg(Iexp2, fftIexp2, radialAvgIexp2);
 
 	//2 step: calculate snr v1
 	if (!isFsc){
@@ -329,7 +328,7 @@ void calculateNewCorrelation(MultidimArray<double> &Iproj1, MultidimArray<double
 		FOR_ALL_DIRECT_ELEMENTS_IN_MULTIDIMARRAY(fftIproj1){
 			DIRECT_MULTIDIM_ELEM(fftErrorI1Sq,n) = DIRECT_MULTIDIM_ELEM(fftIproj1,n) - DIRECT_MULTIDIM_ELEM(fftIexp1,n);
 		}
-		calculateRadialAvg(Iproj1, fftErrorI1Sq, radialAvgErrorI1, true);
+		calculateRadialAvg(Iproj1, fftErrorI1Sq, radialAvgErrorI1);
 
 		MultidimArray<double> radialAvgErrorI2;
 		MultidimArray< std::complex<double> > fftErrorI2Sq;
@@ -337,7 +336,7 @@ void calculateNewCorrelation(MultidimArray<double> &Iproj1, MultidimArray<double
 		FOR_ALL_DIRECT_ELEMENTS_IN_MULTIDIMARRAY(fftIproj2){
 			DIRECT_MULTIDIM_ELEM(fftErrorI2Sq,n) = DIRECT_MULTIDIM_ELEM(fftIproj2,n) - DIRECT_MULTIDIM_ELEM(fftIexp2,n);
 		}
-		calculateRadialAvg(Iproj2, fftErrorI2Sq, radialAvgErrorI2, true);
+		calculateRadialAvg(Iproj2, fftErrorI2Sq, radialAvgErrorI2);
 
 		long nn=0;
 		for(size_t ii=0; ii<YSIZE(fftIproj1); ++ii)
@@ -367,7 +366,7 @@ void calculateNewCorrelation(MultidimArray<double> &Iproj1, MultidimArray<double
 
 		//2 step: calculate snr v2
 		long nn=0;
-		double fY, fX, R, fscValue;
+		double fY, fX, R, fscValue1, fscValue2;
 		for(size_t ii=0; ii<YSIZE(fftIproj1); ++ii)
 		{
 			FFT_IDX2DIGFREQ_FAST(ii, YSIZE(Iproj1),YSIZE(Iproj1)/2, 1.0/YSIZE(Iproj1), fY);
@@ -382,25 +381,37 @@ void calculateNewCorrelation(MultidimArray<double> &Iproj1, MultidimArray<double
 
 				R = sqrt(R2);
 				int idx = (int)round(R * XSIZE(Iproj1));
-				if(idx>=setFsc.size())
-					idx=setFsc.size()-1;
-				fscValue = setFsc[idx];
+				if(idx>=setFsc1.size())
+					idx=setFsc1.size()-1;
+				fscValue1 = setFsc1[idx];
+				if (fscValue1==1)
+					fscValue1 -= 0.0001;
+				fscValue2 = setFsc2[idx];
+				if (fscValue2==1)
+					fscValue2 -= 0.0001;
 
 				//std::cout << " fsc[" << idx << "] = " << fscValue << std::endl;
 
-				double snrTermIexp1 = sqrt(1+((2*fscValue)/(1-fscValue)));
-				double snrTermIproj1 = sqrt(((2*fscValue)/(1-fscValue)));
+				double snrTermIexp1 = sqrt(1+((2*fscValue1)/(1-fscValue1)));
+				double snrTermIproj1 = sqrt(((2*fscValue1)/(1-fscValue1)));
 				DIRECT_MULTIDIM_ELEM(fftIexp1, nn) = DIRECT_MULTIDIM_ELEM(fftIexp1, nn)*snrTermIexp1/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIexp1, jj));
 				DIRECT_MULTIDIM_ELEM(fftIproj1, nn) = DIRECT_MULTIDIM_ELEM(fftIproj1, nn)*snrTermIproj1/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIproj1, jj));
 
-				double snrTermIexp2 = sqrt(1+((2*fscValue)/(1-fscValue)));
-				double snrTermIproj2 = sqrt(((2*fscValue)/(1-fscValue)));
+				double snrTermIexp2 = sqrt(1+((2*fscValue2)/(1-fscValue2)));
+				double snrTermIproj2 = sqrt(((2*fscValue2)/(1-fscValue2)));
 				DIRECT_MULTIDIM_ELEM(fftIexp2, nn) = DIRECT_MULTIDIM_ELEM(fftIexp2, nn)*snrTermIexp2/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIexp2, jj));
 				DIRECT_MULTIDIM_ELEM(fftIproj2, nn) = DIRECT_MULTIDIM_ELEM(fftIproj2, nn)*snrTermIproj2/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIproj2, jj));
+
+//				if(jj==1){
+//					std::cout << " fscValue1 " << fscValue1 << " snrTermIexp1 " << snrTermIexp1 << " radialAvgIexp1 " << DIRECT_MULTIDIM_ELEM(radialAvgIexp1, jj) << " fftIexp1 " << std::abs(DIRECT_MULTIDIM_ELEM(fftIexp1, nn)) << " radialAvgIproj1 " << DIRECT_MULTIDIM_ELEM(radialAvgIproj1, jj) << " fftIproj1 " << std::abs(DIRECT_MULTIDIM_ELEM(fftIproj1, nn)) << std::endl;
+//					std::cout << " fscValue2 " << fscValue2 << " snrTermIexp2 " << snrTermIexp2 << " radialAvgIexp2 " << DIRECT_MULTIDIM_ELEM(radialAvgIexp2, jj) << " fftIexp2 " << std::abs(DIRECT_MULTIDIM_ELEM(fftIexp2, nn)) << " radialAvgIproj2 " << DIRECT_MULTIDIM_ELEM(radialAvgIproj2, jj) << " fftIproj2 " << std::abs(DIRECT_MULTIDIM_ELEM(fftIproj2, nn)) << std::endl;
+//				}
+
 
 				nn++;
 			}
 		}
+
 
 	}
 
@@ -455,7 +466,8 @@ void calculateNewCorrelation(MultidimArray<double> &Iproj1, MultidimArray<double
 	ccI2Iexp2 = numI2Iexp2/sqrt(auxI2I2*auxIexp2Iexp2);
 	//ccI2Iexp1 = numI2Iexp1/sqrt(auxI2I2*auxIexp1Iexp1);
 
-	/*std::cout << " ccI1Iexp1 " << ccI1Iexp1 << " ccI1Iexp2 " << ccI1Iexp2 << " ccI2Iexp2 " << ccI2Iexp2 << " ccI2Iexp1 " << ccI2Iexp1 << std::endl;
+	/*std::cout << " ccI1Iexp1 " << ccI1Iexp1 << " numI1Iexp1 " << numI1Iexp1 << " auxI1I1 " << auxI1I1 << " auxIexp1Iexp1 " << auxIexp1Iexp1 << std::endl;
+	std::cout << " ccI2Iexp2 " << ccI2Iexp2 << " numI2Iexp2 " << numI2Iexp2 << " auxI2I2 " << auxI2I2 << " auxIexp2Iexp2 " << auxIexp2Iexp2 << std::endl;
 	char c;
 	std::cout << "Press any key" << std::endl;
 	std::cin >> c;*/
@@ -712,26 +724,26 @@ void computeWeightedCorrelation(MultidimArray<double> &I1, MultidimArray<double>
 	corrI1exp2 = sumI1exp2/sqrt(sumI1I1*sumIexpIexp2);
 	corrI2exp1 = sumI2exp1/sqrt(sumI2I2*sumIexpIexp1);
 
-	if (isnan(corrWI2exp1))
+	if (std::isnan(corrWI2exp1))
 		corrWI2exp1=-1.0;
-	if (isnan(corrWI1exp2))
+	if (std::isnan(corrWI1exp2))
 		corrWI1exp2=-1.0;
 
-	if(isnan(corrN1exp))
+	if(std::isnan(corrN1exp))
 		corrN1exp=-1.0;
-	if(isnan(corrM1exp))
+	if(std::isnan(corrM1exp))
 		corrM1exp=-1.0;
-	if(isnan(corrW1exp))
+	if(std::isnan(corrW1exp))
 		corrW1exp=-1.0;
-	if(isnan(corrN2exp))
+	if(std::isnan(corrN2exp))
 		corrN2exp=-1.0;
-	if(isnan(corrM2exp))
+	if(std::isnan(corrM2exp))
 		corrM2exp=-1.0;
-	if(isnan(corrW2exp))
+	if(std::isnan(corrW2exp))
 		corrW2exp=-1.0;
-	if (isnan(corrI2exp1))
+	if (std::isnan(corrI2exp1))
 		corrI2exp1=-1.0;
-	if (isnan(corrI1exp2))
+	if (std::isnan(corrI1exp2))
 		corrI1exp2=-1.0;
 	corr2exp = -1;
 	corr1exp=-1;
@@ -895,17 +907,17 @@ void ProgClassifySignificant::run()
 							I2isEmpty=false;
 							//std::cout << "subset2[i2]" << subset2[i2] << std::endl;
 						}
-
+/*
 						////////////////////////////////////
 						//AJ ADDING NEW CORRELATION MEASURE
 						double ccI1Iexp1;
 						double ccI1Iexp2;
 						double ccI2Iexp1;
 						double ccI2Iexp2;
-						calculateNewCorrelation(I1, I2, Iexp1, Iexp2, ccI1Iexp1, ccI1Iexp2, ccI2Iexp2, ccI2Iexp1, isFsc, setFsc);
-						if (isnan(ccI1Iexp1))
+						calculateNewCorrelation(I1, I2, Iexp1, Iexp2, ccI1Iexp1, ccI1Iexp2, ccI2Iexp2, ccI2Iexp1, isFsc, setFsc1, setFsc2);
+						if (std::isnan(ccI1Iexp1))
 							ccI1Iexp1=-1.0;
-						if (isnan(ccI2Iexp2))
+						if (std::isnan(ccI2Iexp2))
 							ccI2Iexp2=-1.0;
 
 						//////////////////////////////////
@@ -913,9 +925,9 @@ void ProgClassifySignificant::run()
 						computeWeightedCorrelation(I1, I2, Iexp1, Iexp2, corr1exp, corr2exp, I1isEmpty, I2isEmpty,
 								xdim, onlyIntersection, numVotes, id, &fs, ccI1Iexp1, ccI2Iexp2);
 
-						if (isnan(corr1exp))
+						if (std::isnan(corr1exp))
 							corr1exp=-1.0;
-						if (isnan(corr2exp))
+						if (std::isnan(corr2exp))
 							corr2exp=-1.0;
 
 						double corrDiff12=corr1exp-corr2exp;
@@ -932,17 +944,18 @@ void ProgClassifySignificant::run()
 							VEC_ELEM(corrDiff,ivol1)+=corrDiff12;
 						}
 
-/*
+*/
+
 							/////////////////////////////
 							//AJ NEW CORRELATION MEASURE
 							double ccI1Iexp1;
 							double ccI1Iexp2;
 							double ccI2Iexp1;
 							double ccI2Iexp2;
-							calculateNewCorrelation(I1, I2, Iexp1, Iexp2, ccI1Iexp1, ccI1Iexp2, ccI2Iexp2, ccI2Iexp1, isFsc, setFsc);
-							if (isnan(ccI1Iexp1))
+							calculateNewCorrelation(I1, I2, Iexp1, Iexp2, ccI1Iexp1, ccI1Iexp2, ccI2Iexp2, ccI2Iexp1, isFsc, setFsc1, setFsc2);
+							if (std::isnan(ccI1Iexp1))
 								ccI1Iexp1=-1.0;
-							if (isnan(ccI2Iexp2))
+							if (std::isnan(ccI2Iexp2))
 								ccI2Iexp2=-1.0;
 
 							double corrDiff12=ccI1Iexp1-ccI2Iexp2;
@@ -959,7 +972,7 @@ void ProgClassifySignificant::run()
 								VEC_ELEM(corrDiff,ivol1)+=corrDiff12;
 							}
 							/////////////////////////////
-*/
+
 							/*Image<double> save;
 							save()=Iexp1;
 							save.write("PPPexp1.xmp");
