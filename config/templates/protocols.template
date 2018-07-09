@@ -176,6 +176,7 @@ Protocols SPA = [
 		{"tag": "protocol_group", "text": "Analysis", "openItem": "False", "children": [
             {"tag": "section", "text": "Heterogeneity", "openItem": "False", "children": [
                 {"tag": "protocol", "value": "XmippProtSolidAngles", "text": "default"},
+                {"tag": "protocol", "value": "XmippProtSplitVolumeHierarchical", "text": "default"},
                 {"tag": "protocol", "value": "XmippProtSplitvolume", "text": "default"},
                 {"tag": "protocol", "value": "XmippProtStructureMapping", "text": "default"},
                 {"tag": "protocol", "value": "XmippProtVolumeHomogenizer", "text": "default"},
