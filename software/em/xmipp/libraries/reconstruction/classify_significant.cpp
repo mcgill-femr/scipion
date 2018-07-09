@@ -390,15 +390,17 @@ void calculateNewCorrelation(MultidimArray<double> &Iproj1, MultidimArray<double
 				if (fscValue2==1)
 					fscValue2 -= 0.0001;
 
-				//std::cout << " fsc[" << idx << "] = " << fscValue << std::endl;
+				double fscAvg = (fscValue1+fscValue2)/2.0;
 
-				double snrTermIexp1 = sqrt(1+((2*fscValue1)/(1-fscValue1)));
-				double snrTermIproj1 = sqrt(((2*fscValue1)/(1-fscValue1)));
+				//std::cout << "fscValue1 = " << fscValue1 << " fscValue2 = " << fscValue2 << " fscAvg = " << fscAvg << std::endl;
+
+				double snrTermIexp1 = sqrt(1+((2*fscAvg)/(1-fscAvg)));
+				double snrTermIproj1 = sqrt(((2*fscAvg)/(1-fscAvg)));
 				DIRECT_MULTIDIM_ELEM(fftIexp1, nn) = DIRECT_MULTIDIM_ELEM(fftIexp1, nn)*snrTermIexp1/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIexp1, jj));
 				DIRECT_MULTIDIM_ELEM(fftIproj1, nn) = DIRECT_MULTIDIM_ELEM(fftIproj1, nn)*snrTermIproj1/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIproj1, jj));
 
-				double snrTermIexp2 = sqrt(1+((2*fscValue2)/(1-fscValue2)));
-				double snrTermIproj2 = sqrt(((2*fscValue2)/(1-fscValue2)));
+				double snrTermIexp2 = sqrt(1+((2*fscAvg)/(1-fscAvg)));
+				double snrTermIproj2 = sqrt(((2*fscAvg)/(1-fscAvg)));
 				DIRECT_MULTIDIM_ELEM(fftIexp2, nn) = DIRECT_MULTIDIM_ELEM(fftIexp2, nn)*snrTermIexp2/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIexp2, jj));
 				DIRECT_MULTIDIM_ELEM(fftIproj2, nn) = DIRECT_MULTIDIM_ELEM(fftIproj2, nn)*snrTermIproj2/sqrt(DIRECT_MULTIDIM_ELEM(radialAvgIproj2, jj));
 
@@ -919,11 +921,11 @@ void ProgClassifySignificant::run()
 							ccI1Iexp1=-1.0;
 						if (std::isnan(ccI2Iexp2))
 							ccI2Iexp2=-1.0;
-
+*/
 						//////////////////////////////////
 						//AJ ORIGINAL CORRELATION MEASURE
 						computeWeightedCorrelation(I1, I2, Iexp1, Iexp2, corr1exp, corr2exp, I1isEmpty, I2isEmpty,
-								xdim, onlyIntersection, numVotes, id, &fs, ccI1Iexp1, ccI2Iexp2);
+								xdim, onlyIntersection, numVotes, id, &fs);
 
 						if (std::isnan(corr1exp))
 							corr1exp=-1.0;
@@ -944,8 +946,8 @@ void ProgClassifySignificant::run()
 							VEC_ELEM(corrDiff,ivol1)+=corrDiff12;
 						}
 
-*/
 
+/*
 							/////////////////////////////
 							//AJ NEW CORRELATION MEASURE
 							double ccI1Iexp1;
@@ -972,7 +974,7 @@ void ProgClassifySignificant::run()
 								VEC_ELEM(corrDiff,ivol1)+=corrDiff12;
 							}
 							/////////////////////////////
-
+*/
 							/*Image<double> save;
 							save()=Iexp1;
 							save.write("PPPexp1.xmp");
