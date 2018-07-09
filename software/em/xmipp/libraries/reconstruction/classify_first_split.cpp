@@ -78,7 +78,7 @@ void ProgClassifyFirstSplit::run()
 
     // Generate the mean
     std::cerr << "Reconstructing average" << std::endl;
-    String command=formatString("xmipp_reconstruct_fourier -i %s -o %s_avg.vol --max_resolution 0.25 -v 0",fnClasses.c_str(),fnRoot.c_str());
+    String command=formatString("xmipp_reconstruct_fourier -i %s -o %s_avg.vol --max_resolution 0.25 --sym %s -v 0",fnClasses.c_str(),fnRoot.c_str(), fnSym.c_str());
     int retval=system(command.c_str());
     Image<double> Vavg;
     Vavg.read(fnRoot+"_avg.vol");
