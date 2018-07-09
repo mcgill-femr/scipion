@@ -26,13 +26,25 @@
 #include "fourier_projection.h"
 #include <data/xmipp_fft.h>
 
-FourierProjector::FourierProjector(MultidimArray<double> &V, double paddFactor, double maxFreq, int degree)
+FourierProjector::FourierProjector(double paddFactor, double maxFreq, int degree)
 {
-    volume = &V;
-    volumeSize=XSIZE(*volume);
     paddingFactor = paddFactor;
     maxFrequency = maxFreq;
     BSplineDeg = degree;
+}
+
+FourierProjector::FourierProjector(MultidimArray<double> &V, double paddFactor, double maxFreq, int degree)
+{
+    paddingFactor = paddFactor;
+    maxFrequency = maxFreq;
+    BSplineDeg = degree;
+    updateVolume(V);
+}
+
+void FourierProjector::updateVolume(MultidimArray<double> &V)
+{
+    volume = &V;
+    volumeSize=XSIZE(*volume);
     produceSideInfo();
 }
 
