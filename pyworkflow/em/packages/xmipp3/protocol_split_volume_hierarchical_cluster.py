@@ -468,7 +468,7 @@ class XmippProtSplitVolumeHierarchical(ProtAnalysis3D):
                         "-i %s --select below 0.5 --substitute binarize" % fnMask,
                         numberOfMpi=1)
 
-        for i in self.Nrec:
+        for i in range(self.Nrec):
             fnRoot = self._getExtraPath("split%06d"%i)
             args = "-i %s --oroot %s --Niter %d --sym %s " % \
                    (self._getDirectionalClassesFn(), fnRoot,
