@@ -51,11 +51,14 @@ class Prot3DVariance(ProtAnalysis3D):
                       label="Symmetry group", 
                       help='See [[Xmipp Symmetry][http://www2.mrc-lmb.cam.ac.uk/Xmipp/index.php/Conventions_%26_File_formats#Symmetry]] page '
                            'for a description of the symmetry format accepted by Xmipp') 
-        form.addParam('maxRes', FloatParam, default=-1,
-                      label="Maximum resolution (A)",  
-                      help='Maximum resolution (in Angstrom) to consider \n'
-                           'in Fourier space (default Nyquist).\n'
-                           'Param *--maxres* in Xmipp.')
+        line = form.addLine('Resolution Range (A)',
+                            help="If the user knows the range of resolutions or"
+                                " only a range of frequencies needs to be analysed." )
+#        form.addParam('maxRes', FloatParam, default=-1,
+#                      label="Maximum resolution (A)",  
+#                      help='Maximum resolution (in Angstrom) to consider \n'
+#                           'in Fourier space (default Nyquist).\n'
+#                           'Param *--maxres* in Xmipp.')
         form.addParam('doCTFCorrection', BooleanParam, default=False,  important=False,
                       label='Use CTF information?',
                       help="The images will be deconvolved by the CTF information.")
@@ -78,6 +81,9 @@ class Prot3DVariance(ProtAnalysis3D):
         form.addParam('extraParams', StringParam, default='', expertLevel=LEVEL_ADVANCED,
                       label='Extra parameters: ', 
                       help='Extra parameters to *xmipp_reconstruct_fourier-xmipp_volume_variability* programs:\n')
+        
+        line.addParam('minRes', FloatParam, default=40, label='Low')
+        line.addParam('maxRes', FloatParam, default=8, label='High')
 
         form.addParallelSection(mpi=4)
 
@@ -106,16 +112,17 @@ class Prot3DVariance(ProtAnalysis3D):
 
         self.params =  '  -i %s' % self._getFileName('input_xmd')
         self.params += ' --sym %s' % self.symmetryGroup.get()
+        
         maxRes = self.maxRes.get()
-        if maxRes == -1:
-            digRes = 0.5
-        else:
-            digRes = self.inputParticles.get().getSamplingRate() / self.maxRes.get()
+        sampling_rate = self.inputParticles.get().getSamplingRate()
+        
+        digResMax = self.inputParticles.get().getSamplingRate() / self.maxRes.get()
         
         if self.doCTFCorrection:
             self.params +=  '  --useCTF'                  
             
-        self.params += ' --max_resolution %0.3f' %digRes
+        self.params += ' --max_resolution %0.3f' %digResMax
+
         self.params += ' --padding %0.3f' % self.pad.get()
         self.params += ' --sampling %f' % self.inputParticles.get().getSamplingRate()
         self.params += ' %s' % self.extraParams.get()
@@ -127,6 +134,13 @@ class Prot3DVariance(ProtAnalysis3D):
             self._insertFunctionStep('reconstructStep', paramRecons)
 
     def _insertVarianceStep(self):
+
+        minRes = self.minRes.get()
+        sampling_rate = self.inputParticles.get().getSamplingRate()
+        
+        digResMin = self.inputParticles.get().getSamplingRate() / self.minRes.get()
+
+        self.params += ' --min_resolution %0.3f' %digResMin
 
         self.params += ' --thrFFT %d' % self.numberOfThreads.get()
         self.params += '  --vol %s' % self._getFileName('output_volume')
