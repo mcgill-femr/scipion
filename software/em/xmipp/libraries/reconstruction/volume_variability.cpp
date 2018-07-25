@@ -55,6 +55,7 @@
 
 
 #include "volume_variability.h"
+#include <iostream>
 
 // Define params
 void ProgVolVariability::defineParams()
@@ -71,6 +72,7 @@ void ProgVolVariability::defineParams()
     addParamsLine("  [--sym <symfile=c1>]              : Enforce symmetry in projections");
     addParamsLine("  [--padding <proj=2.0> <vol=2.0>]  : Padding used for projections and volume");
     addParamsLine("  [--prepare_fsc <fscfile>]      : Filename root for FSC files");
+    addParamsLine("  [--min_resolution <p=0.0>]     	: Min resolution (default=0.0)");
     addParamsLine("  [--max_resolution <p=0.5>]     : Max resolution (Nyquist=0.5)");
     addParamsLine("  [--weight]                     : Use weights stored in the image metadata");
     addParamsLine("  [--thr <threads=1> <rows=1>]   : Number of concurrent threads and rows processed at time by a thread");
@@ -114,6 +116,7 @@ void ProgVolVariability::readParams()
     blob.radius   = getDoubleParam("--blob", 0);
     blob.order    = getIntParam("--blob", 1);
     blob.alpha    = getDoubleParam("--blob", 2);
+    minResolution = getDoubleParam("--min_resolution");
     maxResolution = getDoubleParam("--max_resolution");
     numThreads = getIntParam("--thr");
     thrWidth = getIntParam("--thr", 1);
@@ -160,6 +163,7 @@ void ProgVolVariability::show()
         << "\n   blord                 : "  << blob.order
         << "\n   blalpha               : "  << blob.alpha
         << "\n sampling_rate           : "  << Ts
+        << "\n min_resolution          : "  << minResolution
         << "\n max_resolution          : "  << maxResolution
         << "\n -----------------------------------------------------------------" << std::endl;
 
@@ -232,6 +236,7 @@ void ProgVolVariability::produceSideinfo()
     // Translate the maximum resolution to digital frequency
     // maxResolution=sampling_rate/maxResolution;
     maxResolution2=maxResolution*maxResolution;
+    minResolution2=minResolution*minResolution;
 
     // Read the input images
     SF.read(fn_sel);
@@ -736,6 +741,8 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                 ZZ(freq)=0;
                                 if (XX(freq)*XX(freq)+YY(freq)*YY(freq)>parent->maxResolution2)
                                     continue;
+                                if (XX(freq)*XX(freq)+YY(freq)*YY(freq)<parent->minResolution2)
+                                    continue;
                                 wModulator=1.0;
                                 if (hasCTF && !reprocessFlag)
                                 {
@@ -921,7 +928,7 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                                 double *ptrOut=(double *)&(DIRECT_A1D_ELEM(VoutFourier, memIdx));
                                                 double *ptrInVol=(double *)&(DIRECT_A1D_ELEM(parent->fftVin, memIdx));
 
-                                                  ptrOut[0] += w * ((wCTF*ptrIn[0]-ptrInVol[0])*(wCTF*ptrIn[0]-ptrInVol[0]));
+                                                  ptrOut[0] += 0.01*w * ((wCTF*ptrIn[0]-ptrInVol[0])*(wCTF*ptrIn[0]-ptrInVol[0]));
 //                                                ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0])+(ptrIn[1]-ptrInVol[1])*(ptrIn[1]-ptrInVol[1]));
 //                                                ptrOut[0] += wEffective * (ptrIn[0]);
 //                                                ptrOut[0] += wEffective * std::abs(ptrIn[0] - ptrInVol[0]);
@@ -929,16 +936,19 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                                 DIRECT_A1D_ELEM(fourierWeights, memIdx) += w;
                                                 if (conjugate)
 //                                                	 ptrOut[1]-=wEffective * (ptrIn[1]);
-                                                	ptrOut[1]+=w *((-wCTF*ptrIn[1]-ptrInVol[1])*(-wCTF*ptrIn[1]-ptrInVol[1]));
+                                                	ptrOut[1]+= 0.01*w *((-wCTF*ptrIn[1]-ptrInVol[1])*(-wCTF*ptrIn[1]-ptrInVol[1]));
 //                                                	ptrOut[1]-=wEffective * (ptrInVol[1]);
                                                 else
 //                                            	   ptrOut[1]+=wEffective * (ptrIn[1]);
-                                            	   ptrOut[1]+=w *((wCTF*ptrIn[1]-ptrInVol[1])*(wCTF*ptrIn[1]-ptrInVol[1]));
+                                            	   ptrOut[1]+= 0.01*w *((wCTF*ptrIn[1]-ptrInVol[1])*(wCTF*ptrIn[1]-ptrInVol[1]));
 //                                            	   ptrOut[1]+=wEffective * (ptrInVol[1]);
 //                                            	   ptrOut[1]+=wEffective * std::abs(ptrIn[1]- ptrInVol[1]);
 
-//                                                if (memIdx == 0*0*0)
-//                                                	std::cout << ptrIn[0] << " " << ptrInVol[0] << " " << ptrIn[1] << " " << ptrInVol[1] << " " << w << " " << wCTF << conjugate << std::endl;
+//                                                std::cout << DIRECT_A3D_ELEM(VoutFourier, izp,iyp,ixp) << " " << DIRECT_A1D_ELEM(VoutFourier, memIdx) <<  izp << " " << iyp << " " << ixp << " " << std::endl;
+//                                                std::cin.get();
+
+                                                if ( (izp == 80) && (iyp == 80) && (ixp == 80))
+                                                	std::cout << ptrIn[0] << " " << ptrInVol[0] << " " << ptrIn[1] << " " << ptrInVol[1] << " " << w << " " << wCTF << std::endl;
                                             }
                                         }
                                     }
@@ -1078,7 +1088,8 @@ void ProgVolVariability::processImages( int firstImageIndex, int lastImageIndex,
                 // Determine how many rows of the fourier
                 // transform are of interest for us. This is because
                 // the user can avoid to explore at certain resolutions
-                size_t conserveRows=(size_t)ceil((double)paddedFourier->ydim * maxResolution * 2.0);
+                size_t conserveRows=(size_t)ceil( 2.0*((double)paddedFourier->ydim * maxResolution -
+                								   	   (double)paddedFourier->ydim * minResolution));
                 conserveRows=(size_t)ceil((double)conserveRows/2.0);
 
                 // Loop over all symmetries

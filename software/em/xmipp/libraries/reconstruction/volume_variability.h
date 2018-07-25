@@ -153,6 +153,9 @@ public:
     /// Max resolution in Angstroms
     double maxResolution;
 
+    /// Min resolution in Angstroms
+    double minResolution;
+
     /// Number of iterations for the weight
     int NiterWeight;
 
@@ -213,6 +216,9 @@ public: // Internal members
 
     // Maximum interesting resolution squared
     double maxResolution2;
+
+    // Minimun interesting resolution squared
+    double minResolution2;
 
     // Definition of the blob
     struct blobtype blob;
