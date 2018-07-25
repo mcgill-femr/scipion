@@ -126,6 +126,8 @@ void ProgClassifyFirstSplit3::run()
     show();
 
     countSwap=0;
+    countRandomSwap=0;
+    countNormalSwap=0;
     double th=0.05;
 
     // Generate initial volumes
@@ -160,6 +162,7 @@ void ProgClassifyFirstSplit3::run()
 		bool swap=false;
 		if(rnd_unif()<th){
 			swap = true;
+			countRandomSwap++;
 			//std::cout << "RANDOM" << std::endl;
 		}
 		else
@@ -171,8 +174,10 @@ void ProgClassifyFirstSplit3::run()
 
 			//std::cout << " corrI1_P1 = " << corrI1_P1 << " corrI2_P1 = " << corrI2_P1
 			//		  << " corrI2_P2 = " << corrI2_P2 << " corrI1_P2 = " << corrI1_P2 << std::endl;
-			if (corrI1_P2>corrI1_P1 && corrI2_P1>corrI2_P2)
+			if (corrI1_P2>corrI1_P1 && corrI2_P1>corrI2_P2){
 				swap=true;
+				countNormalSwap++;
+			}
 
 		}
 
@@ -199,8 +204,10 @@ void ProgClassifyFirstSplit3::run()
 		}
 
     	progress_bar(n);
+
     }
     progress_bar(Niter);
+    std::cout << " Niter = " << Niter << " Images in set1 = " << objIds1.size() << " Images in set2 = " << objIds2.size() << " countRandomSwap = " << countRandomSwap << " countNormalSwap = " << countNormalSwap << std::endl;
     //deleteFile(fnSubset);
     //deleteFile(fnSubsetVol);
 

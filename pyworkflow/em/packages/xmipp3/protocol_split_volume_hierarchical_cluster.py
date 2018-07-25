@@ -506,7 +506,7 @@ class XmippProtSplitVolumeHierarchical(ProtAnalysis3D):
                 if matrixCoOc[i][j]==0:
                     matrixCoOc[i][j]+=0.001
                 matrixCoOc[i][j] = 1.0/matrixCoOc[i][j]
-        np.savetxt(self._getExtraPath('matriz.dat'), matrixCoOc, fmt='%.4e')
+        np.savetxt(self._getExtraPath('matriz.txt'), matrixCoOc, fmt='%.4e')
 
         ##### hierarchical clustering algorithm #########
         model = AgglomerativeClustering(n_clusters=2, linkage="complete", affinity="euclidean")

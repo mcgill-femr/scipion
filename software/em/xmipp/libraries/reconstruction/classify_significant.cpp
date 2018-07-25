@@ -49,9 +49,13 @@ void ProgClassifySignificant::readParams()
     onlyIntersection = checkParam("--onlyIntersection");
     numVotes = getIntParam("--votes");
     isFsc = checkParam("--fsc");
+    FileName fnFsc;
     if (isFsc){
-    	fnFsc1 = getParam("--fsc", 0);
-    	fnFsc2 = getParam("--fsc", 1);
+    	numFsc = getIntParam("--fsc", 0);
+    	for (int i=1; i<=numFsc; i++){
+    		fnFsc = getParam("--fsc", i);
+    		setFsc.push_back(fnFsc);
+    	}
     }
 }
 
@@ -120,14 +124,15 @@ void ProgClassifySignificant::produceSideInfo()
     }
 
     //Read FSC if present
-    MetaData mdFsc1, mdFsc2;
+    MetaData mdFsc;
+    std::vector<double> fscAux;
     if(isFsc){
-    	mdFsc1.read(fnFsc1);
-    	mdFsc1.getColumnValues(MDL_RESOLUTION_FRC,setFsc1);
-    	mdFsc2.read(fnFsc2);
-    	mdFsc2.getColumnValues(MDL_RESOLUTION_FRC,setFsc2);
-    	std::cout << " fnFsc1: " << fnFsc1 << std::endl;
-    	std::cout << " fnFsc2: " << fnFsc2 << std::endl;
+    	for (int i=0; i<numFsc; i++){
+    		std::cout << " fnFsc: " << setFsc[i] << std::endl;
+			mdFsc.read(setFsc[i]);
+			mdFsc.getColumnValues(MDL_RESOLUTION_FRC,fscAux);
+			setFscValues.push_back(fscAux);
+    	}
     }
 
     // Read the Ids
@@ -297,7 +302,7 @@ void calculateRadialAvg(MultidimArray<double> &I, MultidimArray< std::complex<do
 
 void calculateNewCorrelation(MultidimArray<double> &Iproj1, MultidimArray<double> &Iproj2, MultidimArray<double> &Iexp1,
 		MultidimArray<double> &Iexp2, double &ccI1Iexp1, double &ccI1Iexp2, double &ccI2Iexp2, double &ccI2Iexp1,
-		bool isFsc, std::vector<double> setFsc1, std::vector<double> setFsc2){
+		bool isFsc, std::vector< std::vector<double> > &setFscValues, int numFsc){
 
 	double w1=0;
 	double w2=0.5;
@@ -381,16 +386,18 @@ void calculateNewCorrelation(MultidimArray<double> &Iproj1, MultidimArray<double
 
 				R = sqrt(R2);
 				int idx = (int)round(R * XSIZE(Iproj1));
-				if(idx>=setFsc1.size())
-					idx=setFsc1.size()-1;
-				fscValue1 = setFsc1[idx];
-				if (fscValue1==1)
-					fscValue1 -= 0.0001;
-				fscValue2 = setFsc2[idx];
-				if (fscValue2==1)
-					fscValue2 -= 0.0001;
-
-				double fscAvg = (fscValue1+fscValue2)/2.0;
+				double fscAvg = 0.0;
+				std::vector<double> setFsc1;
+				for(int i=0; i<numFsc; i++){
+					setFsc1=setFscValues[i];
+					if(idx>=setFsc1.size())
+						idx=setFsc1.size()-1;
+					fscValue1 = setFsc1[idx];
+					if (fscValue1==1)
+						fscValue1 -= 0.0001;
+					fscAvg += fscValue1;
+				}
+				fscAvg /= numFsc;
 
 				//std::cout << "fscValue1 = " << fscValue1 << " fscValue2 = " << fscValue2 << " fscAvg = " << fscAvg << std::endl;
 

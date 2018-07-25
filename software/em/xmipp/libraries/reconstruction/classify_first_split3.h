@@ -79,7 +79,7 @@ public:
     MetaData md;
 	Projection PV;
 	FourierProjector *projectorV1, *projectorV2;
-	int countSwap;
+	int countSwap, countRandomSwap, countNormalSwap;
 };
 //@}
 #endif
