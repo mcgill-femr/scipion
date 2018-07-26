@@ -94,6 +94,12 @@ void ProgVolVariability::defineParams()
     // 			   que NiterWeight == 0, deberia ser NiterWeight == 1 mirar por ejem lineas 186-189
     // Tiene sentido usar numThreads para la FFT y forzar que numThreads es 1 para la parte de reconstruccion?
     // usar prepare_fsc para calcular FSC con los halves ids bien. Usar metadata _rln_halfid
+
+    //Cosas probar: no distorsional Vin() por la FT del blob ? mejora algo?
+
+
+
+    //Tests: las trasnformaciones de Vin y fftIn en ProduceSideInfo estan bien? Comprobarlo quitando toda average y ver que sale bien.
 }
 
 // Read arguments ==========================================================
@@ -590,6 +596,7 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
 
         case PROCESS_WEIGHTS:
             {
+            	//JV: Here the differences are that go comes here is the variance which is the square of std. We correct corr2D_3D in finishComputations better
 
                 // Get a first approximation of the reconstruction
                 double corr2D_3D=pow(parent->padding_factor_proj,2.)/
@@ -608,12 +615,18 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                         for (int j=STARTINGX(mFourierWeights); j<=FINISHINGX(mFourierWeights); j++)
                         {
                         	if (parent->NiterWeight==0)
-                        		A3D_ELEM(parent->VoutFourier,k,i,j)*=corr2D_3D;
+//JV
+//                        		A3D_ELEM(parent->VoutFourier,k,i,j)*=corr2D_3D;
+                        		;
+//JV
                         	else
                         	{
                         		double weight_kij=A3D_ELEM(mFourierWeights,k,i,j);
                         		if (1.0/weight_kij>ACCURACY)
-                        			A3D_ELEM(parent->VoutFourier,k,i,j)*=corr2D_3D*A3D_ELEM(mFourierWeights,k,i,j);
+//JV
+//                        			A3D_ELEM(parent->VoutFourier,k,i,j)*=corr2D_3D*A3D_ELEM(mFourierWeights,k,i,j);
+                        			A3D_ELEM(parent->VoutFourier,k,i,j)*=A3D_ELEM(mFourierWeights,k,i,j);
+//JV
                         		else
                         			A3D_ELEM(parent->VoutFourier,k,i,j)=0;
 
@@ -750,9 +763,10 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                     YY(contFreq)=YY(freq)*iTs;
                                     threadParams->ctf.precomputeValues(XX(contFreq),YY(contFreq));
                                     //wCTF=threadParams->ctf.getValueAt();
+//JV
                                     wCTF=threadParams->ctf.getValuePureNoKAt();
                                     //wCTF=threadParams->ctf.getValuePureWithoutDampingAt();
-
+//JV
                                     if (std::isnan(wCTF))
                                     {
                                     	if (i==0 && j==0)
@@ -765,8 +779,11 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                         wModulator=fabs(wCTF);
                                         wCTF=SGN(wCTF);
                                     }
+
                                     else
-                                        wCTF=1.0/wCTF;
+
+                                    	wCTF=1.0/wCTF;
+
                                     if (parent->phaseFlipped)
                                         wCTF=fabs(wCTF);
                                 }
@@ -928,7 +945,7 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                                 double *ptrOut=(double *)&(DIRECT_A1D_ELEM(VoutFourier, memIdx));
                                                 double *ptrInVol=(double *)&(DIRECT_A1D_ELEM(parent->fftVin, memIdx));
 
-                                                  ptrOut[0] += 0.01*w * ((wCTF*ptrIn[0]-ptrInVol[0])*(wCTF*ptrIn[0]-ptrInVol[0]));
+                                                  ptrOut[0] += w * ((wCTF*ptrIn[0]-ptrInVol[0])*(wCTF*ptrIn[0]-ptrInVol[0]));
 //                                                ptrOut[0] += wEffective * ((ptrIn[0]-ptrInVol[0])*(ptrIn[0]-ptrInVol[0])+(ptrIn[1]-ptrInVol[1])*(ptrIn[1]-ptrInVol[1]));
 //                                                ptrOut[0] += wEffective * (ptrIn[0]);
 //                                                ptrOut[0] += wEffective * std::abs(ptrIn[0] - ptrInVol[0]);
@@ -936,19 +953,19 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                                 DIRECT_A1D_ELEM(fourierWeights, memIdx) += w;
                                                 if (conjugate)
 //                                                	 ptrOut[1]-=wEffective * (ptrIn[1]);
-                                                	ptrOut[1]+= 0.01*w *((-wCTF*ptrIn[1]-ptrInVol[1])*(-wCTF*ptrIn[1]-ptrInVol[1]));
+                                                	ptrOut[1]+= w *((-wCTF*ptrIn[1]-ptrInVol[1])*(-wCTF*ptrIn[1]-ptrInVol[1]));
 //                                                	ptrOut[1]-=wEffective * (ptrInVol[1]);
                                                 else
 //                                            	   ptrOut[1]+=wEffective * (ptrIn[1]);
-                                            	   ptrOut[1]+= 0.01*w *((wCTF*ptrIn[1]-ptrInVol[1])*(wCTF*ptrIn[1]-ptrInVol[1]));
+                                            	   ptrOut[1]+= w *((wCTF*ptrIn[1]-ptrInVol[1])*(wCTF*ptrIn[1]-ptrInVol[1]));
 //                                            	   ptrOut[1]+=wEffective * (ptrInVol[1]);
 //                                            	   ptrOut[1]+=wEffective * std::abs(ptrIn[1]- ptrInVol[1]);
 
 //                                                std::cout << DIRECT_A3D_ELEM(VoutFourier, izp,iyp,ixp) << " " << DIRECT_A1D_ELEM(VoutFourier, memIdx) <<  izp << " " << iyp << " " << ixp << " " << std::endl;
 //                                                std::cin.get();
 
-                                                if ( (izp == 80) && (iyp == 80) && (ixp == 80))
-                                                	std::cout << ptrIn[0] << " " << ptrInVol[0] << " " << ptrIn[1] << " " << ptrInVol[1] << " " << w << " " << wCTF << std::endl;
+//                                                if ( (izp == 80) && (iyp == 80) && (ixp == 80))
+//                                                	std::cout << ptrIn[0] << " " << ptrInVol[0] << " " << ptrIn[1] << " " << ptrInVol[1] << " " << w << " " << wCTF << std::endl;
                                             }
                                         }
                                     }
@@ -1088,8 +1105,7 @@ void ProgVolVariability::processImages( int firstImageIndex, int lastImageIndex,
                 // Determine how many rows of the fourier
                 // transform are of interest for us. This is because
                 // the user can avoid to explore at certain resolutions
-                size_t conserveRows=(size_t)ceil( 2.0*((double)paddedFourier->ydim * maxResolution -
-                								   	   (double)paddedFourier->ydim * minResolution));
+                size_t conserveRows=(size_t)ceil( 2.0*((double)paddedFourier->ydim * maxResolution));
                 conserveRows=(size_t)ceil((double)conserveRows/2.0);
 
                 // Loop over all symmetries
@@ -1354,9 +1370,8 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 
     int it = 1;
     std::cout << "Monte Carlo simulation: " << std::endl;
-    //init_progress_bar(numIters);
 
-    while( it < NiterMC )
+    while( it <= NiterMC )
     {
 
 		FOR_ALL_ELEMENTS_IN_ARRAY3D(VoutFourierTmp2)  // Simulated Volume
@@ -1364,14 +1379,14 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
 			mean = A3D_ELEM(fftVin, k, i, j)*corr2D_3D;
 			stddev = (A3D_ELEM(VoutFourierTmp2, k, i, j)); // We compute the std from the variance
 
-			stddev.real( std::sqrt( std::abs(stddev.real())) );
-			stddev.imag( std::sqrt( std::abs(stddev.imag())) );
+			stddev.real( std::sqrt( std::abs(stddev.real()))*corr2D_3D );
+			stddev.imag( std::sqrt( std::abs(stddev.imag()))*corr2D_3D );
+
 			rand_normal(((double*) &mean)[0], ((double*) &stddev)[0],
 					((double*) &result)[0]);
 			rand_normal(((double*) &mean)[1], ((double*) &stddev)[1],
 					((double*) &result)[1]);
 			A3D_ELEM(VoutFourier,k,i,j) = result;//result; // A3D_ELEM(fftVin,k,i,j);
-			//std::cout << result << std::endl;
 		} 		// Simulated Volume
 
 
