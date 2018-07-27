@@ -137,7 +137,7 @@ class TestAutoClasifier(TestBase):
         def _runAutoClassifier(doGpu=False, label=''):
             print label
             autoClassifierProt = self.newProtocol(ProtAutoClassifier,
-                                               numberOfIterations=10,
+                                               numberOfIterations=10, level=2,
                                                numberOfMpi=4, numberOfThreads=1)
             autoClassifierProt.setObjLabel(label)
             autoClassifierProt.inputParticles.set(self.protImport.outputParticles)
