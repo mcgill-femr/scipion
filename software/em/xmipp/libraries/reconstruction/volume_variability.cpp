@@ -207,6 +207,7 @@ void ProgVolVariability::run()
     }
 
     //Computing interpolated volume
+
     processImages(0, SF.size() - 1, !fn_fsc.empty(), false);
 
     // Correcting the weights
@@ -764,8 +765,8 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
                                     threadParams->ctf.precomputeValues(XX(contFreq),YY(contFreq));
                                     //wCTF=threadParams->ctf.getValueAt();
 //JV
-                                    wCTF=threadParams->ctf.getValuePureNoKAt();
-                                    //wCTF=threadParams->ctf.getValuePureWithoutDampingAt();
+//                                    wCTF=threadParams->ctf.getValuePureNoKAt();
+                                    wCTF=threadParams->ctf.getValuePureWithoutDampingAt();
 //JV
                                     if (std::isnan(wCTF))
                                     {
@@ -1015,6 +1016,10 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
 //#define DEBUG
 void ProgVolVariability::processImages( int firstImageIndex, int lastImageIndex, bool saveFSC, bool reprocessFlag)
 {
+
+    std::cout << "FSC saveFSC " << saveFSC << std::endl;
+
+
     MultidimArray< std::complex<double> > *paddedFourier;
 
     int repaint = (int)ceil((double)SF.size()/60);
@@ -1471,11 +1476,17 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     Vin() = Vintemp/(double)it;
     Vin.write(fn_variance);
 
-    FOR_ALL_ELEMENTS_IN_ARRAY3D(Vintemp)
-    	A3D_ELEM(Vintemp,k,i,j) = std::sqrt(A3D_ELEM(Vout(),k,i,j));
+    FOR_ALL_ELEMENTS_IN_ARRAY3D(Vout())
+    	A3D_ELEM(Vout(),k,i,j) = std::sqrt(A3D_ELEM(Vout(),k,i,j));
 
     fn_variance = fn_out.removeFileFormat().removeLastExtension()+ "_std.vol";
-    Vout() = Vintemp;
+    Vout.write(fn_variance);
+
+
+    FOR_ALL_ELEMENTS_IN_ARRAY3D(Vintemp)
+    	A3D_ELEM(Vout(),k,i,j) = std::abs(A3D_ELEM(Vintemp,k,i,j))/A3D_ELEM(Vout(),k,i,j);
+
+    fn_variance = fn_out.removeFileFormat().removeLastExtension()+ "_snr.vol";
     Vout.write(fn_variance);
 
     std::cout << std::endl;
