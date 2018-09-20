@@ -38,6 +38,10 @@ class ProtRelionCtfRefinement(em.ProtParticles):
 
     _label = 'ctf refinement'
 
+    @classmethod
+    def isDisabled(cls):
+        return not convert.isVersion3()
+
     def _defineParams(self, form):
         form.addSection(label='Input')
         #TODO: conditions on particles?

@@ -37,6 +37,8 @@ from pyworkflow.em.protocol import ProtAlignMovies
 from pyworkflow.gui.plotter import Plotter
 from pyworkflow.protocol import STEPS_SERIAL
 
+import convert
+
 
 class ProtRelionMotioncor(ProtAlignMovies):
     """
@@ -44,6 +46,10 @@ class ProtRelionMotioncor(ProtAlignMovies):
     """
 
     _label = 'motioncor'
+
+    @classmethod
+    def isDisabled(cls):
+        return not convert.isVersion3()
 
     def __init__(self, **kwargs):
         ProtAlignMovies.__init__(self, **kwargs)
