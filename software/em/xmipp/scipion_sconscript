@@ -621,9 +621,10 @@ for p in ['angular_break_symmetry',
           'reconstruct_wbp',
           'resolution_fsc',
           'resolution_ibw',
+          'resolution_fsc_std',
           'resolution_monogenic_signal',
           'resolution_ssnr',
-          'score_micrograph',
+          'score_micrograph',          
 
           'work_test',
 

@@ -1017,10 +1017,7 @@ void * ProgVolVariability::processImageThread( void * threadArgs )
 void ProgVolVariability::processImages( int firstImageIndex, int lastImageIndex, bool saveFSC, bool reprocessFlag)
 {
 
-    std::cout << "FSC saveFSC " << saveFSC << std::endl;
-
-
-    MultidimArray< std::complex<double> > *paddedFourier;
+	MultidimArray< std::complex<double> > *paddedFourier;
 
     int repaint = (int)ceil((double)SF.size()/60);
 
@@ -1467,13 +1464,14 @@ void ProgVolVariability::finishComputations( const FileName &out_name )
     }
     //~JV
 
-    Vout() /=(double)it;
+    Vout()  /= (double)it;
+    Vintemp /= (double)it;
 
     FileName fn_variance = fn_out.removeFileFormat().removeLastExtension()+"_variance.vol";
     Vout.write(fn_variance);
 
     fn_variance = fn_out.removeFileFormat().removeLastExtension()+ "_mean.vol";
-    Vin() = Vintemp/(double)it;
+    Vin() = Vintemp;
     Vin.write(fn_variance);
 
     FOR_ALL_ELEMENTS_IN_ARRAY3D(Vout())
