@@ -75,15 +75,21 @@ class XmippProtDirectionalClasses(ProtAnalysis3D):
     
     #--------------------------- INSERT steps functions --------------------------------------------
     def _insertAllSteps(self):        
+
         self._insertFunctionStep('convertInputStep', self.inputParticles.get().getObjId(), self.inputVolume.get().getObjId(), 
                                  self.targetResolution.get())
+
         self._insertFunctionStep('constructGroupsStep', self.inputParticles.get().getObjId(),
                                  self.angularSampling.get(), self.angularDistance.get(), self.symmetryGroup.get())
+
         self._insertFunctionStep('classifyGroupsStep')
+        
         if self.refineAngles:
             self._insertFunctionStep('refineAnglesStep')
+        
         self._insertFunctionStep('cleanStep')
-        self._insertFunctionStep('createOutputStep',1)
+
+        self._insertFunctionStep('createOutputStep')
     
     #--------------------------- STEPS functions ---------------------------------------------------
     def convertInputStep(self, particlesId, volId, targetResolution):
@@ -92,17 +98,22 @@ class XmippProtDirectionalClasses(ProtAnalysis3D):
         input particles and cause restart from here.
         """
         writeSetOfParticles(self.inputParticles.get(), self._getPath('input_particles.xmd'))
+
+        #Scale the images
         Xdim = self.inputParticles.get().getDimensions()[0]
         Ts = self.inputParticles.get().getSamplingRate()
         newTs = self.targetResolution.get()*0.4
         newTs = max(Ts,newTs)
         newXdim = Xdim*Ts/newTs
-        self.runJob("xmipp_image_resize","-i %s -o %s --save_metadata_stack %s --dim %d"%\
+        
+        self.runJob("xmipp_image_resize",
+                    "-i %s -o %s --save_metadata_stack %s --fourier %d"%\
                     (self._getPath('input_particles.xmd'),
                     self._getExtraPath('scaled_particles.stk'),
                     self._getExtraPath('scaled_particles.xmd'),
                     newXdim))
     
+        #Scale the volume    
         from pyworkflow.em.convert import ImageHandler
         img = ImageHandler()
         img.convert(self.inputVolume.get(), self._getExtraPath("volume.vol"))
@@ -113,7 +124,10 @@ class XmippProtDirectionalClasses(ProtAnalysis3D):
                         newXdim), numberOfMpi=1)
    
     def constructGroupsStep(self, particlesId, angularSampling, angularDistance, symmetryGroup):
-        # Generate projections from this reconstruction        
+        
+        """ Generate projections from the map according to the angular sampling selected
+            and detect neighbouring particles to construct the directional classes 
+        """        
         params = {"inputVol" : self._getExtraPath("volume.vol"),
                   "galleryStk" : self._getExtraPath("gallery.stk"),
                   "galleryXmd" : self._getExtraPath("gallery.doc"),
@@ -123,6 +137,7 @@ class XmippProtDirectionalClasses(ProtAnalysis3D):
                   "angularDistance" : self.angularDistance.get(),
                   "expParticles" : self._getExtraPath('scaled_particles.xmd')
                 }
+        
         args = '-i %(inputVol)s -o %(galleryStk)s --sampling_rate %(angularSampling)f --sym %(symmetry)s'
         args += ' --method fourier 1 0.25 bspline --compute_neighbors --angular_distance %(angularSampling)f'
         args += ' --experimental_images %(expParticles)s --max_tilt_angle 90'
@@ -133,24 +148,34 @@ class XmippProtDirectionalClasses(ProtAnalysis3D):
         self.runJob("xmipp_angular_neighbourhood", args % params, numberOfMpi=1)               
    
     def classifyGroupsStep(self):
+
         mdOut = xmipp.MetaData()
 
         fnNeighbours = self._getExtraPath("neighbours.xmd")
         fnGallery=self._getExtraPath("gallery.stk")
+        
         for block in xmipp.getBlocksInMetaDataFile(fnNeighbours):
+
             imgNo = block.split("_")[1]
             fnDir = self._getExtraPath("direction_%s"%imgNo)
             makePath(fnDir)
             Nlevels = int(math.ceil(math.log(self.directionalClasses.get())/math.log(2)))
             fnOut = join(fnDir,"level_%02d/class_classes.stk"%Nlevels)
+
             if not exists(fnOut):
                 fnBlock="%s@%s"%(block,fnNeighbours)
+
+                # Skip projection directions with not enough images to
+                # create a given number of classes
                 if getSize(fnBlock)>25:
                     try:
-                        args="-i %s --odir %s --ref0 %s@%s --iter %d --nref %d --distance correlation --classicalMultiref --maxShift %d"%\
+                        args="-i %s --odir %s --ref0 %s@%s --iter %d --nref %d --distance correlation --classicalMultiref --maxShift %d" %\
                             (fnBlock,fnDir,imgNo,fnGallery,self.cl2dIterations.get(),self.directionalClasses.get(),self.maxShift.get())
+
                         self.runJob("xmipp_classify_CL2D", args)
+
                         fnAlignRoot = join(fnDir,"classes")
+
                         self.runJob("xmipp_image_align","-i %s --ref %s@%s --oroot %s --iter 1"%(fnOut,imgNo,fnGallery,fnAlignRoot),numberOfMpi=1)
                         self.runJob("xmipp_transform_geometry","-i %s_alignment.xmd --apply_transform"%fnAlignRoot,numberOfMpi=1)
                     
@@ -164,6 +189,7 @@ class XmippProtDirectionalClasses(ProtAnalysis3D):
                         print("The classification failed, probably because of a low number of images.")
                         print("However, this classification does not hinder the protocol to continue")
                         
+
         fnDirectional=self._getPath("directionalClasses.xmd")
         mdOut.write(fnDirectional)
         self.runJob("xmipp_metadata_utilities","-i %s --set join %s ref"%(fnDirectional,self._getExtraPath("gallery.doc")), numberOfMpi=1)
@@ -180,7 +206,7 @@ class XmippProtDirectionalClasses(ProtAnalysis3D):
         cleanPath(self._getExtraPath('volume.vol'))
         cleanPattern(self._getExtraPath("direction_*/level_00"))
 
-    def createOutputStep(self, numeroFeo):
+    def createOutputStep(self):
         fnDirectional=self._getPath("directionalClasses.xmd")
         if exists(fnDirectional):
             imgSetOut = self._createSetOfParticles()
