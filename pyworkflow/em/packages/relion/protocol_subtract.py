@@ -53,8 +53,8 @@ class ProtRelionSubtract(ProtOperateParticles):
         """ Centralize how files are called. """
         myDict = {
                   'input_star': self._getPath('input_particles.star'),
-                  'output': self._getExtraPath('output_particles'),
-                  'output_star': self._getExtraPath('output_particles.star'),
+                  'output': self._getExtraPath('output_particles_%(id)06d'),
+                  'output_star': self._getExtraPath('output_particles_%(id)06d.star'),
                   'volume_masked': self._getTmpPath('volume_masked.mrc'),
                   }
         self._updateFilenamesDict(myDict)
@@ -170,12 +170,12 @@ class ProtRelionSubtract(ProtOperateParticles):
 
         params += ' --ang %s  --o %s ' % (
             self._getFileName('input_star'),
-            self._getFileName('output'))
+            self._getFileName('output', id=self.getObjId()))
 
         try:
             self.runJob('relion_project', params)
         except Exception, ex:
-            fn = self._getFileName('output_star')
+            fn = self._getFileName('output_star', id=self.getObjId())
             if not os.path.exists(fn):
                 sys.stderr.write('The file %s was not produced\n' % fn)
                 raise ex
@@ -185,7 +185,7 @@ class ProtRelionSubtract(ProtOperateParticles):
     def createOutputStep(self):
         imgSet = self._getInputParticles()
         outImgSet = self._createSetOfParticles()
-        outImgsFn = self._getFileName('output_star')
+        outImgsFn = self._getFileName('output_star', id=self.getObjId())
          
         outImgSet.copyInfo(imgSet)
         outImgSet.setAlignmentProj()
