@@ -451,6 +451,13 @@ env.addPackage('relion', version='2.1',
               updateCuda=True,
               vars=relion_vars)
 
+# TODO: Check which tgz will be distributed
+env.addPackage('relion', version='3.0',
+               tar='relion-3.0.tgz',
+               commands=relion2_commands,
+               updateCuda=True,
+               vars=relion_vars)
+
 env.addPackage('localrec', version='1.1.0',
                tar='localrec-1.1.0.tgz')
 
