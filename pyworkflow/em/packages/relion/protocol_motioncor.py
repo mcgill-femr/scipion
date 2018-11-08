@@ -38,11 +38,12 @@ from pyworkflow.gui.plotter import Plotter
 from pyworkflow.protocol import STEPS_SERIAL
 
 import convert
+import metadata as md
 
 
 class ProtRelionMotioncor(ProtAlignMovies):
     """
-    Wrapper protocol for the Relion's implementation of motioncor algorithm.
+    Wrapper for the Relion's implementation of motioncor algorithm.
     """
 
     _label = 'motioncor'
@@ -161,6 +162,12 @@ class ProtRelionMotioncor(ProtAlignMovies):
         form.addParallelSection(threads=4, mpi=1)
 
     # --------------------------- STEPS functions -------------------------------
+    def _convertInputStep(self):
+        self.info("Relion version:")
+        self.runJob("which", "relion_run_motioncorr")
+
+        ProtAlignMovies._convertInputStep(self)
+
     def _processMovie(self, movie):
         movieFolder = self._getOutputMovieFolder(movie)
         inputStar = os.path.join(movieFolder,
@@ -195,7 +202,6 @@ class ProtRelionMotioncor(ProtAlignMovies):
         self.runJob("relion_run_motioncorr", args, cwd=movieFolder)
 
         self._computeExtra(movie)
-
         self._moveFiles(movie)
 
     # --------------------------- INFO functions ------------------------------
@@ -217,7 +223,7 @@ class ProtRelionMotioncor(ProtAlignMovies):
         return self._getExtraPath(fn) if extra else fn
 
     def _createOutputMovies(self):
-        return False
+        return True
 
     def _createOutputMicrographs(self):
         return not self.doDW or bool(self.saveNonDW)
@@ -232,80 +238,29 @@ class ProtRelionMotioncor(ProtAlignMovies):
     def _setMotionValues(self, movie, mic):
         """ Parse motion values from the 'corrected_micrographs.star' file
         generated for each movie. """
-        fn = os.path.join(self._getOutputMovieFolder(movie), 'output',
-                          'corrected_micrographs.star')
+        fn = self._getMovieExtraFn(movie, 'corrected_micrographs.star')
         # FIXME: There are a few quick and dirty solutions here:
-        # 1) we are reading the star file by "hand"
-        # 2) assuming the data line always starts with 'output/',
-        #   since we use that folder as output
         # 3) current implementation only works for a single item
         #   so, a re-write is needed when processing in batch
         #   and corrected_micrographs.star file can contain more rows.
-        # Assume file format is the following:
-        #
-        # data_
-        #
-        # loop_
-        # _rlnMicrographName  # 1
-        # _rlnMicrographMetadata  # 2
-        # _rlnAccumMotionTotal  # 3
-        # _rlnAccumMotionEarly  # 4
-        # _rlnAccumMotionLate  # 5
-        # output / cct_1.mrc output / cct_1.star   5.347620 4.311143 1.036477
-        with open(fn) as f:
-            for line in f:
-                l = line.strip()
-                if l.startswith('output/'):
-                    parts = l.split()
-                    mic._rlnAccumMotionTotal = pwobj.Float(parts[2])
-                    mic._rlnAccumMotionEarly = pwobj.Float(parts[3])
-                    mic._rlnAccumMotionLate = pwobj.Float(parts[4])
-                    break
+        table = md.Table(fileName=fn)
+        row = table[0]
+        mic._rlnAccumMotionTotal = pwobj.Float(row.rlnAccumMotionTotal)
+        mic._rlnAccumMotionEarly = pwobj.Float(row.rlnAccumMotionEarly)
+        mic._rlnAccumMotionLate = pwobj.Float(row.rlnAccumMotionLate)
 
-    def _getMovieShifts(self, movie):
-        outStar = self._getMovieOutFn(movie, '.star')
+    def _getMovieShifts(self, movie, outStarFn=None):
+        outStar = outStarFn or self._getMovieExtraFn(movie, '.star')
         first, last = self._getRange(movie)
         n = last - first + 1
-        # JMRT: I will parse the shift manually here from the .star file
-        # to avoid the need to include new labels and depend on binding code
-        # The following structure of the block is assumed:
-        """
-        data_global_shift
-
-        loop_
-        _rlnMicrographFrameNumber #1
-        _rlnMicrographShiftX #2
-        _rlnMicrographShiftY #3
-                   1     0.000000     0.000000
-                   2     -0.91811     1.351012
-                   ...
-        """
+        table = md.Table(fileName=outStar, tableName='global_shift')
         xShifts, yShifts = [], []
 
-        with open(outStar) as f:
-            # Locate the desired data block
-            found_data = False
-            found_loop = False
-
-            for line in f:
-                l = line.strip()
-                if found_data:
-                    if found_loop:
-                        if not l:
-                            break
-                        if not l.startswith('_rln'):
-                            parts = l.split()
-                            xShifts.append(float(parts[1]))
-                            yShifts.append(float(parts[2]))
-                            # Avoid reading values from non aligned frames
-                            if len(xShifts) == n:
-                                break
-                    else:
-                        if l == 'loop_':
-                            found_loop = True
-                else:
-                    if l == 'data_global_shift':
-                        found_data = True
+        for row in table:
+            xShifts.append(float(row.rlnMicrographShiftX))
+            yShifts.append(float(row.rlnMicrographShiftY))
+            if len(xShifts) == n:
+                break
 
         return xShifts, yShifts
 
@@ -315,14 +270,22 @@ class ProtRelionMotioncor(ProtAlignMovies):
         Used by the relion implementation of motioncor.
         """
         with open(starFn, 'w') as f:
-            f.write("\ndata_\nloop_\n_rlnMicrographMovieName\n")
+            table = md.Table(columns=['rlnMicrographMovieName'])
             for img in images:
-                f.write("%s\n" % os.path.basename(img.getFileName()))
+                table.addRow(os.path.basename(img.getFileName()))
+            table.writeStar(f)
 
     def _getMovieOutFn(self, movie, suffix):
         movieBase = pwutils.removeBaseExt(movie.getFileName()).replace('.', '_')
         return os.path.join(self._getOutputMovieFolder(movie), 'output',
                             '%s%s' % (movieBase, suffix))
+
+    def _getMovieExtraFn(self, movie, suffix):
+        """ Return filenames in the extra directory with the prefix of this movie.
+        Used to keep files associated with each micrograph.
+        """
+        movieBase = pwutils.removeBaseExt(movie.getFileName())
+        return self._getExtraPath('%s%s' % (movieBase, suffix))
 
     def _getAbsPath(self, baseName):
         return os.path.abspath(self._getExtraPath(baseName))
@@ -383,6 +346,15 @@ class ProtRelionMotioncor(ProtAlignMovies):
             pwutils.moveFile(self._getMovieOutFn(movie, '.mrc'),
                              self._getExtraPath(self._getOutputMicName(movie)))
 
+        # Keep some local files of this movie in the extra folder
+        for suffix in ['.star', '.log']:
+            pwutils.moveFile(self._getMovieOutFn(movie, suffix),
+                             self._getMovieExtraFn(movie, suffix))
+
+        suffix = 'corrected_micrographs.star'
+        fn = os.path.join(self._getOutputMovieFolder(movie), 'output', suffix)
+        pwutils.moveFile(fn, self._getMovieExtraFn(movie, suffix))
+
     def _getRange(self, movie):
         n = self._getNumberOfFrames(movie)
         iniFrame, _, indxFrame = movie.getFramesRange()
@@ -405,7 +377,7 @@ class ProtRelionMotioncor(ProtAlignMovies):
 
     def _saveAlignmentPlots(self, movie):
         # Create plots and save as an image
-        shiftsX, shiftsY = self._getMovieShifts(movie)
+        shiftsX, shiftsY = self._getMovieShifts(movie, self._getMovieOutFn(movie, '.star'))
         first, _ = self._getFrameRange(movie.getNumberOfFrames(), 'align')
         plotter = createGlobalAlignmentPlot(shiftsX, shiftsY, first)
         plotter.savefig(self._getPlotGlobal(movie))
