@@ -117,7 +117,7 @@ class ProtRelionMotioncor(ProtAlignMovies):
                             'Float-values may be used. Do make sure though '
                             'that the resulting micrograph size is even.')
 
-        group.addParam('gainRotation', params.EnumParam, default=0,
+        group.addParam('gainRot', params.EnumParam, default=0,
                        choices=['No rotation (0)',
                                 ' 90 degrees (1)',
                                 '180 degrees (2)',
@@ -138,6 +138,15 @@ class ProtRelionMotioncor(ProtAlignMovies):
                            "This is the same as -FlipGain in MotionCor2. "
                            "0 means do nothing, 1 means flip Y (upside down) "
                            "and 2 means flip X (left to right).")
+
+        # TODO: Check if defectFile is used, not found parameter
+        # form.addParam('defectFile', params.StringParam,
+        #               label='Defect file',
+        #               help="Location of the MOTIONCOR2-style ASCII file that "
+        #                    "describes the defect pixels on the detector "
+        #                    "(using the -DefectFile option). Leave empty if you "
+        #                    "don't have any defects, or don't want to correct "
+        #                    "for defects on your detector.")
 
         form.addParam('extraParams', params.StringParam, default='',
                       expertLevel=cons.LEVEL_ADVANCED,
@@ -186,6 +195,13 @@ class ProtRelionMotioncor(ProtAlignMovies):
         args += "--patch_x %d --patch_y %d " % (self.patchX, self.patchY)
         args += "--j %d " % self.numberOfThreads
 
+        inputMovies = self.inputMovies.get()
+        if inputMovies.getGain():
+            # TODO: Maybe we need to convert the gain to mrc if not?
+            args += ' --gainref "%s"' % inputMovies.getGain()
+            args += ' --gain_rot %d ' % self.gainRot
+            args += ' --gain_flip %d ' % self.gainFlip
+
         if self.doDW:
             preExp, dose = self._getCorrectedDose(self.inputMovies.get())
             voltage = movie.getAcquisition().getVoltage()
@@ -195,6 +211,9 @@ class ProtRelionMotioncor(ProtAlignMovies):
             args += "--voltage %d " % voltage
             args += "--dose_per_frame %f " % dose
             args += "--preexposure %f " % preExp
+
+        # if self.defectFile.get():
+        #     args += "%s" % self.defectFile
 
         if self.extraParams.hasValue():
             args += " " + self.extraParams.get()
@@ -226,7 +245,7 @@ class ProtRelionMotioncor(ProtAlignMovies):
         return True
 
     def _createOutputMicrographs(self):
-        return not self.doDW or bool(self.saveNonDW)
+        return not bool(self.doDW) or bool(self.saveNonDW)
 
     def _createOutputWeightedMicrographs(self):
         return bool(self.doDW)
