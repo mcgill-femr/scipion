@@ -184,7 +184,7 @@ class ProtRelionInitialModel(ProtInitialVolume, ProtRelionBase):
                            'You can do this by the relion_align_symmetry command.')
 
         group = form.addGroup('Sampling')
-        group.addParam('angularSamplingDeg', EnumParam, default=2,
+        group.addParam('angularSamplingDeg', EnumParam, default=15,
                       choices=ANGULAR_SAMPLING_LIST,
                       label='Angular sampling interval (deg)',
                       help='There are only a few discrete angular samplings'
@@ -193,7 +193,7 @@ class ProtRelionInitialModel(ProtInitialVolume, ProtRelionBase):
                            'angles on the sphere. The samplings are '
                            'approximate numbers and vary slightly over '
                            'the sphere.')
-        group.addParam('offsetSearchRangePix', FloatParam, default=5,
+        group.addParam('offsetSearchRangePix', FloatParam, default=6,
                       label='Offset search range (pix)',
                       help='Probabilities will be calculated only for '
                            'translations in a circle with this radius (in '
@@ -201,7 +201,7 @@ class ProtRelionInitialModel(ProtInitialVolume, ProtRelionBase):
                            'every iteration and is placed at the optimal '
                            'translation for each image in the previous '
                            'iteration.')
-        group.addParam('offsetSearchStepPix', FloatParam, default=1.0,
+        group.addParam('offsetSearchStepPix', FloatParam, default=2,
                       label='Offset search step (pix)',
                       help='Translations will be sampled with this step-size '
                            '(in pixels). Translational sampling is also done '
