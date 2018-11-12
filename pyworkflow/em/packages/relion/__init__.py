@@ -58,6 +58,7 @@ from protocol_export_particles import ProtRelionExportParticles
 from protocol_motioncor import ProtRelionMotioncor
 from protocol_autopick_v3 import ProtRelionAutopickLoG
 from protocol_ctf_refinement import ProtRelionCtfRefinement
+from protocol_symmetrize_volume import ProtRelionSymmetrizeVolume
 
 # Wizards
 from wizard import *
