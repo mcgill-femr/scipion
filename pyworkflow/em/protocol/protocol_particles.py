@@ -117,7 +117,7 @@ class ProtExtractParticles(ProtParticles):
                       label="Input coordinates",
                       help='Select the SetOfCoordinates ')
     
-        # The name for the followig param is because historical reasons
+        # The name for the following param is because historical reasons
         # now it should be named better 'micsSource' rather than
         # 'downsampleType', but this could make inconsistent previous executions
         # of this protocols, we will keep the name
@@ -158,7 +158,7 @@ class ProtExtractParticles(ProtParticles):
         specific parameters """
         pass
     
-    #--------------------------- INSERT steps functions ------------------------
+    # -------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         # Let's load input data for the already existing micrographs
         # before the streaming
@@ -207,7 +207,6 @@ class ProtExtractParticles(ProtParticles):
         return micStepId
     
     # -------------------------- STEPS functions ------------------------------
-
 
     def extractMicrographStep(self, micKey, *args):
         """ Step function that will be common for all extraction protocols.

@@ -1,8 +1,8 @@
 # **************************************************************************
 # *
-# * Authors:     Grigory Sharov     (sharov@igbmc.fr)
+# * Authors:     Grigory Sharov (gsharov@mrc-lmb.cam.ac.uk) [1]
 # *
-# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
+# * [1] MRC Laboratory of Molecular Biology, MRC-LMB
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -31,9 +31,8 @@ from pyworkflow.protocol.params import (PointerParam, FloatParam, StringParam,
 from pyworkflow.utils import removeExt
 import pyworkflow.em as em
 from pyworkflow.em.protocol import ProtParticles
-from pyworkflow.em.data import SetOfClasses3D, SetOfParticles, SetOfClasses
-from convert import (convertBinaryVol, readSetOfParticles,
-                     writeSetOfParticles, writeReferences)
+from pyworkflow.em.data import SetOfParticles, SetOfClasses
+from convert import isVersion1, writeSetOfParticles, writeReferences
 import pyworkflow.em.metadata as md
 
 
@@ -49,7 +48,7 @@ class ProtRelionSortParticles(ProtParticles):
     _label = 'sort particles'
     _lastUpdateVersion = VERSION_1_1
 
-    #--------------------------- DEFINE param functions ------------------------
+    # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('inputSet', PointerParam,
@@ -126,8 +125,7 @@ class ProtRelionSortParticles(ProtParticles):
 
         form.addParallelSection(threads=0, mpi=1)
             
-    #--------------------------- INSERT steps functions ------------------------
-
+    # -------------------------- INSERT steps functions -----------------------
     def isInputAutoPicking(self):
         inputSet = self.inputSet.get()
         return (isinstance(inputSet, SetOfParticles) and
@@ -165,8 +163,7 @@ class ProtRelionSortParticles(ProtParticles):
 
         self._insertFunctionStep('runRelionStep', params)
 
-    #--------------------------- STEPS functions -------------------------------
-
+    # -------------------------- STEPS functions ------------------------------
     def _createFilenameTemplates(self):
         """ Centralize how files are called. """
         myDict = {
@@ -243,8 +240,7 @@ class ProtRelionSortParticles(ProtParticles):
         self._defineOutputs(outputParticles=sortedImgSet)
         self._defineSourceRelation(self.inputSet, sortedImgSet)
 
-
-    #--------------------------- INFO functions --------------------------------
+    # -------------------------- INFO functions -------------------------------
     def _validate(self):
         errors = []
         #imgSet = self.inputParticles.get()
@@ -263,7 +259,7 @@ class ProtRelionSortParticles(ProtParticles):
                             self.getObjectTag('outputParticles')))
         return summary
     
-    #--------------------------- UTILS functions -------------------------------
+    # -------------------------- UTILS functions ------------------------------
     def _allParticles(self, iterate=False):
         # A handler function to iterate over the particles
         inputSet = self.inputSet.get()
@@ -307,7 +303,7 @@ class ProtRelionSortParticles(ProtParticles):
                      '--min_z': self.minZ.get()
                      })
         
-        if isVersion2():
+        if not isVersion1():
             args['--o'] = self._getFileName('output_star')
         else:
             args['--o'] = 'sorted'
