@@ -1,8 +1,11 @@
 # **************************************************************************
 # *
-# * Authors:     Grigory Sharov (gsharov@mrc-lmb.cam.ac.uk)
+# * Authors:     Grigory Sharov (gsharov@mrc-lmb.cam.ac.uk) [1]
+# *              J.M. De la Rosa Trevin (delarosatrevin@scilifelab.se) [2]
 # *
-# * MRC Laboratory of Molecular Biology, MRC-LMB
+# * [1] MRC Laboratory of Molecular Biology, MRC-LMB
+# * [2] SciLifeLab, Stockholm University
+# *
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by

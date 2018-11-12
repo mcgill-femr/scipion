@@ -30,8 +30,8 @@ from protocol_base import ProtRelionBase
 
 
 class ProtRelionCenterAverages(em.ProtProcessParticles, ProtRelionBase):
-    """ Simple protocol to center averages.
-     This protocol uses the *relion_image_handler* with *--shift_com* option.
+    """
+    Center averages using *relion_image_handler* with *--shift_com* option.
     """
     _label = 'center averages'
     
