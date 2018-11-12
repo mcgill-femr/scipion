@@ -139,15 +139,6 @@ class ProtRelionMotioncor(ProtAlignMovies):
                            "0 means do nothing, 1 means flip Y (upside down) "
                            "and 2 means flip X (left to right).")
 
-        # TODO: Check if defectFile is used, not found parameter
-        # form.addParam('defectFile', params.StringParam,
-        #               label='Defect file',
-        #               help="Location of the MOTIONCOR2-style ASCII file that "
-        #                    "describes the defect pixels on the detector "
-        #                    "(using the -DefectFile option). Leave empty if you "
-        #                    "don't have any defects, or don't want to correct "
-        #                    "for defects on your detector.")
-
         form.addParam('extraParams', params.StringParam, default='',
                       expertLevel=cons.LEVEL_ADVANCED,
                       label='Additional parameters',
@@ -211,9 +202,6 @@ class ProtRelionMotioncor(ProtAlignMovies):
             args += "--voltage %d " % voltage
             args += "--dose_per_frame %f " % dose
             args += "--preexposure %f " % preExp
-
-        # if self.defectFile.get():
-        #     args += "%s" % self.defectFile
 
         if self.extraParams.hasValue():
             args += " " + self.extraParams.get()
