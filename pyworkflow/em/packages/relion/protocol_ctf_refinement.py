@@ -155,7 +155,7 @@ class ProtRelionCtfRefinement(em.ProtParticles):
         args += "--o %s " % self._getExtraPath()
         postStar = self.inputPostprocess.get()._getExtraPath('postprocess.star')
         args += "--f %s " % postStar
-        args += "--m1 %s --m2 %s --mask %s " % self._getInputVolumes(postStar)
+        args += "--m1 %s --m2 %s --mask %s " % convert.getVolumesFromPostprocess(postStar)
         args += "--kmin_tilt %0.3f " % self.minResolution
         args += "--angpix %0.3f " % self.inputParticles.get().getSamplingRate()
 
