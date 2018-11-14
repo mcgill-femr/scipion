@@ -59,6 +59,7 @@ from protocol_motioncor import ProtRelionMotioncor
 from protocol_autopick_v3 import ProtRelionAutopickLoG
 from protocol_ctf_refinement import ProtRelionCtfRefinement
 from protocol_symmetrize_volume import ProtRelionSymmetrizeVolume
+from protocol_bayesian_polishing import ProtRelionBayesianPolishing
 
 # Wizards
 from wizard import *
