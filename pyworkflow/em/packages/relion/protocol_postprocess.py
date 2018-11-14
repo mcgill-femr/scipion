@@ -26,12 +26,13 @@
 # *
 # **************************************************************************
 
-from pyworkflow.protocol.params import (PointerParam, FloatParam, FileParam,
-                                        BooleanParam, IntParam, LEVEL_ADVANCED)
+from os.path import exists
+
+import pyworkflow.protocol.params as params
 from pyworkflow.em.data import Volume
 from pyworkflow.em.protocol import ProtAnalysis3D, ImageHandler
 import pyworkflow.em.metadata as md
-from pyworkflow.utils import exists
+import pyworkflow.utils as pwutils
 from convert import isVersion3
 
 
@@ -44,11 +45,14 @@ class ProtRelionPostprocess(ProtAnalysis3D):
     
     def _createFilenameTemplates(self):
         """ Centralize how files are called for iterations and references. """
+        def _getInputPath(*paths):
+            return self._getPath('input', *paths)
+
         myDict = {
-                  'finalVolume': self._getTmpPath("relion_class001.mrc"),
-                  'half1': self._getTmpPath("relion_half1_class001_unfil.mrc"),
-                  'half2': self._getTmpPath("relion_half2_class001_unfil.mrc"),
-                  'mask': self._getTmpPath("input_mask.mrc")
+                  'finalVolume': _getInputPath("relion_class001.mrc"),
+                  'half1': _getInputPath("relion_half1_class001_unfil.mrc"),
+                  'half2': _getInputPath("relion_half2_class001_unfil.mrc"),
+                  'mask': _getInputPath("input_mask.mrc")
                   }
 
         self._updateFilenamesDict(myDict)
@@ -57,19 +61,21 @@ class ProtRelionPostprocess(ProtAnalysis3D):
     def _defineParams(self, form):
         
         form.addSection(label='Input')
-        form.addParam('protRefine', PointerParam, pointerClass="ProtRefine3D",
+        form.addParam('protRefine', params.PointerParam,
+                      pointerClass="ProtRefine3D",
                       label='Select a previous refinement protocol',
                       help='Select any previous refinement protocol to get the '
                            '3D half maps. Note that it is recommended that the '
                            'refinement protocol uses a gold-standard method.')
-        form.addParam('solventMask', PointerParam, pointerClass="VolumeMask",
+        form.addParam('solventMask', params.PointerParam,
+                      pointerClass="VolumeMask",
                       label='Solvent mask',
                       help="Provide a soft mask where the protein is white "
                            "(1) and the solvent is black (0). Often, the "
                            "softer the mask the higher resolution estimates "
                            "you will get. A soft edge of 5-10 pixels is often "
                            "a good edge width.")
-        form.addParam('calibratedPixelSize', FloatParam, default=0,
+        form.addParam('calibratedPixelSize', params.FloatParam, default=0,
                       label='Calibrated pixel size (A)',
                       help="Provide the final, calibrated pixel size in "
                            "Angstroms. If 0, the input pixel size will be used. "
@@ -80,12 +86,12 @@ class ProtRelionPostprocess(ProtAnalysis3D):
                            "calibrated value.")
 
         form.addSection(label='Sharpening')
-        form.addParam('mtf', FileParam,
+        form.addParam('mtf', params.FileParam,
                       label='MTF-curve file',
                       help='User-provided STAR-file with the MTF-curve '
                            'of the detector.'
                            'Relion param: <--mtf>')
-        form.addParam('doAutoBfactor', BooleanParam, default=True,
+        form.addParam('doAutoBfactor', params.BooleanParam, default=True,
                       label='Estimate B-factor automatically?',
                       help='If set to Yes, then the program will use the '
                            'automated procedure described by Rosenthal and '
@@ -98,9 +104,11 @@ class ProtRelionPostprocess(ProtAnalysis3D):
                                  'the linear fit of the Guinier plot as '
                                  'described in Rosenthal and Henderson '
                                  '(2003, JMB).')
-        line.addParam('bfactorLowRes', FloatParam, default='10.0', label='low')
-        line.addParam('bfactorHighRes', FloatParam, default='0.0', label='high')
-        form.addParam('bfactor', FloatParam, default=-350,
+        line.addParam('bfactorLowRes', params.FloatParam,
+                      default='10.0', label='low')
+        line.addParam('bfactorHighRes', params.FloatParam,
+                      default='0.0', label='high')
+        form.addParam('bfactor', params.FloatParam, default=-350,
                       condition='not doAutoBfactor',
                       label='Provide B-factor:',
                       help= 'User-provided B-factor (in A^2) for map '
@@ -111,7 +119,7 @@ class ProtRelionPostprocess(ProtAnalysis3D):
                             'Relion param: *--adhoc_bfac*')
         
         form.addSection(label='Filtering')
-        form.addParam('skipFscWeighting', BooleanParam, default=False,
+        form.addParam('skipFscWeighting', params.BooleanParam, default=False,
                       label='Skip FSC-weighting for sharpening?',
                       help='If set to No (the default), then the output map '
                            'will be low-pass filtered according to the '
@@ -123,7 +131,7 @@ class ProtRelionPostprocess(ProtAnalysis3D):
                            'overall resolution as measured by the FSC. In '
                            'such  cases, set this option to Yes and provide '
                            'an ad-hoc filter as described below.')
-        form.addParam('lowRes', FloatParam, default=5,
+        form.addParam('lowRes', params.FloatParam, default=5,
                       condition='skipFscWeighting',
                       label='Low-pass filter (A):',
                       help='This option allows one to low-pass filter the map '
@@ -131,14 +139,14 @@ class ProtRelionPostprocess(ProtAnalysis3D):
                            'using a resolution that is higher than the '
                            'gold-standard FSC-reported resolution, take care '
                            'not to interpret noise in the map for signal...')
-        form.addParam('filterEdgeWidth', IntParam, default=2,
-                      expertLevel=LEVEL_ADVANCED,
+        form.addParam('filterEdgeWidth', params.IntParam, default=2,
+                      expertLevel=params.LEVEL_ADVANCED,
                       label='Low-pass filter edge width:',
                       help='Width of the raised cosine on the low-pass filter '
                            'edge (in resolution shells)\n'
                            'Relion param: *--filter_edge_width*')
-        form.addParam('randomizeAtFsc', FloatParam, default=0.8,
-                      expertLevel=LEVEL_ADVANCED,
+        form.addParam('randomizeAtFsc', params.FloatParam, default=0.8,
+                      expertLevel=params.LEVEL_ADVANCED,
                       label='Randomize phases threshold',
                       help='Randomize phases from the resolution where FSC '
                            'drops below this value\n'
@@ -159,6 +167,7 @@ class ProtRelionPostprocess(ProtAnalysis3D):
     def convertInputStep(self, protId):
         protRef = self.protRefine.get()
         protClassName = protRef.getClassName()
+        pwutils.makePath(self._getPath('input'))
 
         # FIXME: JMRT I think this a dirty hack to plugin other refinement output here
         # I would suggest better that we standardize the outputs: finalMap, half1 and half2
