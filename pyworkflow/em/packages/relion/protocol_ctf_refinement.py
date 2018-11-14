@@ -24,9 +24,12 @@
 # *
 # ******************************************************************************
 
+import pyworkflow.utils as pwutils
 import pyworkflow.protocol.params as params
 import pyworkflow.em as em
 import pyworkflow.em.metadata as md
+from metadata import Table
+
 
 import convert
 
@@ -130,24 +133,22 @@ class ProtRelionCtfRefinement(em.ProtParticles):
         self.info("Converting set from '%s' into '%s'" %
                   (inputParts.getFileName(), imgStar))
 
-        convert.writeSetOfParticles(inputParts, imgStar, self._getExtraPath(),
+        inputFolder = self._getPath('input')
+        pwutils.makePath(inputFolder)
+        convert.writeSetOfParticles(inputParts, imgStar, inputFolder,
                                     alignType=em.ALIGN_PROJ,
+                                    fillMagnification=True,
                                     fillRandomSubset=True)
 
     def _getInputVolumes(self, postStar):
         """ Parse the input volumes: halfs and mask
         from the postprocess.star file. """
         half1 = half2 = mask = ''
-        with open(postStar) as f:
-            for line in f:
-                if line.startswith('_rlnUnfilteredMapHalf1'):
-                    half1 = line.split()[1]
-                if line.startswith('_rlnUnfilteredMapHalf2'):
-                    half2 = line.split()[1]
-                if line.startswith('_rlnMaskName'):
-                    mask = line.split()[1]
-                    break
-        return half1, half2, mask
+        table = Table(fileName=postStar, tableName='general')
+        row = table[0]
+        return (row.rlnUnfilteredMapHalf1,
+                row.rlnUnfilteredMapHalf2,
+                row.rlnMaskName)
 
     def refineCtfStep(self):
         args = "--i %s " % self._getPath('input_particles.star')
@@ -156,6 +157,7 @@ class ProtRelionCtfRefinement(em.ProtParticles):
         args += "--f %s " % postStar
         args += "--m1 %s --m2 %s --mask %s " % self._getInputVolumes(postStar)
         args += "--kmin_tilt %0.3f " % self.minResolution
+        args += "--angpix %0.3f " % self.inputParticles.get().getSamplingRate()
 
         if self.doCtfFitting:
             args += "--fit_defocus "
@@ -173,8 +175,8 @@ class ProtRelionCtfRefinement(em.ProtParticles):
             args += "--fit_beamtilt "
 
         args += "--j %d " % self.numberOfThreads
-
-        self.runJob("relion_ctf_refine", args)
+        prog = "relion_ctf_refine" + ("_mpi" if self.numberOfMpi > 1 else "")
+        self.runJob(prog, args)
 
     def createOutputStep(self):
         imgSet = self.inputParticles.get()
