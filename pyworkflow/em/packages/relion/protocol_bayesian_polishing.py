@@ -24,10 +24,13 @@
 # *
 # ******************************************************************************
 
+import os
+
 import pyworkflow.utils as pwutils
 import pyworkflow.protocol.params as params
 import pyworkflow.em as em
 import pyworkflow.em.metadata as md
+from metadata import Table
 
 import convert
 
@@ -155,59 +158,97 @@ class ProtRelionBayesianPolishing(em.ProtParticles):
 
     # -------------------------- STEPS functions -------------------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('convertInputStep')
-        self._insertFunctionStep('trainOrPolishStep')
-        #self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep('convertInputStep',
+                                 self.inputMovies.get().getObjId(),
+                                 self.inputParticles.get().getObjId(),
+                                 self.inputPostprocess.get().getObjId())
+        self._insertFunctionStep('trainOrPolishStep', self.operation.get())
+        if self.operation == self.OP_POLISH:
+            self._insertFunctionStep('createOutputStep', 3)
 
-    def convertInputStep(self):
+    def _writeMovieStar(self, movie, starFn):
+        """ Write the required """
+
+    def convertInputStep(self, movId, partId, postId):
+        inputMovies = self.inputMovies.get()
         inputParts = self.inputParticles.get()
         imgStar = self._getPath('input_particles.star')
-        inputFolder = self._getPath('input')
-        pwutils.makePath(inputFolder)
+        inputPartsFolder = self._getInputPath('particles')
+        pwutils.makePath(inputPartsFolder)
 
         self.info("Converting set from '%s' into '%s'" %
                   (inputParts.getFileName(), imgStar))
 
-        convert.writeSetOfParticles(inputParts, imgStar, inputFolder,
+        tableMovies = Table(columns=['rlnMicrographName',
+                                     'rlnMicrographMetadata'])
+        tableGeneral = Table(columns=['rlnImageSizeX',
+                                      'rlnImageSizeY',
+                                      'rlnImageSizeZ',
+                                      'rlnMicrographMovieName',
+                                      'rlnMicrographBinning',
+                                      'rlnMicrographOriginalPixelSize',
+                                      'rlnMicrographDoseRate',
+                                      'rlnMicrographPreExposure',
+                                      'rlnVoltage',
+                                      'rlnMicrographStartFrame',
+                                      'rlnMotionModelVersion'])
+        tableShifts = Table(columns=['rlnMicrographFrameNumber',
+                                     'rlnMicrographShiftX',
+                                     'rlnMicrographShiftY'])
+
+        # Create the first row, later only the movieName will be updated
+        xdim, ydim, ndim = inputMovies.getDim()
+        acq = inputMovies.getAcquisition()
+        a0, aN = inputMovies.getFirstItem().getAlignment().getRange()
+        tableGeneral.addRow(xdim, ydim, ndim, 'movieName',
+                            1.0, inputMovies.getSamplingRate(),
+                            acq.getDosePerFrame(), acq.getDoseInitial(),
+                            acq.getVoltage(), a0, 0)
+        row = tableGeneral[0]
+
+        for movie in inputMovies:
+            movieFn = movie.getFileName()
+            movieBase = os.path.basename(movieFn)
+            movieStar = self._getInputPath(pwutils.replaceBaseExt(movieFn,
+                                                                  'star'))
+            tableMovies.addRow(movieBase, movieStar)
+            with open(movieStar, 'w') as f:
+                # Update Movie name
+                tableGeneral[0] = row._replace(rlnMicrographMovieName=movieFn)
+                tableGeneral.writeStar(f, tableName='general', singleRow=True)
+                # Write shifts
+                tableShifts.clearRows()
+                alignment = movie.getAlignment()
+                shiftsX, shiftsY = alignment.getShifts()
+                a0, aN = alignment.getRange()
+                empty = -9999.000
+                for i in range(1, a0):
+                    tableShifts.addRow(i, empty, empty)
+                # Adjust the shifts to be relative to the first frame
+                # so let's add the opposite value
+                xoff, yoff = -shiftsX[0], -shiftsY[0]
+                for i in range(a0, aN + 1):
+                    tableShifts.addRow(i, shiftsX[i-a0] + xoff,
+                                       shiftsY[i-a0] + yoff)
+                for i in range(aN + 1, ndim + 1):
+                    tableShifts.addRow(i, empty, empty)
+                tableShifts.writeStar(f, tableName='global_shift')
+
+        with open(self._getPath('input_corrected_micrographs.star'), 'w') as f:
+            tableMovies.writeStar(f)
+
+        convert.writeSetOfParticles(inputParts, imgStar, inputPartsFolder,
                                     alignType=em.ALIGN_PROJ,
                                     fillMagnification=True,
                                     fillRandomSubset=True)
 
-    def trainOrPolishStep(self):
-        """
-        Train:
-        `which relion_motion_refine`
-        --i CtfRefine/job024/particles_ctf_refine.star
-        --f PostProcess/job023/postprocess.star
-        --corr_mic MotionCorr/job002/corrected_micrographs.star
-        --m1 Refine3D/job021/run_half1_class001_unfil.mrc
-        --m2 Refine3D/job021/run_half2_class001_unfil.mrc
-        --mask MaskCreate/job022/mask.mrc
-        --first_frame 1 --last_frame -1
-        --o Polish/job030/
-
-        --min_p 5000 --eval_frac 0.5 --align_frac 0.5 --params3  --j 16
-
-        Polish:
-        `which relion_motion_refine`
-        --i CtfRefine/job024/particles_ctf_refine.star
-        --f PostProcess/job023/postprocess.star
-        --corr_mic MotionCorr/job002/corrected_micrographs.star
-        --m1 Refine3D/job021/run_half1_class001_unfil.mrc
-        --m2 Refine3D/job021/run_half2_class001_unfil.mrc
-        --mask MaskCreate/job022/mask.mrc
-        --first_frame 1 --last_frame -1
-        --o Polish/job030/
-
-        --s_vel 0.2 --s_div 5000 --s_acc 2 --combine_frames --bfac_minfreq 20 --bfac_maxfreq -1 --j 16 bbbb
-
-        """
+    def trainOrPolishStep(self, operation):
         args = "--i %s " % self._getPath('input_particles.star')
         args += "--o %s " % self._getExtraPath()
         postStar = self.inputPostprocess.get()._getExtraPath('postprocess.star')
         args += "--f %s " % postStar
         args += "--m1 %s --m2 %s --mask %s " % convert.getVolumesFromPostprocess(postStar)
-        args += "--corr_mic %s " % self._getInputPath("corrected_micrographs.star")
+        args += "--corr_mic %s " % self._getPath('input_corrected_micrographs.star')
         args += "--first_frame %d --last_frame %d " % (self.frame0, self.frameN)
 
         if self.operation == self.OP_TRAIN:
@@ -219,47 +260,32 @@ class ProtRelionBayesianPolishing(em.ProtParticles):
             args += "--s_vel %0.3f " % self.sigmaVel
             args += "--s_div %0.3f " % self.sigmaDiv
             args += "--s_acc %0.3f " % self.sigmaAcc
+            args += "--bfac_minfreq %0.3f " % self.minResBfactor
+            args += "--bfac_maxfreq %0.3f " % self.maxResBfactor
             args += "--combine_frames "
-            args += ""
-
-        if self.doCtfFitting:
-            args += "--fit_defocus "
-
-        fitAstig = self.fitAstig.get()
-        if fitAstig == 1:
-            args += "--glob_astig "
-        elif fitAstig == 2:
-            args += "--astig "
-
-        if self.fitMicPhaseShift:
-            args += "--fit_phase "
-
-        if self.doBeamtiltEstimation:
-            args += "--fit_beamtilt "
 
         args += "--j %d " % self.numberOfThreads
 
-        self.info("runJob: program: %s, args: %s" % ("relion_motion_refine", args))
-        #self.runJob("relion_motion_refine", args)
+        prog = "relion_motion_refine" + ("_mpi" if self.numberOfMpi > 1 else "")
+        self.runJob(prog, args)
 
-    def createOutputStep(self):
+    def createOutputStep(self, id=1):
         imgSet = self.inputParticles.get()
         outImgSet = self._createSetOfParticles()
         outImgSet.copyInfo(imgSet)
 
-        outImgsFn = self._getExtraPath('particles_ctf_refine.star')
-        imgSet.setAlignmentProj()
+        outImgsFn = self._getExtraPath('shiny.star')
         rowIterator = md.iterRows(outImgsFn, sortByLabel=md.RLN_IMAGE_ID)
         outImgSet.copyItems(imgSet,
-                            updateItemCallback=self._updateItemCtf,
+                            updateItemCallback=self._updateItem,
                             itemDataIterator=rowIterator)
 
         self._defineOutputs(outputParticles=outImgSet)
         self._defineTransformRelation(self.inputParticles, outImgSet)
 
-    def _updateItemCtf(self, particle, row):
-        particle.setCTF(convert.rowToCtfModel(row))
-        #TODO: Add other field from the .star file when other options?
+    def _updateItem(self, particle, row):
+        newLoc = convert.relionToLocation(row.getValue('rlnImageName'))
+        particle.setLocation(newLoc)
 
     # --------------------------- INFO functions ------------------------------
     def _summary(self):
@@ -268,6 +294,10 @@ class ProtRelionBayesianPolishing(em.ProtParticles):
 
     def _validate(self):
         errors = []
+
+        if self.operation == self.OP_TRAIN:
+            if self.numberOfMpi > 1:
+                errors.append("Parameter estimation is not supported in MPI mode.")
         return errors
 
     def _getInputPath(self, *paths):
