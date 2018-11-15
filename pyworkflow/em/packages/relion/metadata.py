@@ -19,7 +19,7 @@
 # *
 # **************************************************************************
 
-__version__ = '0.0.1'
+__version__ = '0.0.3'
 __author__ = 'Jose Miguel de la Rosa Trevin'
 
 
@@ -64,6 +64,10 @@ class Table:
         self._columns = OrderedDict()
         self._rows = []
 
+    def clearRows(self):
+        """ Remove all the rows from the table, but keep its columns. """
+        self._rows = []
+
     def addRow(self, *args, **kwargs):
         self._rows.append(self.Row(*args, **kwargs))
 
@@ -105,21 +109,45 @@ class Table:
         with open(fileName) as f:
             self.readStar(f, tableName)
 
-    def writeStar(self, outputFile, tableName=None):
-        outputFile.write("\ndata_%s\n\nloop_\n"
-                         % (tableName or ''))
+    def writeStar(self, outputFile, tableName=None, singleRow=False):
+        """
+        Write a Table in Star format to the given file.
+        :param outputFile: File handler that should be already opened and
+            in the position to write.
+        :param tableName: The name of the table to write.
+        :param singleRow: If True, don't write loop_, just label - value pairs.
+        """
+        outputFile.write("\ndata_%s\n\n" % (tableName or ''))
 
         if self.size() == 0:
             return
+
+        if singleRow:
+            m = max([len(c) for c in self._columns.keys()]) + 5
+            lineFormat = "_{:<%d} {:>10}\n" % m
+            row = self._rows[0]
+            for col, value in row._asdict().iteritems():
+                outputFile.write(lineFormat.format(col, value))
+            outputFile.write('\n\n')
+            return
+
+        outputFile.write("loop_\n")
 
         # Write column names
         for col in self._columns.values():
             outputFile.write("_%s \n" % col)
 
         # Take a hint for the columns width from the first row
-        lineFormat = ""
-        for v in self._rows[0]:
-            lineFormat += "{:>%d}" % (len(str(v)) + 3)
+
+        widths = [len(str(v)) for v in self._rows[0]]
+        # Check middle and last row, just in case ;)
+        for index in [len(self)/2, -1]:
+            for i, v in enumerate(self._rows[index]):
+                w = len(str(v))
+                if w > widths[i]:
+                    widths[i] = w
+
+        lineFormat = " ".join("{:>%d} " % (w + 1) for w in widths)
 
         # Write data rows
         for row in self._rows:
@@ -132,8 +160,8 @@ class Table:
         with open(output_star, 'w') as output_file:
             self.writeStar(output_file, tableName)
 
-    def printStar(self):
-        self.writeStar(sys.stdout)
+    def printStar(self, tableName=None):
+        self.writeStar(sys.stdout, tableName)
 
     def size(self):
         return len(self._rows)
@@ -160,6 +188,9 @@ class Table:
 
     def __getitem__(self, item):
         return self._rows[item]
+
+    def __setitem__(self, key, value):
+        self._rows[key] = value
 
     # --------- Internal implementation methods ------------------------
 
@@ -256,4 +287,4 @@ if __name__ == '__main__':
     if args.output:
         tableOut.write(args.output, tableName)
     else:
-        tableOut.printStar()
+        tableOut.printStar(tableName)
