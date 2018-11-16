@@ -42,19 +42,19 @@ class ProtRelionPostprocess(ProtAnalysis3D):
     overfitting estimation, MTF-correction and B-factor sharpening.
     """
     _label = 'post-processing'
-    
+
+    def _getInputPath(self, *paths):
+        return self._getPath('input', *paths)
+
     def _createFilenameTemplates(self):
         """ Centralize how files are called for iterations and references. """
-        def _getInputPath(*paths):
-            return self._getPath('input', *paths)
-
         myDict = {
-                  'finalVolume': _getInputPath("relion_class001.mrc"),
-                  'half1': _getInputPath("relion_half1_class001_unfil.mrc"),
-                  'half2': _getInputPath("relion_half2_class001_unfil.mrc"),
-                  'mask': _getInputPath("input_mask.mrc")
-                  }
-
+            'finalVolume': self._getInputPath("relion_class001.mrc"),
+            'half1': self._getInputPath("relion_half1_class001_unfil.mrc"),
+            'half2': self._getInputPath("relion_half2_class001_unfil.mrc"),
+            'mask': self._getInputPath("input_mask.mrc"),
+            'outputVolume': self._getExtraPath('postprocess.mrc')
+        }
         self._updateFilenamesDict(myDict)
 
     # -------------------------- DEFINE param functions -----------------------
@@ -166,60 +166,27 @@ class ProtRelionPostprocess(ProtAnalysis3D):
     # -------------------------- STEPS functions -------------------------------
     def convertInputStep(self, protId):
         protRef = self.protRefine.get()
-        protClassName = protRef.getClassName()
         pwutils.makePath(self._getPath('input'))
-
-        # FIXME: JMRT I think this a dirty hack to plugin other refinement output here
-        # I would suggest better that we standardize the outputs: finalMap, half1 and half2
-        # in the base class ProtRefine3D and use the general approach here, instead of
-        # dealing with it here as it is now, that is not extensible.
-
-        if protClassName.startswith('ProtRelionRefine3D'):
-            protRef._createFilenameTemplates()
-            final = protRef._getFileName("finalvolume", ref3d=1)
-            half1 = protRef._getFileName("final_half1_volume", ref3d=1)
-            half2 = protRef._getFileName("final_half2_volume", ref3d=1)
-            
-        elif protClassName.startswith('ProtFrealign'):
-            protRef._createFilenameTemplates()
-            lastIter = protRef._getLastIter()
-            final = protRef._getFileName('iter_vol', iter=lastIter)
-            half1 = protRef._getFileName('iter_vol1', iter=lastIter)
-            half2 = protRef._getFileName('iter_vol2', iter=lastIter)
-            
-        elif protClassName.startswith('XmippProtProjMatch'):
-            iterN = protRef.getLastIter()
-            protRef._initialize()
-            final = protRef._getFileName('reconstructedFileNamesIters',
-                                            iter=iterN, ref=1)
-            half1 = protRef._getFileName('reconstructedFileNamesItersSplit1',
-                                         iter=iterN, ref=1)
-            half2 = protRef._getFileName('reconstructedFileNamesItersSplit2',
-                                         iter=iterN, ref=1)
-
-        elif protClassName.startswith('EmanProtRefine'):
-            protRef._createFilenameTemplates()
-            numRun = protRef._getRun()
-            protRef._createIterTemplates(numRun)
-            iterN = protRef._lastIter()
-            final = protRef._getFileName("mapFull", run=numRun, iter=iterN)
-            half1 = protRef._getFileName("mapEvenUnmasked", run=numRun)
-            half2 = protRef._getFileName("mapOddUnmasked", run=numRun)
-            
+        vols = protRef.getFinalVolumes()  # final, half1, half2
         ih = ImageHandler()
-        ih.convert(final, self._getFileName("finalVolume"))
-        ih.convert(half1, self._getFileName("half1"))
-        ih.convert(half2, self._getFileName("half2"))
-        ih.convert(self.solventMask.get(), self._getFileName('mask'))
-    
+        vols.append(self.solventMask.get())
+
+        for vol, key in zip(vols, ['finalVolume', 'half1', 'half2', 'mask']):
+            ih.convert(vol, self._getFileName(key))
+
     def postProcessStep(self, paramDict):
         params = ' '.join(['%s %s' % (k, str(v))
                            for k, v in self.paramDict.iteritems()])
-        self.runJob('relion_postprocess', params)
+
+        program = 'relion_postprocess'
+        if self.numberOfMpi.get() > 1:
+            program += '_mpi'
+
+        self.runJob(program, params)
     
     def createOutputStep(self):
         volume = Volume()
-        volume.setFileName(self._getExtraPath('postprocess.mrc'))
+        volume.setFileName(self._getFileName('outputVolume'))
         vol = self.protRefine.get().outputVolume
         pxSize = vol.getSamplingRate()
         volume.setSamplingRate(pxSize)
@@ -237,14 +204,11 @@ class ProtRelionPostprocess(ProtAnalysis3D):
         if mtfFile and not exists(mtfFile):
             errors.append("Missing MTF-file '%s'" % mtfFile)
 
-        protClassName = self.protRefine.get().getClassName()
-        if protClassName.startswith('SpiderProtRefinement'):
-            errors.append("Relion post-process protocol not implemented for "
-                          "Spider - refinement.")
-        
-        if protClassName.startswith('XmippProtReconstructHighRes'):
-            errors.append("Relion post-process protocol not implemented for "
-                          "Xmipp - highres.")
+        protRef = self.protRefine.get()
+        if not protRef.getFinalVolumes():
+            errors.append('The input refinement protocol should implemented '
+                          'getFinalVolumes function to return the final map'
+                          'and half1 and half1 paths. ')
         return errors
     
     def _summary(self):
@@ -260,7 +224,7 @@ class ProtRelionPostprocess(ProtAnalysis3D):
         
         return summary
         
-    # -------------------------- UTILS functions -------------------------------
+    # -------------------------- UTILS functions ------------------------------
     def _defineParamDict(self):
         """ Define all parameters to run relion_postprocess"""
         volume = self.protRefine.get().outputVolume
@@ -272,16 +236,16 @@ class ProtRelionPostprocess(ProtAnalysis3D):
         if isVersion3():
             inputFn = self._getFileName('half1')
         else:
-            inputFn = self._getTmpPath("relion")
+            inputFn = self._getInputPath("relion")
 
         self.paramDict = {'--i': inputFn,
                           '--o': self._getExtraPath('postprocess'),
                           '--angpix': angpix,
                           # Expert params
                           '--filter_edge_width': self.filterEdgeWidth.get(),
-                          '--randomize_at_fsc': self.randomizeAtFsc.get()
+                          '--randomize_at_fsc': self.randomizeAtFsc.get(),
+                          '--mask': self._getFileName('mask')
                           }
-        self.paramDict['--mask'] = self._getFileName('mask')
 
         mtfFile = self.mtf.get()
         if mtfFile:
