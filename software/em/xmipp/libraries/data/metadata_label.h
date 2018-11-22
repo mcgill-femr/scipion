@@ -791,6 +791,75 @@ enum MDLabel
 	BUFFER_28,
 	BUFFER_29,
 	BUFFER_30,
+    BUFFER_31,
+    BUFFER_32,
+    BUFFER_33,
+    BUFFER_34,
+    BUFFER_35,
+    BUFFER_36,
+    BUFFER_37,
+    BUFFER_38,
+    BUFFER_39,
+    BUFFER_40,
+    BUFFER_41,
+    BUFFER_42,
+    BUFFER_43,
+    BUFFER_44,
+    BUFFER_45,
+    BUFFER_46,
+    BUFFER_47,
+    BUFFER_48,
+    BUFFER_49,
+    BUFFER_50,
+    BUFFER_51,
+    BUFFER_52,
+    BUFFER_53,
+    BUFFER_54,
+    BUFFER_55,
+    BUFFER_56,
+    BUFFER_57,
+    BUFFER_58,
+    BUFFER_59,
+    BUFFER_60,
+    BUFFER_61,
+    BUFFER_62,
+    BUFFER_63,
+    BUFFER_64,
+    BUFFER_65,
+    BUFFER_66,
+    BUFFER_67,
+    BUFFER_68,
+    BUFFER_69,
+    BUFFER_70,
+    BUFFER_71,
+    BUFFER_72,
+    BUFFER_73,
+    BUFFER_74,
+    BUFFER_75,
+    BUFFER_76,
+    BUFFER_77,
+    BUFFER_78,
+    BUFFER_79,
+    BUFFER_80,
+    BUFFER_81,
+    BUFFER_82,
+    BUFFER_83,
+    BUFFER_84,
+    BUFFER_85,
+    BUFFER_86,
+    BUFFER_87,
+    BUFFER_88,
+    BUFFER_89,
+    BUFFER_90,
+    BUFFER_91,
+    BUFFER_92,
+    BUFFER_93,
+    BUFFER_94,
+    BUFFER_95,
+    BUFFER_96,
+    BUFFER_97,
+    BUFFER_98,
+    BUFFER_99,
 
     MDL_LAST_LABEL  // **** NOTE ****: Do keep this label always at the end,it is here for looping purposes
 };//close enum MDLabel
@@ -2063,6 +2132,75 @@ private:
 		MDL::addLabel(BUFFER_28, LABEL_STRING, "buffer_28");
 		MDL::addLabel(BUFFER_29, LABEL_STRING, "buffer_29");
 		MDL::addLabel(BUFFER_30, LABEL_STRING, "buffer_30");
+        MDL::addLabel(BUFFER_31, LABEL_STRING, "buffer_31");
+        MDL::addLabel(BUFFER_32, LABEL_STRING, "buffer_32");
+        MDL::addLabel(BUFFER_33, LABEL_STRING, "buffer_33");
+        MDL::addLabel(BUFFER_34, LABEL_STRING, "buffer_34");
+        MDL::addLabel(BUFFER_35, LABEL_STRING, "buffer_35");
+        MDL::addLabel(BUFFER_36, LABEL_STRING, "buffer_36");
+        MDL::addLabel(BUFFER_37, LABEL_STRING, "buffer_37");
+        MDL::addLabel(BUFFER_38, LABEL_STRING, "buffer_38");
+        MDL::addLabel(BUFFER_39, LABEL_STRING, "buffer_39");
+        MDL::addLabel(BUFFER_40, LABEL_STRING, "buffer_40");
+        MDL::addLabel(BUFFER_41, LABEL_STRING, "buffer_41");
+        MDL::addLabel(BUFFER_42, LABEL_STRING, "buffer_42");
+        MDL::addLabel(BUFFER_43, LABEL_STRING, "buffer_43");
+        MDL::addLabel(BUFFER_44, LABEL_STRING, "buffer_44");
+        MDL::addLabel(BUFFER_45, LABEL_STRING, "buffer_45");
+        MDL::addLabel(BUFFER_46, LABEL_STRING, "buffer_46");
+        MDL::addLabel(BUFFER_47, LABEL_STRING, "buffer_47");
+        MDL::addLabel(BUFFER_48, LABEL_STRING, "buffer_48");
+        MDL::addLabel(BUFFER_49, LABEL_STRING, "buffer_49");
+        MDL::addLabel(BUFFER_50, LABEL_STRING, "buffer_50");
+        MDL::addLabel(BUFFER_51, LABEL_STRING, "buffer_51");
+        MDL::addLabel(BUFFER_52, LABEL_STRING, "buffer_52");
+        MDL::addLabel(BUFFER_53, LABEL_STRING, "buffer_53");
+        MDL::addLabel(BUFFER_54, LABEL_STRING, "buffer_54");
+        MDL::addLabel(BUFFER_55, LABEL_STRING, "buffer_55");
+        MDL::addLabel(BUFFER_56, LABEL_STRING, "buffer_56");
+        MDL::addLabel(BUFFER_57, LABEL_STRING, "buffer_57");
+        MDL::addLabel(BUFFER_58, LABEL_STRING, "buffer_58");
+        MDL::addLabel(BUFFER_59, LABEL_STRING, "buffer_59");
+        MDL::addLabel(BUFFER_60, LABEL_STRING, "buffer_60");
+        MDL::addLabel(BUFFER_61, LABEL_STRING, "buffer_61");
+        MDL::addLabel(BUFFER_62, LABEL_STRING, "buffer_62");
+        MDL::addLabel(BUFFER_63, LABEL_STRING, "buffer_63");
+        MDL::addLabel(BUFFER_64, LABEL_STRING, "buffer_64");
+        MDL::addLabel(BUFFER_65, LABEL_STRING, "buffer_65");
+        MDL::addLabel(BUFFER_66, LABEL_STRING, "buffer_66");
+        MDL::addLabel(BUFFER_67, LABEL_STRING, "buffer_67");
+        MDL::addLabel(BUFFER_68, LABEL_STRING, "buffer_68");
+        MDL::addLabel(BUFFER_69, LABEL_STRING, "buffer_69");
+        MDL::addLabel(BUFFER_70, LABEL_STRING, "buffer_70");
+        MDL::addLabel(BUFFER_71, LABEL_STRING, "buffer_71");
+        MDL::addLabel(BUFFER_72, LABEL_STRING, "buffer_72");
+        MDL::addLabel(BUFFER_73, LABEL_STRING, "buffer_73");
+        MDL::addLabel(BUFFER_74, LABEL_STRING, "buffer_74");
+        MDL::addLabel(BUFFER_75, LABEL_STRING, "buffer_75");
+        MDL::addLabel(BUFFER_76, LABEL_STRING, "buffer_76");
+        MDL::addLabel(BUFFER_77, LABEL_STRING, "buffer_77");
+        MDL::addLabel(BUFFER_78, LABEL_STRING, "buffer_78");
+        MDL::addLabel(BUFFER_79, LABEL_STRING, "buffer_79");
+        MDL::addLabel(BUFFER_80, LABEL_STRING, "buffer_80");
+        MDL::addLabel(BUFFER_81, LABEL_STRING, "buffer_81");
+        MDL::addLabel(BUFFER_82, LABEL_STRING, "buffer_82");
+        MDL::addLabel(BUFFER_83, LABEL_STRING, "buffer_83");
+        MDL::addLabel(BUFFER_84, LABEL_STRING, "buffer_84");
+        MDL::addLabel(BUFFER_85, LABEL_STRING, "buffer_85");
+        MDL::addLabel(BUFFER_86, LABEL_STRING, "buffer_86");
+        MDL::addLabel(BUFFER_87, LABEL_STRING, "buffer_87");
+        MDL::addLabel(BUFFER_88, LABEL_STRING, "buffer_88");
+        MDL::addLabel(BUFFER_89, LABEL_STRING, "buffer_89");
+        MDL::addLabel(BUFFER_90, LABEL_STRING, "buffer_90");
+        MDL::addLabel(BUFFER_91, LABEL_STRING, "buffer_91");
+        MDL::addLabel(BUFFER_92, LABEL_STRING, "buffer_92");
+        MDL::addLabel(BUFFER_93, LABEL_STRING, "buffer_93");
+        MDL::addLabel(BUFFER_94, LABEL_STRING, "buffer_94");
+        MDL::addLabel(BUFFER_95, LABEL_STRING, "buffer_95");
+        MDL::addLabel(BUFFER_96, LABEL_STRING, "buffer_96");
+        MDL::addLabel(BUFFER_97, LABEL_STRING, "buffer_97");
+        MDL::addLabel(BUFFER_98, LABEL_STRING, "buffer_98");
+        MDL::addLabel(BUFFER_99, LABEL_STRING, "buffer_99");
         //Create an static empty header for image initialization
         MDL::emptyHeader.resetGeo();
         MDL::emptyHeader.setValue(MDL_ANGLE_ROT, 0.);
