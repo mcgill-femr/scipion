@@ -187,7 +187,7 @@ class ProtRelionInitialModel(ProtInitialVolume, ProtRelionBase):
                            'You can do this by the relion_align_symmetry command.')
 
         group = form.addGroup('Sampling')
-        group.addParam('angularSamplingDeg', EnumParam, default=15,
+        group.addParam('angularSamplingDeg', EnumParam, default=1,
                       choices=ANGULAR_SAMPLING_LIST,
                       label='Angular sampling interval (deg)',
                       help='There are only a few discrete angular samplings'
