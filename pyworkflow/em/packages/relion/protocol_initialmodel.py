@@ -58,8 +58,8 @@ class ProtRelionInitialModel(ProtInitialVolume, ProtRelionBase):
     def isDisabled(cls):
         return getVersion() in [V1_3, V1_4, V2_0]
 
-    def __init__(self, **args):
-        ProtRelionBase.__init__(self, **args)
+    def __init__(self, **kwargs):
+        ProtRelionBase.__init__(self, **kwargs)
 
     def _initialize(self):
         """ This function is mean to be called after the
