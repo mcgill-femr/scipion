@@ -1635,13 +1635,9 @@ void MetaData::readStar(const FileName &filename,
         oldFormat = false;
         _comment.clear();
 
-        std::cout << "first line: " << line << std::endl;
-        std::cout << "find: " << line.find("data_") << std::endl;
-
         // Skip comment parsing if we found the data key in the first line
         if (line.find("data_") != 0)
         {
-            std::cout << "Reading comment...." << std::endl;
             // Read comment
             //        is.ignore(256,'#');//format line
             is.ignore(256, '\n');//skip first line
