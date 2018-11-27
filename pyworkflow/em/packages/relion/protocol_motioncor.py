@@ -194,14 +194,15 @@ class ProtRelionMotioncor(ProtAlignMovies):
             args += ' --gain_flip %d ' % self.gainFlip
 
         if self.doDW:
-            preExp, dose = self._getCorrectedDose(self.inputMovies.get())
-            voltage = movie.getAcquisition().getVoltage()
             args += "--dose_weighting "
             if self.saveNonDW:
                 args += " --save_noDW "
-            args += "--voltage %d " % voltage
-            args += "--dose_per_frame %f " % dose
-            args += "--preexposure %f " % preExp
+
+        preExp, dose = self._getCorrectedDose(self.inputMovies.get())
+        voltage = movie.getAcquisition().getVoltage()
+        args += "--voltage %d " % voltage
+        args += "--dose_per_frame %f " % dose
+        args += "--preexposure %f " % preExp
 
         if self.extraParams.hasValue():
             args += " " + self.extraParams.get()
