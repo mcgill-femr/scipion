@@ -27,6 +27,7 @@
 import os
 from itertools import izip
 from math import ceil
+import json
 
 import pyworkflow.object as pwobj
 import pyworkflow.protocol.params as params
@@ -247,10 +248,6 @@ class ProtRelionMotioncor(ProtAlignMovies):
         """ Parse motion values from the 'corrected_micrographs.star' file
         generated for each movie. """
         fn = self._getMovieExtraFn(movie, 'corrected_micrographs.star')
-        # FIXME: There are a few quick and dirty solutions here:
-        # 3) current implementation only works for a single item
-        #   so, a re-write is needed when processing in batch
-        #   and corrected_micrographs.star file can contain more rows.
         table = md.Table(fileName=fn)
         row = table[0]
         mic._rlnAccumMotionTotal = pwobj.Float(row.rlnAccumMotionTotal)
@@ -390,6 +387,18 @@ class ProtRelionMotioncor(ProtAlignMovies):
         plotter = createGlobalAlignmentPlot(shiftsX, shiftsY, first)
         plotter.savefig(self._getPlotGlobal(movie))
         plotter.close()
+
+    def _createOutputMovie(self, movie):
+        """ Overwrite this function to store the Relion's specific
+        Motion model coefficientes.
+        """
+        m = ProtAlignMovies._createOutputMovie(self, movie)
+        table = md.Table(fileName=self._getMovieExtraFn(movie, '.star'),
+                         tableName='local_motion_model')
+        coeffs = [row.rlnMotionModelCoeff for row in table]
+        m._rlnMotionModelCoeff = pwobj.String(json.dumps(coeffs))
+        print("movie %d, %s" % (m.getObjId(), m._rlnMotionModelCoeff))
+        return m
 
 
 def createGlobalAlignmentPlot(meanX, meanY, first):
