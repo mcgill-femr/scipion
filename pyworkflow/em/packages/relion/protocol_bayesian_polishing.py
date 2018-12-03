@@ -25,6 +25,7 @@
 # ******************************************************************************
 
 import os
+import json
 
 import pyworkflow.utils as pwutils
 import pyworkflow.protocol.params as params
@@ -195,17 +196,23 @@ class ProtRelionBayesianPolishing(em.ProtParticles):
         tableShifts = Table(columns=['rlnMicrographFrameNumber',
                                      'rlnMicrographShiftX',
                                      'rlnMicrographShiftY'])
+        tableCoeffs = Table(columns=['rlnMotionModelCoeffsIdx',
+                                     'rlnMotionModelCoeff'])
 
         # Create the first row, later only the movieName will be updated
         xdim, ydim, ndim = inputMovies.getDim()
         acq = inputMovies.getAcquisition()
-        a0, aN = inputMovies.getFirstItem().getAlignment().getRange()
+        firstMovie = inputMovies.getFirstItem()
+        a0, aN = firstMovie.getAlignment().getRange()
         moviesPixelSize = inputMovies.getSamplingRate()
         binningFactor = inputParts.getSamplingRate() / moviesPixelSize
+        hasLocal = firstMovie.hasAttribute('_rlnMotionModelCoeff')
+        motionMode = 1 if hasLocal else 0
+
         tableGeneral.addRow(xdim, ydim, ndim, 'movieName',
                             binningFactor, moviesPixelSize,
                             acq.getDosePerFrame(), acq.getDoseInitial(),
-                            acq.getVoltage(), a0, 0)
+                            acq.getVoltage(), a0, motionMode)
         row = tableGeneral[0]
 
         for movie in inputMovies:
@@ -235,6 +242,14 @@ class ProtRelionBayesianPolishing(em.ProtParticles):
                 for i in range(aN + 1, ndim + 1):
                     tableShifts.addRow(i, empty, empty)
                 tableShifts.writeStar(f, tableName='global_shift')
+
+                # Write coefficients
+                if hasLocal:
+                    coeffs = movie.getAttributeValue('_rlnMotionModelCoeff', '')
+                    tableCoeffs.clearRows()
+                    for i, c in enumerate(json.loads(coeffs)):
+                        tableCoeffs.addRow(i, c)
+                    tableCoeffs.writeStar(f, tableName='local_motion_model')
 
         with open(self._getPath('input_corrected_micrographs.star'), 'w') as f:
             tableMovies.writeStar(f)
