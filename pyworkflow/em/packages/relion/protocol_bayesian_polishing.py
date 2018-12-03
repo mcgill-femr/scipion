@@ -200,8 +200,10 @@ class ProtRelionBayesianPolishing(em.ProtParticles):
         xdim, ydim, ndim = inputMovies.getDim()
         acq = inputMovies.getAcquisition()
         a0, aN = inputMovies.getFirstItem().getAlignment().getRange()
+        moviesPixelSize = inputMovies.getSamplingRate()
+        binningFactor = inputParts.getSamplingRate() / moviesPixelSize
         tableGeneral.addRow(xdim, ydim, ndim, 'movieName',
-                            1.0, inputMovies.getSamplingRate(),
+                            binningFactor, moviesPixelSize,
                             acq.getDosePerFrame(), acq.getDoseInitial(),
                             acq.getVoltage(), a0, 0)
         row = tableGeneral[0]
