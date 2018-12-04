@@ -272,11 +272,11 @@ class ProtRelionExtractParticles(em.ProtExtractParticles, ProtRelionBase):
         params += ' --extract_size %d' % self.boxSize
 
         if self.backDiameter <= 0:
-            diameter = self.boxSize.get() * 0.75 / self._getDownFactor()
+            diameter = self.boxSize.get() * 0.75
         else:
             diameter = self.backDiameter.get()
 
-        params += ' --bg_radius %d' % int(diameter/2)
+        params += ' --bg_radius %d' % int(diameter/(2 * self._getDownFactor()))
 
         if self.doInvert:
             params += ' --invert_contrast'
