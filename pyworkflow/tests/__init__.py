@@ -124,6 +124,7 @@ DataSet(name='relion_tutorial', folder='relion_tutorial',
                'particles_binary': '006.stk'
         })
 
+DataSet(name='relion30_tutorial', folder='relion30_tutorial', files={})
 
 DataSet(name='ribo_movies', folder='ribo_movies',
         files={
