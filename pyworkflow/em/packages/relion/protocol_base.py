@@ -66,7 +66,7 @@ class ProtRelionBase(EMProtocol):
     
     def __init__(self, **args):        
         EMProtocol.__init__(self, **args)
-        
+
     def _initialize(self):
         """ This function is mean to be called after the 
         working dir for the protocol have been set. (maybe after recovery from mapper)
@@ -135,6 +135,8 @@ class ProtRelionBase(EMProtocol):
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         self.IS_3D = not self.IS_2D
+        self.IS_V3 = isVersion3()
+
         form.addSection(label='Input')
         # Some hidden variables to be used for conditions
         form.addHidden('isClassify', BooleanParam, default=self.IS_CLASSIFY)
@@ -183,6 +185,26 @@ class ProtRelionBase(EMProtocol):
                            'The same diameter will also be used for a '
                            'spherical mask of the reference structures if no '
                            'user-provided mask is specified.')
+        form.addParam('maskZero', EnumParam, default=0,
+                      choices=['Yes, fill with zeros',
+                               'No, fill with random noise'],
+                      label='Mask particles with zeros?',
+                      condition='not doContinue',
+                      help='If set to <Yes>, then in the individual particles, '
+                           'the area outside a circle with the radius '
+                           'of the particle will be set to zeros prior to '
+                           'taking the Fourier transform. '
+                           'This will remove noise and therefore increase '
+                           'sensitivity in the alignment and classification. '
+                           'However, it will also introduce correlations '
+                           'between the Fourier components that are not '
+                           'modelled. When set to <No>, then the solvent area '
+                           'is filled with random noise, which prevents '
+                           'introducing correlations.High-resolution '
+                           'refinements (e.g. in 3D auto-refine) tend to work '
+                           'better when filling the solvent area with random '
+                           'noise, some classifications go better when using '
+                           'zeros.')
         form.addParam('continueRun', PointerParam,
                       pointerClass=self.getClassName(),
                       condition='doContinue', allowsNull=True,
@@ -195,14 +217,6 @@ class ProtRelionBase(EMProtocol):
                            'continue. If you use *last*, then the last '
                            'iteration will be used. Otherwise, a valid '
                            'iteration number should be provided.')
-        form.addParam('numberOfClasses', IntParam, default=3,
-                      condition='not doContinue and isClassify',
-                      label='Number of classes:',
-                      help='The number of classes (K) for a multi-reference '
-                           'refinement. These classes will be made in an '
-                           'unsupervised manner from a single reference by '
-                           'division of the data into random subsets during '
-                           'the first iteration.')
         form.addParam('referenceAverages', PointerParam,
                       pointerClass='SetOfAverages', allowsNull=True,
                       condition='not doContinue and isClassify and is2D',
@@ -213,15 +227,18 @@ class ProtRelionBase(EMProtocol):
                            'initial 2D references. If this option is used, '
                            'the number of classes will be ignored. '
                       )
-        group = form.addGroup('Reference 3D map',
-                              condition='not doContinue and not is2D')
+
         referenceClass = 'Volume'
         referenceLabel = 'Input volume'
         if self.IS_CLASSIFY:  # allow SetOfVolumes as references for 3D
             referenceClass += ', SetOfVolumes'
             referenceLabel += '(s)'
 
-        group.addParam('referenceVolume', PointerParam,
+        if self.IS_3D:
+            form.addSection('Reference 3D map',
+                            condition='not doContinue and not is2D')
+
+            form.addParam('referenceVolume', PointerParam,
                        pointerClass=referenceClass,
                        important=True,
                        label=referenceLabel,
@@ -229,42 +246,93 @@ class ProtRelionBase(EMProtocol):
                        help='Initial reference 3D map, it should have the same '
                             'dimensions and the same pixel size as your input '
                             'particles.')
-        group.addParam('isMapAbsoluteGreyScale', BooleanParam, default=False,
-                       label="Is initial 3D map on absolute greyscale?",
-                       help='The probabilities are based on squared differences,'
-                            ' so that the absolute grey scale is important. \n'
-                            'Probabilities are calculated based on a Gaussian '
-                            'noise model, which contains a squared difference '
-                            'term between the reference and the experimental '
-                            'image. This has a consequence that the reference '
-                            'needs to be on the same absolute intensity '
-                            'grey-scale as the experimental images. RELION and '
-                            'XMIPP reconstruct maps at their absolute '
-                            'intensity grey-scale. Other packages may perform '
-                            'internal normalisations of the reference density, '
-                            'which will result in incorrect grey-scales. '
-                            'Therefore: if the map was reconstructed in RELION '
-                            'or in XMIPP, set this option to Yes, otherwise '
-                            'set it to No. If set to No, RELION will use a ('
-                            'grey-scale invariant) cross-correlation criterion '
-                            'in the first iteration, and prior to the second '
-                            'iteration the map will be filtered again using '
-                            'the initial low-pass filter. This procedure is '
-                            'relatively quick and typically does not '
-                            'negatively affect the outcome of the subsequent '
-                            'MAP refinement. Therefore, if in doubt it is '
-                            'recommended to set this option to No.')
-        
-        self.addSymmetry(group)
 
-        group.addParam('initialLowPassFilterA', FloatParam, default=60,
-                       condition='not is2D',
-                       label='Initial low-pass filter (A)',
-                       help='It is recommended to strongly low-pass filter your '
-                            'initial reference map. If it has not yet been '
-                            'low-pass filtered, it may be done internally using '
-                            'this option. If set to 0, no low-pass filter will '
-                            'be applied to the initial reference(s).')
+            form.addParam('referenceMask', PointerParam,
+                          pointerClass='VolumeMask',
+                          label='Reference mask (optional)', allowsNull=True,
+                          help='A volume mask containing a (soft) mask with '
+                               'the same dimensions as the reference(s), '
+                               'and values between 0 and 1, with 1 being 100% '
+                               'protein and 0 being 100% solvent. The '
+                               'reconstructed reference map will be multiplied '
+                               'by this mask. If no mask is given, a soft '
+                               'spherical mask based on the <radius> of the '
+                               'mask for the experimental images will be '
+                               'applied.\n\n'
+                               'In some cases, for example for non-empty '
+                               'icosahedral viruses, it is also useful to use '
+                               'a second mask. Check _Advaced_ level and '
+                               'select another volume mask')
+            form.addParam('solventMask', PointerParam, pointerClass='VolumeMask',
+                          expertLevel=LEVEL_ADVANCED, allowsNull=True,
+                          label='Second reference mask (optional)',
+                          help='For all white (value 1) pixels in this second '
+                               'mask the corresponding pixels in the '
+                               'reconstructed map are set to the average value '
+                               'of these pixels. Thereby, for example, the '
+                               'higher density inside the virion may be set to '
+                               'a constant. Note that this second mask should '
+                               'have one-values inside the virion and '
+                               'zero-values in the capsid and the solvent '
+                               'areas.')
+            form.addParam('solventFscMask', BooleanParam, default=False,
+                          expertLevel=LEVEL_ADVANCED,
+                          label='Use solvent-flattened FSCs?',
+                          help='If set to Yes, then instead of using '
+                               'unmasked maps to calculate the gold-standard '
+                               'FSCs during refinement, masked half-maps '
+                               'are used and a post-processing-like '
+                               'correction of the FSC curves (with '
+                               'phase-randomisation) is performed every '
+                               'iteration. This only works when a reference '
+                               'mask is provided on the I/O tab. This may '
+                               'yield higher-resolution maps, especially '
+                               'when the mask contains only a relatively '
+                               'small volume inside the box.')
+        # TODO: Check if referenceMask is used in 2D classification protocol in Relion
+        # form.addParam('referenceMask', PointerParam, pointerClass='Mask',
+        #               label='Reference mask (optional)', allowsNull=True,
+        #               expertLevel=LEVEL_ADVANCED,
+        #               help='User-provided mask for the references ('
+        #                    'default is to use spherical mask with '
+        #                    'particle_diameter)')
+
+            form.addParam('isMapAbsoluteGreyScale', BooleanParam, default=False,
+                           label="Is initial 3D map on absolute greyscale?",
+                           help='The probabilities are based on squared differences,'
+                                ' so that the absolute grey scale is important. \n'
+                                'Probabilities are calculated based on a Gaussian '
+                                'noise model, which contains a squared difference '
+                                'term between the reference and the experimental '
+                                'image. This has a consequence that the reference '
+                                'needs to be on the same absolute intensity '
+                                'grey-scale as the experimental images. RELION and '
+                                'XMIPP reconstruct maps at their absolute '
+                                'intensity grey-scale. Other packages may perform '
+                                'internal normalisations of the reference density, '
+                                'which will result in incorrect grey-scales. '
+                                'Therefore: if the map was reconstructed in RELION '
+                                'or in XMIPP, set this option to Yes, otherwise '
+                                'set it to No. If set to No, RELION will use a ('
+                                'grey-scale invariant) cross-correlation criterion '
+                                'in the first iteration, and prior to the second '
+                                'iteration the map will be filtered again using '
+                                'the initial low-pass filter. This procedure is '
+                                'relatively quick and typically does not '
+                                'negatively affect the outcome of the subsequent '
+                                'MAP refinement. Therefore, if in doubt it is '
+                                'recommended to set this option to No.')
+
+            self.addSymmetry(form)
+
+            form.addParam('initialLowPassFilterA', FloatParam, default=60,
+                           condition='not is2D',
+                           label='Initial low-pass filter (A)',
+                           help='It is recommended to strongly low-pass filter your '
+                                'initial reference map. If it has not yet been '
+                                'low-pass filtered, it may be done internally using '
+                                'this option. If set to 0, no low-pass filter will '
+                                'be applied to the initial reference(s).')
         
         form.addSection(label='CTF')
         form.addParam('continueMsg', LabelParam, default=True,
@@ -330,19 +398,14 @@ class ProtRelionBase(EMProtocol):
         
         form.addSection(label='Optimisation')
         if self.IS_CLASSIFY:
-            form.addParam('numberOfIterations', IntParam, default=25,
-                          label='Number of iterations',
-                          help='Number of iterations to be performed. Note '
-                               'that the current implementation does NOT '
-                               'comprise a convergence criterium. Therefore, '
-                               'the calculations will need to be stopped '
-                               'by the user if further iterations do not yield '
-                               'improvements in resolution or classes. '
-                               'If continue option is True, you going to do '
-                               'this number of new iterations (e.g. if '
-                               '*Continue from iteration* is set 3 and this '
-                               'param is set 25, the final iteration of the '
-                               'protocol will be the 28th.')
+            form.addParam('numberOfClasses', IntParam, default=3,
+                          condition='not doContinue and isClassify',
+                          label='Number of classes:',
+                          help='The number of classes (K) for a multi-reference '
+                               'refinement. These classes will be made in an '
+                               'unsupervised manner from a single reference by '
+                               'division of the data into random subsets during '
+                               'the first iteration.')
             # Default T is 2 for 2D but 4 for 3D in Relion GUI
             form.addParam('regularisationParamT', IntParam,
                           default=2 if self.IS_2D else 4,
@@ -361,6 +424,19 @@ class ProtRelionBase(EMProtocol):
                                'Too small values yield too-low resolution '
                                'structures; too high values result in '
                                'over-estimated resolutions and overfitting.')
+            form.addParam('numberOfIterations', IntParam, default=25,
+                          label='Number of iterations',
+                          help='Number of iterations to be performed. Note '
+                               'that the current implementation does NOT '
+                               'comprise a convergence criterium. Therefore, '
+                               'the calculations will need to be stopped '
+                               'by the user if further iterations do not yield '
+                               'improvements in resolution or classes. '
+                               'If continue option is True, you going to do '
+                               'this number of new iterations (e.g. if '
+                               '*Continue from iteration* is set 3 and this '
+                               'param is set 25, the final iteration of the '
+                               'protocol will be the 28th.')
 
             version = getVersion()
 
@@ -407,7 +483,7 @@ class ProtRelionBase(EMProtocol):
                                    'times the subset size is larger than the number '
                                    'of particles in the data set, then more than 1 '
                                    'iteration will be split into subsets.')
-            elif isVersion3():
+            elif self.IS_V3:
                 form.addParam('useFastSubsets', BooleanParam, default=False,
                               condition='not doContinue',
                               label='Use fast subsets (for large data sets)?',
@@ -419,77 +495,7 @@ class ProtRelionBase(EMProtocol):
                                    'ones with all data. This was inspired by '
                                    'a cisTEM implementation by Niko Grigorieff'
                                    ' et al.')
-        form.addParam('maskZero', EnumParam, default=0,
-                      choices=['Yes, fill with zeros',
-                               'No, fill with random noise'],
-                      label='Mask particles with zeros?',
-                      condition='not doContinue',
-                      help='If set to <Yes>, then in the individual particles, '
-                           'the area outside a circle with the radius '
-                           'of the particle will be set to zeros prior to '
-                           'taking the Fourier transform. '
-                           'This will remove noise and therefore increase '
-                           'sensitivity in the alignment and classification. '
-                           'However, it will also introduce correlations '
-                           'between the Fourier components that are not '
-                           'modelled. When set to <No>, then the solvent area '
-                           'is filled with random noise, which prevents '
-                           'introducing correlations.High-resolution '
-                           'refinements (e.g. in 3D auto-refine) tend to work '
-                           'better when filling the solvent area with random '
-                           'noise, some classifications go better when using '
-                           'zeros.')
-        if self.IS_3D:
-            form.addParam('referenceMask', PointerParam,
-                          pointerClass='VolumeMask',
-                          label='Reference mask (optional)', allowsNull=True,
-                          help='A volume mask containing a (soft) mask with '
-                               'the same dimensions as the reference(s), '
-                               'and values between 0 and 1, with 1 being 100% '
-                               'protein and 0 being 100% solvent. The '
-                               'reconstructed reference map will be multiplied '
-                               'by this mask. If no mask is given, a soft '
-                               'spherical mask based on the <radius> of the '
-                               'mask for the experimental images will be '
-                               'applied.\n\n'
-                               'In some cases, for example for non-empty '
-                               'icosahedral viruses, it is also useful to use '
-                               'a second mask. Check _Advaced_ level and '
-                               'select another volume mask')
-            form.addParam('solventMask', PointerParam, pointerClass='VolumeMask',
-                          expertLevel=LEVEL_ADVANCED, allowsNull=True,
-                          label='Second reference mask (optional)',
-                          help='For all white (value 1) pixels in this second '
-                               'mask the corresponding pixels in the '
-                               'reconstructed map are set to the average value '
-                               'of these pixels. Thereby, for example, the '
-                               'higher density inside the virion may be set to '
-                               'a constant. Note that this second mask should '
-                               'have one-values inside the virion and '
-                               'zero-values in the capsid and the solvent '
-                               'areas.')
-            form.addParam('solventFscMask', BooleanParam, default=False,
-                          expertLevel=LEVEL_ADVANCED,
-                          label='Use solvent-flattened FSCs?',
-                          help='If set to Yes, then instead of using '
-                               'unmasked maps to calculate the gold-standard '
-                               'FSCs during refinement, masked half-maps '
-                               'are used and a post-processing-like '
-                               'correction of the FSC curves (with '
-                               'phase-randomisation) is performed every '
-                               'iteration. This only works when a reference '
-                               'mask is provided on the I/O tab. This may '
-                               'yield higher-resolution maps, especially '
-                               'when the mask contains only a relatively '
-                               'small volume inside the box.')
-        else:
-            form.addParam('referenceMask', PointerParam, pointerClass='Mask',
-                          label='Reference mask (optional)', allowsNull=True,
-                          expertLevel=LEVEL_ADVANCED,
-                          help='User-provided mask for the references ('
-                               'default is to use spherical mask with '
-                               'particle_diameter)')
-        
+
         if self.IS_CLASSIFY:
             form.addParam('limitResolEStep', FloatParam, default=-1,
                           label='Limit resolution E-step to (A)',
@@ -655,7 +661,7 @@ class ProtRelionBase(EMProtocol):
                                     'movie-frames were averaged. For '
                                     'ribosomes, we used a value of 1 degree')
         
-        form.addSection('Additional')
+        form.addSection('Compute')
         self._defineComputeParams(form)
         
         joinHalves = ("--low_resol_join_halves 40 (only not continue mode)"
@@ -669,7 +675,7 @@ class ProtRelionBase(EMProtocol):
 
         form.addParam('extraParams', StringParam,
                       default='',
-                      label='Additional parameters',
+                      label='Additional arguments',
                       help="In this box command-line arguments may be "
                            "provided that are not generated by the GUI. This "
                            "may be useful for testing developmental options "
@@ -728,6 +734,18 @@ class ProtRelionBase(EMProtocol):
                            'particularly metadata handling of disk '
                            'access, is a problem. It has a modest cost of '
                            'increased RAM usage.')
+        if self.IS_V3 and self.IS_3D:
+            form.addParam('skipPadding', BooleanParam, default=False,
+                          label='Skip padding',
+                          help='If set to Yes, the calculations will not use '
+                               'padding in Fourier space for better '
+                               'interpolation in the references. Otherwise, '
+                               'references are padded 2x before Fourier '
+                               'transforms are calculated. Skipping padding '
+                               '(i.e. use --pad 1) gives nearly as good results '
+                               'as using --pad 2, but some artifacts may appear '
+                               'in the corners from signal that is folded back.')
+
         form.addParam('allParticlesRam', BooleanParam, default=False,
                       label='Pre-read all particles into RAM?',
                       help='If set to Yes, all particle images will be '
@@ -1029,7 +1047,9 @@ class ProtRelionBase(EMProtocol):
                     args['--firstiter_cc'] = ''
                 args['--ini_high'] = self.initialLowPassFilterA.get()
                 args['--sym'] = self.symmetryGroup.get()
-        
+            if self.IS_V3:
+                args['--pad'] = 1 if self.skipPadding else 2
+
         if isVersion1():  # FIXME: Deprecate versions priors to 2.0
             args['--memory_per_thread'] = self.memoryPreThreads.get()
 
@@ -1114,17 +1134,18 @@ class ProtRelionBase(EMProtocol):
             args['--ctf_intact_first_peak'] = ''
 
     def _setMaskArgs(self, args):
-        if self.referenceMask.hasValue():
-            mask = convertMask(self.referenceMask.get(), self._getTmpPath())
-            args['--solvent_mask'] = mask
-    
-        if self.IS_3D and self.solventMask.hasValue():
-            solventMask = convertMask(self.solventMask.get(), self._getTmpPath())
-            args['--solvent_mask2'] = solventMask
+        if self.IS_3D:
+            if self.referenceMask.hasValue():
+                mask = convertMask(self.referenceMask.get(), self._getTmpPath())
+                args['--solvent_mask'] = mask
 
-        if (not isVersion1() and self.IS_3D and self.referenceMask.hasValue() and
-            self.solventFscMask):
-            args['--solvent_correct_fsc'] = ''
+            if self.solventMask.hasValue():
+                solventMask = convertMask(self.solventMask.get(), self._getTmpPath())
+                args['--solvent_mask2'] = solventMask
+
+            if (not isVersion1() and self.referenceMask.hasValue()
+                and self.solventFscMask):
+                args['--solvent_correct_fsc'] = ''
 
     def _setSubsetArgs(self, args):
         if self._doSubsets():
@@ -1341,7 +1362,7 @@ class ProtRelionBase(EMProtocol):
         return False
 
     def _useFastSubsets(self):
-        if isVersion3():
+        if self.IS_V3:
             return self.getAttributeValue('useFastSubsets', False)
         return False
     
