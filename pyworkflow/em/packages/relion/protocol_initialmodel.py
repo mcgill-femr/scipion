@@ -33,10 +33,11 @@ from pyworkflow.protocol.params import (PointerParam, FloatParam,
                                         EnumParam, StringParam,
                                         BooleanParam, PathParam,
                                         LEVEL_ADVANCED)
+from pyworkflow.em import ALIGN_PROJ
 from pyworkflow.em.data import Volume
 from pyworkflow.em.protocol import ProtInitialVolume
 from pyworkflow.em.packages.relion.protocol_base import ProtRelionBase
-from convert import V1_3, V1_4, V2_0, getVersion, isVersion3
+from convert import V1_3, V1_4, V2_0, getVersion, isVersion3, createItemMatrix
 from constants import ANGULAR_SAMPLING_LIST
 
 IS_V3 = isVersion3()
@@ -415,7 +416,16 @@ class ProtRelionInitialModel(ProtInitialVolume, ProtRelionBase):
         line.addParam('finalRes', IntParam, default=15, label='Final')
 
         line = form.addLine('Mini-batch size',
-                            help='')
+                            help='The number of particles that will be processed '
+                                 'during the initial and final iterations. \n\n'
+                                 'For initial, 100 seems to work well in many '
+                                 'cases. Lower values may result in wider '
+                                 'searches of the energy landscape, but possibly '
+                                 'at reduced resolutions. \n\n'
+                                 'For final, 300-500 seems to work well in many '
+                                 'cases. Higher values may result in increased '
+                                 'resolutions, but at increased computational '
+                                 'costs.')
         line.addParam('initialBatch', IntParam, default=100, label='Initial')
         line.addParam('finalBatch', IntParam, default=500, label='Final')
 
@@ -432,11 +442,12 @@ class ProtRelionInitialModel(ProtInitialVolume, ProtRelionBase):
         # Provide 1 as default value for making it backward compatible
         k = self.getAttributeValue('numberOfClasses', 1)
         pixelSize = self._getInputParticles().getSamplingRate()
+        lastIter = self._lastIter()
         volumes = []
 
         for i in range(1, k+1):
-            vol = Volume(self._getExtraPath('relion_it%03d_class001.mrc')
-                            % self._lastIter())
+            vol = Volume(self._getExtraPath('relion_it%03d_class%03d.mrc')
+                         % (lastIter, i))
             vol.setSamplingRate(pixelSize)
             volumes.append(vol)
 
@@ -537,10 +548,6 @@ class ProtRelionInitialModel(ProtInitialVolume, ProtRelionBase):
             args['--sgd_ini_subset'] = self.initialBatch.get()
             args['--sgd_fin_subset'] = self.finalBatch.get()
             args['--K'] = self.numberOfClasses.get()
-
-            s = """ --flatten_solvent  --zero_mask  --dont_combine_weights_via_disc --pool 3 --pad 2
-            --particle_diameter 200 --oversampling 1 --healpix_order 1 --offset_range 6 --offset_step 4 --j 1
-            """
         else:
             args['--subset_size'] = self.sgdSubsetSize.get()
             args['--strict_highres_sgd'] = self.sgdResLimit.get()
@@ -565,7 +572,4 @@ class ProtRelionInitialModel(ProtInitialVolume, ProtRelionBase):
                          itemDataIterator=md.iterRows(outImgsFn, sortByLabel=md.RLN_IMAGE_ID))
 
     def _createItemMatrix(self, item, row):
-        from pyworkflow.em.packages.relion.convert import createItemMatrix
-        from pyworkflow.em import ALIGN_PROJ
-
         createItemMatrix(item, row, align=ALIGN_PROJ)
