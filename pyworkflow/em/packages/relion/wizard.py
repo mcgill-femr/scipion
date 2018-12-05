@@ -393,7 +393,6 @@ class RelionWizLogPickParams(EmWizard):
         from pyworkflow.em.packages.relion.convert import writeSetOfMicrographs
         micStarFn = os.path.join(coordsDir, 'input_micrographs.star')
 
-        from pyworkflow.convert import getS
         def _postprocessMic(mic, micRow):
             micFn = mic.getFileName()
             micBase = os.path.basename(micFn)
