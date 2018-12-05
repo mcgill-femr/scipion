@@ -34,6 +34,7 @@ from pyworkflow.em.protocol import ProtAnalysis3D
 from .constants import ANGULAR_SAMPLING_LIST
 from .protocol_base import ProtRelionBase
 from .metadata import Table
+from .convert import isVersion3
 
 
 class ProtRelionMultiBody(ProtAnalysis3D, ProtRelionBase):
@@ -68,7 +69,8 @@ class ProtRelionMultiBody(ProtAnalysis3D, ProtRelionBase):
 
     # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
-        
+        self._defineConstants()
+
         form.addSection(label='Input')
 
         form.addParam('protRefine', params.PointerParam,
