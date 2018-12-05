@@ -37,11 +37,12 @@ from pyworkflow.object import Set, Boolean, Pointer
 from pyworkflow.protocol.constants import (STEPS_PARALLEL, LEVEL_ADVANCED,
                                            STATUS_NEW)
 from pyworkflow.protocol.params import (PointerParam, FloatParam, IntParam,
-                                        BooleanParam, FileParam, LabelParam)
+                                        BooleanParam, FileParam, LabelParam,
+                                        RelationParam)
 from pyworkflow.utils.path import copyTree, removeBaseExt, makePath, makeFilePath
 from pyworkflow.utils.properties import Message
 from pyworkflow.utils.utils import prettyTime
-from pyworkflow.em.protocol import EMProtocol
+from pyworkflow.em.protocol import EMProtocol, RELATION_CTF
 from pyworkflow.em.data import SetOfMicrographs, SetOfCTF
 
 
@@ -650,4 +651,60 @@ class ProtCTFMicrographs(ProtMicrographs):
 
 class ProtPreprocessMicrographs(ProtMicrographs):
     pass
+
+
+class ProtMicrographsDefocusSubset(ProtMicrographs):
+    """ Create a subset of Micrographs based on defocus.
+    """
+    _label = 'mics defocus subset'
+
+    # -------------------------- DEFINE param functions ------------------------
+    def _defineParams(self, form):
+        form.addSection(label='Input')
+        form.addParam('inputMicrographs', PointerParam,
+                      pointerClass='SetOfMicrographs',
+                      label='Input micrographs', important=True,
+                      help='Select the input micrographs. ')
+
+        form.addParam('ctfRelations', RelationParam,
+                      relationName=RELATION_CTF,
+                      attributeName='getInputMicrographs',
+                      label='CTF estimation',
+                      help='Choose some CTF estimation related to the '
+                           'input micrographs.')
+
+        form.addParam('numberOfMics', IntParam,
+                      label='Number of micrographs in subset',
+                      help="Select how many micrographs do you "
+                           "want in the subset. ")
+
+    # -------------------------- INSERT steps functions -----------------------
+    def _insertAllSteps(self):
+        self._insertFunctionStep('createOutputStep',
+                                 self.getInputMicrographs().getObjId(),
+                                 self.getInputCtfs().getObjId(),
+                                 self.numberOfMics.get())
+
+    # -------------------------- STEPS functions ------------------------------
+    def createOutputStep(self, micsId, ctfIds, n):
+        from pyworkflow.em.convert import getSubsetByDefocus
+
+        inputMics = self.getInputMicrographs()
+        micList = getSubsetByDefocus(self.getInputCtfs(), inputMics, n)
+
+        outputMics = self._createSetOfMicrographs()
+        outputMics.copyInfo(inputMics)
+
+        for mic in micList:
+            outputMics.append(mic)
+
+        self._defineOutputs(outputMicrographs=outputMics)
+        self._defineTransformRelation(self.inputMicrographs, outputMics)
+
+    def getInputMicrographs(self):
+        return self.inputMicrographs.get()
+
+    def getInputCtfs(self):
+        return self.ctfRelations.get()
+
 
