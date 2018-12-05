@@ -384,15 +384,30 @@ class RelionWizLogPickParams(EmWizard):
         micSet = autopickProt.getInputMicrographs()
         micfn = micSet.getFileName()
         coordsDir = project.getTmpPath(micSet.getName())
+        print("coordsDir: ", coordsDir)
         params, minDiameter, maxDiameter, threshold = autopickProt._getPickArgs()
 
         cleanPath(coordsDir)
-        makePath(coordsDir)
+        makePath(coordsDir, 'extra')
         pickerProps = os.path.join(coordsDir, 'picker.conf')
+        from pyworkflow.em.packages.relion.convert import writeSetOfMicrographs
+        micStarFn = os.path.join(coordsDir, 'input_micrographs.star')
+
+        from pyworkflow.convert import getS
+        def _postprocessMic(mic, micRow):
+            micFn = mic.getFileName()
+            micBase = os.path.basename(micFn)
+            createLink(micFn, os.path.join(coordsDir, micBase))
+            micRow.setValue(md.RLN_MICROGRAPH_NAME, micBase)
+
+        writeSetOfMicrographs(micSet, micStarFn, postprocessImageRow=_postprocessMic)
+
         f = open(pickerProps, "w")
 
+        #params = params.replace('--odir ""', '--odir extra')
         autopickCmd = "%s relion_autopick " % pw.getScipionScript()
-        autopickCmd += ' --i extra/%(micrographName).star --o autopick ' + params
+        autopickCmd += ' --i input_micrographs.star '
+        autopickCmd += params
         autopickCmd += ' --LoG_diam_min %(mind) '
         autopickCmd += ' --LoG_diam_max %(maxd) '
         autopickCmd += ' --LoG_adjust_threshold %(threshold) '
@@ -404,7 +419,7 @@ class RelionWizLogPickParams(EmWizard):
             "minDiameter": minDiameter,
             "maxDiameter": maxDiameter,
             "threshold": threshold,
-            'protDir': autopickProt.getWorkingDir(),
+            'projDir': project.getPath(), #autopickProt.getWorkingDir(),
             "autopickCmd": autopickCmd
         }
 
@@ -419,11 +434,11 @@ class RelionWizLogPickParams(EmWizard):
         threshold.value =  %(threshold)s
         threshold.label = Adjust default threshold
         threshold.help = Lower threshold -> more particles
-        runDir = %(protDir)s
+        runDir = %(coordsDir)s
         autopickCommand = %(autopickCmd)s
-        convertCommand = %(convert)s --coordinates --from relion --to xmipp --input  %(micsSqlite)s --output %(coordsDir)s --extra %(protDir)s/extra
+        convertCommand = %(convert)s --coordinates --from relion --to xmipp --input  %(micsSqlite)s --output %(coordsDir)s --extra %(coordsDir)s/
         hasInitialCoordinates = false
-        doPickAll = false
+        doPickAll = true
         """ % args)
         f.close()
         process = CoordinatesObjectView(autopickProt.getProject(), micfn, coordsDir, autopickProt,
@@ -435,3 +450,4 @@ class RelionWizLogPickParams(EmWizard):
             form.setVar('minDiameter', myprops['mind.value'])
             form.setVar('maxDiameter', myprops['maxd.value'])
             form.setVar('threshold', myprops['threshold.value'])
+
