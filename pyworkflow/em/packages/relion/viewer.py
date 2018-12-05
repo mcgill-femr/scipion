@@ -763,6 +763,7 @@ Examples:
         self.lastIter = self.protocol._lastIter()
         
         halves = getattr(self, 'showHalves', None)
+        # TODO: (JMRT) Check when initial volume (halves=3) and select iterations
         if self.viewIter.get() == ITER_LAST or halves == 3:
             self._iterations = [self.lastIter]
         else:
@@ -1130,7 +1131,8 @@ class RelionPolishViewer(ProtocolViewer):
         
         group = form.addGroup('Volumes')
         
-        group.addParam('showHalves', params.EnumParam, choices=['half1', 'half2', 'both', 'final shiny'], default=0,
+        group.addParam('showHalves', params.EnumParam, default=0,
+                       choices=['half1', 'half2', 'both', 'final shiny'],
                        label='Volume to visualize',
                        help='Select which half do you want to visualize.')
         group.addParam('viewFrame', params.EnumParam, choices=['all', 'selection'], default=0, 
