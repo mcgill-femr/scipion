@@ -27,7 +27,6 @@ from pyworkflow.em.data import SetOfCTF
 from pyworkflow.tests import BaseTest, setupTestProject
 from pyworkflow.em.protocol import ProtCreateStreamData, ProtMonitorSystem
 from pyworkflow.em.packages.grigoriefflab import ProtCTFFind
-from pyworkflow.protocol import getProtocolFromDb
 from pyworkflow.em.protocol.protocol_create_stream_data import \
     SET_OF_RANDOM_MICROGRAPHS
 from pyworkflow.em.packages.xmipp3.protocol_ctf_micrographs import\
@@ -45,22 +44,13 @@ class TestCtfStreaming(BaseTest):
     def setUpClass(cls):
         setupTestProject(cls)
 
-    def _updateProtocol(self, prot):
-        prot2 = getProtocolFromDb(prot.getProject().path,
-                                  prot.getDbPath(),
-                                  prot.getObjId())
-        # Close DB connections
-        prot2.getProject().closeMapper()
-        prot2.closeMappers()
-        return prot2
-
     def test_pattern(self):
         """ Import several Particles from a given pattern.
         """
         def checkOutputs(prot):
             while not (prot.isFinished() or prot.isFailed()):
                 time.sleep(10)
-                prot = self._updateProtocol(prot)
+                prot = self.updateProtocol(prot)
                 if prot.hasAttribute("outputCTF"):
                     ctfSet = SetOfCTF(filename=prot._getPath(CTF_SQLITE))
                     baseFn = prot._getPath(CTF_SQLITE)
