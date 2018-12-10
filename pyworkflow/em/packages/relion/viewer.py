@@ -36,6 +36,7 @@ from pyworkflow.protocol.constants import LEVEL_ADVANCED
 import pyworkflow.protocol.params as params
 from pyworkflow.viewer import (Viewer, ProtocolViewer, DESKTOP_TKINTER,
                                WEB_DJANGO)
+from pyworkflow.em.viewer import MicrographsView
 
 from protocol_classify2d import ProtRelionClassify2D
 from protocol_classify3d import ProtRelionClassify3D
@@ -46,6 +47,8 @@ from protocol_autopick import ProtRelionAutopick, ProtRelionAutopickFom
 from protocol_sort import ProtRelionSortParticles
 from protocol_initialmodel import ProtRelionInitialModel
 from protocol_localres import ProtRelionLocalRes
+from protocol_motioncor import ProtRelionMotioncor
+
 from convert import relionToLocation
 
 ITER_LAST = 0
@@ -649,7 +652,6 @@ Examples:
 #===============================================================================
     def _showFSC(self, paramName=None):
         #self._iterations = self._getListFromRangeString(self.iterSelection.get())
-        print("_showFSC_self._iterations",self._iterations)
         threshold = self.resolutionThresholdFSC.get()
         prefixes = self._getPrefixes()        
         nrefs = len(self._refsList)
@@ -761,6 +763,7 @@ Examples:
         self.lastIter = self.protocol._lastIter()
         
         halves = getattr(self, 'showHalves', None)
+        # TODO: (JMRT) Check when initial volume (halves=3) and select iterations
         if self.viewIter.get() == ITER_LAST or halves == 3:
             self._iterations = [self.lastIter]
         else:
@@ -1090,8 +1093,6 @@ class PostprocessViewer(ProtocolViewer):
             return 'log(Amplitudes) Intercept'
         
 
-
-
 class RelionAutopickViewerFOM(Viewer):
     """ Class to visualize Relion postprocess protocol """
     _targets = [ProtRelionAutopickFom]
@@ -1130,7 +1131,8 @@ class RelionPolishViewer(ProtocolViewer):
         
         group = form.addGroup('Volumes')
         
-        group.addParam('showHalves', params.EnumParam, choices=['half1', 'half2', 'both', 'final shiny'], default=0,
+        group.addParam('showHalves', params.EnumParam, default=0,
+                       choices=['half1', 'half2', 'both', 'final shiny'],
                        label='Volume to visualize',
                        help='Select which half do you want to visualize.')
         group.addParam('viewFrame', params.EnumParam, choices=['all', 'selection'], default=0, 
@@ -1741,3 +1743,20 @@ class RelionLocalResViewer(ProtocolViewer):
         for step in range(0, numberOfColors):
             rangeList.append(round(minRes + step * inter, 2))
         return rangeList
+
+
+class RelionMotioncorViewer(Viewer):
+    """ Wrapper to visualize Relion micrographs after motioncor.
+    """
+    _environments = [DESKTOP_TKINTER, WEB_DJANGO]
+    _targets = [ProtRelionMotioncor]
+
+    def _visualize(self, obj, **kwargs):
+        micsView = MicrographsView(self._project, obj.outputMicrographs)
+        params = micsView.getViewParams()
+        # Add specific labels to be display
+        params[showj.VISIBLE] += (" _rlnAccumMotionTotal"
+                                  " _rlnAccumMotionEarly"
+                                  " _rlnAccumMotionLate ")
+
+        return [micsView]

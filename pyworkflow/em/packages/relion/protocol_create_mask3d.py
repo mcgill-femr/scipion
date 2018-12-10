@@ -1,8 +1,10 @@
 # **************************************************************************
 # *
-# * Authors:     Grigory Sharov (sharov@igbmc.fr)
+# * Authors:     Grigory Sharov (gsharov@mrc-lmb.cam.ac.uk) [1]
+# *              J.M. De la Rosa Trevin (delarosatrevin@scilifelab.se) [2]
 # *
-# * L'Institut de genetique et de biologie moleculaire et cellulaire (IGBMC)
+# * [1] MRC Laboratory of Molecular Biology, MRC-LMB
+# * [2] SciLifeLab, Stockholm University
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -25,9 +27,10 @@
 # **************************************************************************
 from pyworkflow import VERSION_1_1
 from pyworkflow.em import ProtCreateMask3D, VolumeMask
-from convert import convertBinaryVol, isVersion2
+from convert import convertBinaryVol, isVersion1
 import pyworkflow.protocol.params as params
 
+NOT_VERSION1 = not isVersion1()
 
 AND = 0
 OR = 1
@@ -44,11 +47,11 @@ class ProtRelionCreateMask3D(ProtCreateMask3D):
     
     # --------------------------- DEFINE param functions ------------------------
     def _defineParams(self, form):
-        form.addSection(label='Mask generation')
+        form.addSection(label='Input')
         form.addParam('inputVolume', params.PointerParam, pointerClass="Volume",
                       label="Input volume",
                       help="Select the volume that will be used to create the mask")
-        if isVersion2():
+        if NOT_VERSION1:
             form.addParam('initialLowPassFilterA', params.FloatParam, default=-1,
                           label='Lowpass filter map by (A)',
                           help='Lowpass filter that will be applied to the input map, '
@@ -128,21 +131,17 @@ class ProtRelionCreateMask3D(ProtCreateMask3D):
                     '--extend_inimask ': self.extend.get(),
                     '--width_soft_edge ': self.edge.get()
                     }
-        if isVersion2() and self.initialLowPassFilterA.get() != -1:
+        if NOT_VERSION1 and self.initialLowPassFilterA.get() != -1:
             argsDict['--lowpass '] = self.initialLowPassFilterA.get()
+            argsDict['--angpix'] = self.inputVolume.get().getSamplingRate()
 
         args = ' --o %s ' % self.maskFile
         args += ' '.join(['%s %s' % (k, v) for k, v in argsDict.iteritems()])
 
         if self.doCompare:
-            if self.operation.get() == AND:
-                args += ' --and %s' % self.inputVol2Fn
-            elif self.operation.get() == OR:
-                args += ' --or %s' % self.inputVol2Fn
-            elif self.operation.get() == AND_NOT:
-                args += ' --and_not %s' % self.inputVol2Fn
-            elif self.operation.get() == OR_NOT:
-                args += ' --or_not %s' % self.inputVol2Fn
+            op = self.operation.get()
+            opStr = ['--and', '--or', '--and_not', '--or_not'][op]
+            args += ' %s %s' % (opStr, self.inputVol2Fn)
 
         if self.doInvert:
             args += ' --invert'
@@ -201,6 +200,7 @@ class ProtRelionCreateMask3D(ProtCreateMask3D):
             "And, we smoothed it by applying a soft edge of %d voxels."
             % self.edge.get()
         ]
+
         if self.doInvert:
             messages.append("We inverted the mask. ")
             messages.append("And, we smoothed it by applying a soft edge of "

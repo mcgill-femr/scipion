@@ -54,6 +54,14 @@ from protocol_export_ctf import ProtRelionExportCtf
 from protocol_center_averages import ProtRelionCenterAverages
 from protocol_export_particles import ProtRelionExportParticles
 
+# Relion 3.0 new protocols
+from protocol_motioncor import ProtRelionMotioncor
+from protocol_autopick_v3 import ProtRelionAutopickLoG
+from protocol_ctf_refinement import ProtRelionCtfRefinement
+from protocol_symmetrize_volume import ProtRelionSymmetrizeVolume
+from protocol_bayesian_polishing import ProtRelionBayesianPolishing
+from protocol_multibody import ProtRelionMultiBody
+
 # Wizards
 from wizard import *
 

@@ -33,7 +33,7 @@ import pyworkflow.em as em
 import pyworkflow.em.metadata as md
 
 from convert import (writeMicCoordinates, relionToLocation, rowToParticle,
-                     writeSetOfMicrographs, isVersion2)
+                     writeSetOfMicrographs, isVersion1)
 
 from protocol_base import ProtRelionBase
 
@@ -49,7 +49,7 @@ class ProtRelionExtractParticles(em.ProtExtractParticles, ProtRelionBase):
     
     @classmethod
     def isDisabled(cls):
-        return not isVersion2()
+        return isVersion1()
 
     def __init__(self, **kwargs):
         em.ProtExtractParticles.__init__(self, **kwargs)
@@ -272,11 +272,11 @@ class ProtRelionExtractParticles(em.ProtExtractParticles, ProtRelionBase):
         params += ' --extract_size %d' % self.boxSize
 
         if self.backDiameter <= 0:
-            diameter = self.boxSize.get() * 0.75 / self._getDownFactor()
+            diameter = self.boxSize.get() * 0.75
         else:
             diameter = self.backDiameter.get()
 
-        params += ' --bg_radius %d' % int(diameter/2)
+        params += ' --bg_radius %d' % int(diameter/(2 * self._getDownFactor()))
 
         if self.doInvert:
             params += ' --invert_contrast'
@@ -329,13 +329,18 @@ class ProtRelionExtractParticles(em.ProtExtractParticles, ProtRelionBase):
                     mic = micPathDict[micFile]
                     coordDict = {self._getPos(coord): coord
                                  for coord in self.coordDict[mic.getObjId()]}
-
+                    posSet = set()  # Set of (x, y) pairs to avoid duplicates
                     prevMicFile = micFile
 
                 pos = (row.getValue(md.RLN_IMAGE_COORD_X),
                        row.getValue(md.RLN_IMAGE_COORD_Y))
 
-                coord = coordDict.get(pos, None)
+                if pos in posSet:
+                    print("Duplicate coordinate at: %s, IGNORED. " % str(pos))
+                    coord = None
+                else:
+                    coord = coordDict.get(pos, None)
+
                 if coord is not None:
                     # scale the coordinates according to particles dimension.
                     coord.scale(self.getBoxScale())
@@ -346,6 +351,7 @@ class ProtRelionExtractParticles(em.ProtExtractParticles, ProtRelionBase):
                     p.setMicId(mic.getObjId())
                     p.setCTF(mic.getCTF())
                     outputParts.append(p)
+                    posSet.add(pos)
 
         # Clean up the last mic if necessary
         if mic is not None:

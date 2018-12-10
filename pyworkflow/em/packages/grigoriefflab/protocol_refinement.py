@@ -102,3 +102,11 @@ reconstructions.
     def _createItemMatrix(self, item, row):
         from convert import rowToAlignment
         item.setTransform(rowToAlignment(row, item.getSamplingRate()))
+
+    def getFinalVolumes(self):
+        """ Implemented from base class to return final volumes. """
+        self._createFilenameTemplates()
+        lastIter = self._getLastIter()
+        return [self._getFileName('iter_vol', iter=lastIter),
+                self._getFileName('iter_vol1', iter=lastIter),
+                self._getFileName('iter_vol2', iter=lastIter)]
