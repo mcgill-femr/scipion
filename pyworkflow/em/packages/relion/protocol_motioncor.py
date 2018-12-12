@@ -390,14 +390,15 @@ class ProtRelionMotioncor(ProtAlignMovies):
 
     def _createOutputMovie(self, movie):
         """ Overwrite this function to store the Relion's specific
-        Motion model coefficientes.
+        Motion model coefficients.
         """
         m = ProtAlignMovies._createOutputMovie(self, movie)
-        table = md.Table(fileName=self._getMovieExtraFn(movie, '.star'),
-                         tableName='local_motion_model')
-        coeffs = [row.rlnMotionModelCoeff for row in table]
-        m._rlnMotionModelCoeff = pwobj.String(json.dumps(coeffs))
-        print("movie %d, %s" % (m.getObjId(), m._rlnMotionModelCoeff))
+        # Load local motion values only if the patches are more than one
+        if self.patchX.get() * self.patchY.get() > 1:
+            table = md.Table(fileName=self._getMovieExtraFn(movie, '.star'),
+                             tableName='local_motion_model')
+            coeffs = [row.rlnMotionModelCoeff for row in table]
+            m._rlnMotionModelCoeff = pwobj.String(json.dumps(coeffs))
         return m
 
 
