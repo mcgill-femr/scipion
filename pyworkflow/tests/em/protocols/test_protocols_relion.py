@@ -23,9 +23,32 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
 from pyworkflow.tests import *
+import pyworkflow as pw
 from pyworkflow.em.packages.relion import *
 from pyworkflow.em.protocol import ImageHandler
+
+
+IS_V3 = isVersion3()
+IS_V1 = isVersion1()
+NOT_V1 = not IS_V1
+ONLY_GPU = int(os.environ.get('SCIPION_TEST_RELION_ONLY_GPU', 0))
+
+
+def useGpu():
+    """ Helper function to determine if GPU can be used.
+    Return a boolean and a label to be used in protocol's label. """
+    environ = pw.utils.Environ(os.environ)
+    cudaPath = environ.getFirst(('RELION_CUDA_LIB', 'CUDA_LIB'))
+
+    if NOT_V1 and cudaPath and pw.utils.existsVariablePaths(cudaPath):
+        return True, 'GPU'
+    else:
+        return False, 'CPU'
+
+USE_GPU = useGpu()[0]
+RUN_CPU = not USE_GPU or ONLY_GPU
 
 
 class TestRelionBase(BaseTest):
@@ -114,7 +137,7 @@ class TestRelionClassify2D(TestRelionBase):
             prot2D.inputParticles.set(self.protNormalize.outputParticles)
             prot2D.setObjLabel(label)
 
-            if isVersion2():
+            if NOT_V1:
                 prot2D.doGpu.set(doGpu)
 
             self.launchProtocol(prot2D)
@@ -133,19 +156,14 @@ class TestRelionClassify2D(TestRelionBase):
             for class2D in relionProt.outputClasses:
                 self.assertTrue(class2D.hasAlignment2D())
 
-        if isVersion2():
-            relionNoGpu = _runRelionClassify2D(False, "Relion classify2D No GPU")
-            _checkAsserts(relionNoGpu)
 
-            environ = Environ(os.environ)
-            cudaPath = environ.getFirst(('RELION_CUDA_LIB', 'CUDA_LIB'))
-
-            if cudaPath is not None and os.path.exists(cudaPath):
-                relionGpu = _runRelionClassify2D(True, "Relion classify2D GPU")
-                _checkAsserts(relionGpu)
-        else:
-            relionProt = _runRelionClassify2D(label="Run Relion classify2D")
+        if RUN_CPU:
+            relionProt = _runRelionClassify2D(doGpu=False, label="Run Relion classify2D CPU")
             _checkAsserts(relionProt)
+
+        if USE_GPU:
+            relionGpu = _runRelionClassify2D(doGpu=True, label="Relion classify2D GPU")
+            _checkAsserts(relionGpu)
 
 
 class TestRelionClassify3D(TestRelionBase):
@@ -176,8 +194,7 @@ class TestRelionClassify3D(TestRelionBase):
             relion3DClass.inputParticles.set(relionNormalize.outputParticles)
             relion3DClass.referenceVolume.set(self.protImportVol.outputVolume)
 
-
-            if isVersion2():
+            if NOT_V1:
                 relion3DClass.doGpu.set(doGpu)
 
             self.launchProtocol(relion3DClass)
@@ -187,23 +204,16 @@ class TestRelionClassify3D(TestRelionBase):
             self.assertIsNotNone(relionProt.outputClasses, "There was a "
                                                            "problem with "
                                                            "Relion 3D classify")
-
             for class3D in relionProt.outputClasses:
                 self.assertTrue(class3D.hasAlignmentProj())
 
-        if isVersion2():
-            relionNoGpu = _runRelionClassify3D(False, "Relion classify3D No GPU")
-            _checkAsserts(relionNoGpu)
-
-            environ = Environ(os.environ)
-            cudaPath = environ.getFirst(('RELION_CUDA_LIB', 'CUDA_LIB'))
-
-            if cudaPath is not None and os.path.exists(cudaPath):
-                relionGpu = _runRelionClassify3D(True, "Relion classify3D GPU")
-                _checkAsserts(relionGpu)
-        else:
-            relionProt = _runRelionClassify3D(label="Run Relion classify3D")
+        if RUN_CPU:
+            relionProt = _runRelionClassify3D(doGpu=False, label="Run Relion classify3D CPU")
             _checkAsserts(relionProt)
+
+        if USE_GPU:
+            relionGpu = _runRelionClassify3D(doGpu=True, label="Relion classify3D GPU")
+            _checkAsserts(relionGpu)
 
 
 class TestRelionRefine(TestRelionBase):
@@ -231,7 +241,7 @@ class TestRelionRefine(TestRelionBase):
             relionRefine.inputParticles.set(relNorm.outputParticles)
             relionRefine.referenceVolume.set(self.protImportVol.outputVolume)
             
-            if isVersion2():
+            if NOT_V1:
                 relionRefine.doGpu.set(doGpu)
             
             self.launchProtocol(relionRefine)
@@ -251,21 +261,14 @@ class TestRelionRefine(TestRelionBase):
             self.assertAlmostEqual(outImgSet[1].getFileName(),
                                    relNorm.outputParticles[1].getFileName(),
                                    "The particles filenames are wrong")
-        
-        if isVersion2():
-            environ = Environ(os.environ)
-            cudaPath = environ.getFirst(('RELION_CUDA_LIB', 'CUDA_LIB'))
 
-            hasCuda = (cudaPath is not None and
-                       all(os.path.exists(p) for p in cudaPath.split(os.pathsep)))
-
-            relionRefine = _runRelionRefine(hasCuda,
-                                            "Relion auto-refine %sGPU"
-                                            % ('' if hasCuda else 'NO-'))
-            _checkAsserts(relionRefine)
-        else:
-            relionProt = _runRelionRefine(label="Run Relion auto-refine")
+        if RUN_CPU:
+            relionProt = _runRelionRefine(doGpu=False, label="Run Relion auto-refine CPU")
             _checkAsserts(relionProt)
+
+        if USE_GPU:
+            relionGpu = _runRelionRefine(doGpu=True, label="Run Relion auto-refine GPU")
+            _checkAsserts(relionGpu)
 
 
 class TestRelionInitialModel(TestRelionBase):
@@ -277,17 +280,27 @@ class TestRelionInitialModel(TestRelionBase):
         cls.protImport = cls.runImportParticlesStar(cls.partFn, 50000, 7.08)
 
     def testProtRelionIniModel(self):
-        if getVersion() in [V1_3, V1_4, V2_0]:
+        if IS_V1:
             raise Exception('Initial model protocol exists only for Relion v2.1 or higher!')
 
         def _runRelionIniModel(doGpu=True, label=''):
-            print label
-            relionIniModel = self.newProtocol(ProtRelionInitialModel,
-                                              doCTF=False, doGpu=doGpu,
-                                              maskDiameterA=340,
-                                              numberOfIterations=2,
-                                              symmetryGroup="C1",
-                                              numberOfMpi=3, numberOfThreads=2)
+            kwargs = {
+                'doCTF': False,
+                'doGpu': doGpu,
+                'maskDiameterA': 340,
+                'symmetryGroup': 'C1',
+                'allParticlesRam': True,
+                'numberOfMpi': 3,
+                'numberOfThreads': 2
+            }
+            if IS_V3:
+                kwargs.update({'numberOfIterInitial': 10,
+                               'numberOfIterInBetween': 30,
+                               'numberOfIterFinal': 10})
+            else:  # v3
+                kwargs['numberOfIterations'] = 50
+
+            relionIniModel = self.newProtocol(ProtRelionInitialModel, **kwargs)
             relionIniModel.setObjLabel(label)
             relionIniModel.inputParticles.set(self.protImport.outputParticles)
             self.launchProtocol(relionIniModel)
@@ -296,7 +309,7 @@ class TestRelionInitialModel(TestRelionBase):
 
         def _checkAsserts(relionProt):
             relionProt._initialize()  # Load filename templates
-            dataSqlite = relionProt._getIterData(2)
+            dataSqlite = relionProt._getIterData(relionProt._lastIter())
             outImgSet = em.SetOfParticles(filename=dataSqlite)
 
             self.assertIsNotNone(relionProt.outputVolume,
@@ -305,18 +318,11 @@ class TestRelionInitialModel(TestRelionBase):
                                    self.protImport.outputParticles[1].getSamplingRate(),
                                    "The sampling rate is wrong", delta=0.00001)
 
-        environ = Environ(os.environ)
-        cudaPath = environ.getFirst(('RELION_CUDA_LIB', 'CUDA_LIB'))
+        relionProt = _runRelionIniModel(
+            doGpu=USE_GPU, label="Relion initial model %s" % ('GPU' if USE_GPU else 'CPU'))
+        _checkAsserts(relionProt)
 
-        if cudaPath is not None and os.path.exists(cudaPath):
-            relionGpu = _runRelionIniModel(doGpu=True, label="Relion initial model GPU")
-            _checkAsserts(relionGpu)
-        else:
-            print "Warning: running this test on CPU might take a lot of time!"
-            relion = _runRelionIniModel(doGpu=False, label="Relion initial model CPU")
-            _checkAsserts(relion)
 
-        
 class TestRelionPreprocess(TestRelionBase):
     """ This class helps to test all different preprocessing particles options
     on Relion. """
@@ -762,7 +768,7 @@ class TestRelionLocalRes(TestRelionBase):
                                " must be %0.2f" % (sr, pxSize))
 
     def test_runRelionLocalRes(self):
-        if not isVersion2():
+        if IS_V1:
             raise Exception('Local resolution protocol exists only for Relion v2.0 or higher!')
 
         pathFns = 'import/refine3d/extra'
@@ -807,7 +813,7 @@ class TestRelionExpandSymmetry(TestRelionBase):
         return protPart
 
     def test_ExpandSymmetry(self):
-        if not isVersion2():
+        if IS_V1:
             raise Exception('Expand symmetry protocol exists only for Relion v2.0 or higher!')
 
         prot = self.newProtocol(ProtRelionExpandSymmetry)
