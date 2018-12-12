@@ -43,7 +43,7 @@ class TestWorkflowRelionPick(TestWorkflow):
         cls.ds = DataSet.getDataSet('relion_tutorial')
 
     def _launchPick(self, pickProt, validate=True):
-        """ Simple wrapper to launch a pickig protocol.
+        """ Simple wrapper to launch a picking protocol.
         If validate=True, the output will be validated to exist and
         with non-zero elements.
         """
@@ -215,17 +215,19 @@ class TestWorkflowRelionExtract(TestWorkflowRelionPick):
         outputParts = getattr(prot, 'outputParticles', None)
 
         self.assertIsNotNone(outputParts)
-        self.assertEqual(outputParts.getSize(), size)
+        # Maybe number of particles changes between different versions
+        # of Relion, so let's give a delta
+        self.assertAlmostEqual(outputParts.getSize(), size, delta=10)
 
         first = outputParts.getFirstItem()
-        ctfModel = first.getCTF()
+        ctf = first.getCTF()
 
-        ctfModelExpected = self.protCTF.outputCTF.getFirstItem()
+        ctfGold = self.protCTF.outputCTF.getFirstItem()
         
         self.assertEqual(first.getDim(), (dim, dim, 1))
         self.assertAlmostEqual(first.getSamplingRate(), sampling, delta=0.001)
-        self.assertAlmostEqual(ctfModel.getDefocusU(), ctfModelExpected.getDefocusU())
-        self.assertAlmostEqual(ctfModel.getDefocusV(), ctfModelExpected.getDefocusV())
+        self.assertAlmostEqual(ctf.getDefocusU(), ctfGold.getDefocusU())
+        self.assertAlmostEqual(ctf.getDefocusV(), ctfGold.getDefocusV())
 
     def test_ribo(self):
         """ Reimplement this test to run several extract cases. """
