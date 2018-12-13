@@ -1706,7 +1706,7 @@ class RelionLocalResViewer(ProtocolViewer):
         stepColors = self._getStepColors(minRes, maxRes)
         colorList = plotter.getHexColorList(stepColors, self._getColorName())
         
-        fnVol = os.path.abspath(self.protocol._getFileName('finalMap'))
+        fnVol = os.path.abspath(self.protocol._getFileName('outputVolume'))
 
         fhCmd.write("background solid white\n")
         
