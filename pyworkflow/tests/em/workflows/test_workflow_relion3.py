@@ -25,9 +25,10 @@
 # **************************************************************************
 
 import os
-import pyworkflow.tests as pwtests
-import pyworkflow.em as pwem
 
+import pyworkflow.tests as pwtests
+from pyworkflow.tests.em.workflows import TestWorkflow
+import pyworkflow.em as pwem
 import pyworkflow.em.packages.relion as relion
 import pyworkflow.em.packages.gctf as gctf
 
@@ -36,7 +37,7 @@ CPUS = os.environ.get('SCIPION_TEST_CPUS', 4)
 GPUS = os.environ.get('SCIPION_TEST_GPUS', 2)
 
 
-class TestWorkflowRelion3Betagal(pwtests.em.workflows.TestWorkflow):
+class TestWorkflowRelion3Betagal(TestWorkflow):
     @classmethod
     def setUpClass(cls):
         pwtests.setupTestProject(cls)
@@ -158,3 +159,8 @@ class TestWorkflowRelion3Betagal(pwtests.em.workflows.TestWorkflow):
         protRelionLog = self._runRelionLog(protRelionMc)
         protRelionExtract = self._runRelionExtract(protRelionLog, protGctf)
         protRelion2D = self._runRelion2D(protRelionExtract)
+
+
+if __name__ == '__main__':
+    import unittest
+    unittest.main()
