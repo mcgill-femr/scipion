@@ -165,8 +165,9 @@ class ProtRelionPostprocess(ProtAnalysis3D):
     
     # -------------------------- STEPS functions -------------------------------
     def convertInputStep(self, protId):
+        pwutils.makePath(self._getInputPath())
+
         protRef = self.protRefine.get()
-        pwutils.makePath(self._getPath('input'))
         vols = protRef.getFinalVolumes()  # final, half1, half2
         ih = ImageHandler()
         vols.append(self.solventMask.get())

@@ -79,7 +79,8 @@ class ProtRelionInitialModel(ProtInitialVolume, ProtRelionBase):
 
     # ------------------------- DEFINE param functions ------------------------
     def _defineParams(self, form):
-        self.IS_3D = not self.IS_2D
+        self._defineConstants()
+
         form.addSection(label='Input')
         form.addParam('doContinue', BooleanParam, default=False,
                       label='Continue from a previous run?',
@@ -234,104 +235,11 @@ class ProtRelionInitialModel(ProtInitialVolume, ProtRelionBase):
                            'Change the factor of eight with the additional '
                            'argument *--sgd_sigma2fudge_ini*')
 
-        form.addSection('Additional')
-        form.addParam('useParallelDisk', BooleanParam, default=True,
-                      label='Use parallel disc I/O?',
-                      help='If set to Yes, all MPI slaves will read '
-                           'their own images from disc. Otherwise, only '
-                           'the master will read images and send them '
-                           'through the network to the slaves. Parallel '
-                           'file systems like gluster of fhgfs are good '
-                           'at parallel disc I/O. NFS may break with many '
-                           'slaves reading in parallel.')
-        form.addParam('pooledParticles', IntParam, default=3,
-                      label='Number of pooled particles:',
-                      help='Particles are processed in individual batches '
-                           'by MPI slaves. During each batch, a stack of '
-                           'particle images is only opened and closed '
-                           'once to improve disk access times. All '
-                           'particle images of a single batch are read '
-                           'into memory together. The size of these '
-                           'batches is at least one particle per thread '
-                           'used. The nr_pooled_particles parameter '
-                           'controls how many particles are read together '
-                           'for each thread. If it is set to 3 and one '
-                           'uses 8 threads, batches of 3x8=24 particles '
-                           'will be read together. This may improve '
-                           'performance on systems where disk access, and '
-                           'particularly metadata handling of disk '
-                           'access, is a problem. It has a modest cost of '
-                           'increased RAM usage.')
-        form.addParam('allParticlesRam', BooleanParam, default=False,
-                      label='Pre-read all particles into RAM?',
-                      help='If set to Yes, all particle images will be '
-                           'read into computer memory, which will greatly '
-                           'speed up calculations on systems with slow '
-                           'disk access. However, one should of course be '
-                           'careful with the amount of RAM available. '
-                           'Because particles are read in '
-                           'float-precision, it will take \n'
-                           '( N * (box_size)^2 * 4 / (1024 * 1024 '
-                           '* 1024) ) Giga-bytes to read N particles into '
-                           'RAM. For 100 thousand 200x200 images, that '
-                           'becomes 15Gb, or 60 Gb for the same number of '
-                           '400x400 particles. Remember that running a '
-                           'single MPI slave on each node that runs as '
-                           'many threads as available cores will have '
-                           'access to all available RAM.\n\n'
-                           'If parallel disc I/O is set to No, then only '
-                           'the master reads all particles into RAM and '
-                           'sends those particles through the network to '
-                           'the MPI slaves during the refinement '
-                           'iterations.')
-        form.addParam('scratchDir', PathParam,
-                      condition='not allParticlesRam',
-                      label='Copy particles to scratch directory: ',
-                      help='If a directory is provided here, then the job '
-                           'will create a sub-directory in it called '
-                           'relion_volatile. If that relion_volatile '
-                           'directory already exists, it will be wiped. '
-                           'Then, the program will copy all input '
-                           'particles into a large stack inside the '
-                           'relion_volatile subdirectory. Provided this '
-                           'directory is on a fast local drive (e.g. an '
-                           'SSD drive), processing in all the iterations '
-                           'will be faster. If the job finishes '
-                           'correctly, the relion_volatile directory will '
-                           'be wiped. If the job crashes, you may want to '
-                           'remove it yourself.')
-        form.addParam('combineItersDisc', BooleanParam, default=False,
-                      label='Combine iterations through disc?',
-                      help='If set to Yes, at the end of every iteration '
-                           'all MPI slaves will write out a large file '
-                           'with their accumulated results. The MPI '
-                           'master will read in all these files, combine '
-                           'them all, and write out a new file with the '
-                           'combined results. All MPI salves will then '
-                           'read in the combined results. This reduces '
-                           'heavy load on the network, but increases load '
-                           'on the disc I/O. This will affect the time it '
-                           'takes between the progress-bar in the '
-                           'expectation step reaching its end (the mouse '
-                           'gets to the cheese) and the start of the '
-                           'ensuing maximisation step. It will depend on '
-                           'your system setup which is most efficient.')
-        form.addParam('doGpu', BooleanParam, default=True,
-                      label='Use GPU acceleration?',
-                      help='If set to Yes, the job will try to use GPU '
-                           'acceleration.')
-        form.addParam('gpusToUse', StringParam, default='',
-                      label='Which GPUs to use:', condition='doGpu',
-                      help='This argument is not necessary. If left empty, '
-                           'the job itself will try to allocate available '
-                           'GPU resources. You can override the default '
-                           'allocation by providing a list of which GPUs '
-                           '(0,1,2,3, etc) to use. MPI-processes are '
-                           'separated by ":", threads by ",". '
-                           'For example: "0,0:1,1:0,0:1,1"')
+        form.addSection('Compute')
+        self._defineComputeParams(form)
 
         form.addParam('extraParams', StringParam, default='',
-                      label='Additional parameters',
+                      label='Additional arguments',
                       help="In this box command-line arguments may be "
                            "provided that are not generated by the GUI. This "
                            "may be useful for testing developmental options "

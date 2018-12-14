@@ -25,7 +25,7 @@
 # **************************************************************************
 
 from os.path import exists
-from pyworkflow import VERSION_1_2
+import pyworkflow as pw
 from pyworkflow.protocol.params import (PointerParam, FloatParam, FileParam,
                                         IntParam, LabelParam, LEVEL_ADVANCED)
 from pyworkflow.em.data import Volume
@@ -45,7 +45,7 @@ class ProtRelionLocalRes(ProtRelionPostprocess):
     of that mask.
     """
     _label = 'local resolution'
-    _lastUpdateVersion = VERSION_1_2
+    _lastUpdateVersion = pw.VERSION_1_2
 
     @classmethod
     def isDisabled(cls):
@@ -54,8 +54,8 @@ class ProtRelionLocalRes(ProtRelionPostprocess):
     def _createFilenameTemplates(self):
         """ Centralize how files are called for iterations and references. """
         myDict = {
-                 'half1': self._getTmpPath("relion_half1_class001_unfil.mrc"),
-                 'half2': self._getTmpPath("relion_half2_class001_unfil.mrc"),
+                 'half1': self._getInputPath("relion_half1_class001_unfil.mrc"),
+                 'half2': self._getInputPath("relion_half2_class001_unfil.mrc"),
                  'outputVolume': self._getExtraPath('relion_locres_filtered.mrc'),
                  'resolMap': self._getExtraPath('relion_locres.mrc')
                  }
@@ -120,6 +120,8 @@ class ProtRelionLocalRes(ProtRelionPostprocess):
 
     # ------------------------- STEPS functions -------------------------------
     def convertInputStep(self, protId):
+        pw.utils.makePath(self._getInputPath())
+
         protRef = self.protRefine.get()
         _, half1, half2 = protRef.getFinalVolumes()
         ih = ImageHandler()

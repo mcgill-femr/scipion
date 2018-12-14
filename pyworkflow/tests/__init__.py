@@ -25,12 +25,10 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os, sys
 
-import pyworkflow as pw
 from tests import *
-from pyworkflow.utils.path import makeFilePath
 import model
+import em
 
 try:
     from unittest.runner import _WritelnDecorator # Python 2.7+
