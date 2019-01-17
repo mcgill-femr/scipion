@@ -24,6 +24,8 @@ CRYOEF_HOME = %(EM_ROOT)s/cryoEF-1.1.0
 CTFFIND_HOME = %(EM_ROOT)s/ctffind-3.6
 CTFFIND4_HOME = %(EM_ROOT)s/ctffind4-4.1.10
 CCP4_HOME =  %(EM_ROOT)s/ccp4-7.0
+PHENIX_HOME =  %(EM_ROOT)s/phenix-1.13
+
 DOGPICKER_HOME = %(EM_ROOT)s/dogpicker-0.2.1
 EMAN2DIR = %(EM_ROOT)s/eman-2.12
 ETHAN_HOME = %(EM_ROOT)s/ethan-1.2
@@ -116,6 +118,8 @@ JAVA_BINDIR = %(JAVA_HOME)s/bin
 JAVAC = %(JAVA_BINDIR)s/javac
 JAR = %(JAVA_BINDIR)s/jar
 JNI_CPPPATH = %(JAVA_HOME)s/include:%(JAVA_HOME)s/include/linux
+# Will be used as Xmx JVM param. In GB. Might be increased in specific cases: viewing movies +1
+JAVA_MAX_MEMORY = 2
 
 # Modules to compile
 GTEST = False
