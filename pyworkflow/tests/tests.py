@@ -11,7 +11,7 @@ from pyworkflow.utils.path import cleanPath, makePath
 from pyworkflow.manager import Manager
 from pyworkflow.utils.utils import envVarOn, redStr, greenStr
 from pyworkflow.object import Object, Float
-from pyworkflow.protocol import MODE_RESTART
+from pyworkflow.protocol import MODE_RESTART, getProtocolFromDb
 
 TESTS_INPUT = os.environ['SCIPION_TESTS']
 TESTS_OUTPUT = join(os.environ['SCIPION_USER_DATA'], 'Tests')
@@ -94,12 +94,28 @@ class BaseTest(unittest.TestCase):
         return relpath(filename, basedir)
     
     @classmethod
-    def launchProtocol(cls, prot):
-        """ Launch a given protocol using cls.proj and the
-        flag wait=True.
+    def launchProtocol(cls, prot, **kwargs):
+        """ Launch a given protocol using cls.proj.
+        Accepted **kwargs:
+            wait: if True the function will return after the protocol runs.
+                If not specified, then if waitForOutput is passed, wait is
+                false.
+            waitForOutputs: a list of expected outputs, ignored if wait=True
         """
+        wait = kwargs.get('wait', None)
+        waitForOutputs = kwargs.get('waitForOutput', [])
+
+        if wait is None:
+            wait = not waitForOutputs
+
         if getattr(prot, '_run', True):
-            cls.proj.launchProtocol(prot, wait=True)
+            cls.proj.launchProtocol(prot, wait=wait)
+            if not wait and waitForOutputs:
+                while True:
+                    time.sleep(10)
+                    prot = cls.updateProtocol(prot)
+                    if all(prot.hasAttribute(o) for o in waitForOutputs):
+                        return prot
         
         if prot.isFailed():
             print "\n>>> ERROR running protocol %s" % prot.getRunName()
@@ -109,6 +125,21 @@ class BaseTest(unittest.TestCase):
         if not prot.isFinished():
             print "\n>>> ERROR running protocol %s" % prot.getRunName()
             raise Exception("ERROR: Protocol not finished")
+
+        return prot
+
+    @classmethod
+    def updateProtocol(cls, prot):
+        """ Method used for streaming when we need to update
+        the protocol to check if there are new outputs.
+        """
+        prot2 = getProtocolFromDb(prot.getProject().path,
+                                  prot.getDbPath(),
+                                  prot.getObjId())
+        # Close DB connections
+        prot2.getProject().closeMapper()
+        prot2.closeMappers()
+        return prot2
     
     @classmethod    
     def saveProtocol(cls, prot):

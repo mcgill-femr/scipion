@@ -37,11 +37,12 @@ from pyworkflow.object import Set, Boolean, Pointer
 from pyworkflow.protocol.constants import (STEPS_PARALLEL, LEVEL_ADVANCED,
                                            STATUS_NEW)
 from pyworkflow.protocol.params import (PointerParam, FloatParam, IntParam,
-                                        BooleanParam, FileParam, LabelParam)
+                                        BooleanParam, FileParam, LabelParam,
+                                        RelationParam)
 from pyworkflow.utils.path import copyTree, removeBaseExt, makePath, makeFilePath
 from pyworkflow.utils.properties import Message
 from pyworkflow.utils.utils import prettyTime
-from pyworkflow.em.protocol import EMProtocol
+from pyworkflow.em.protocol import EMProtocol, RELATION_CTF
 from pyworkflow.em.data import SetOfMicrographs, SetOfCTF
 
 
@@ -74,13 +75,9 @@ class ProtCTFMicrographs(ProtMicrographs):
                       condition='not recalculate',
                       label=Message.LABEL_INPUT_MIC,
                       pointerClass='SetOfMicrographs')
-
-        form.addParam('AutoDownsampling', BooleanParam, default = False, label = 'Automatic Downsampling Factor',
-                      help = 'Recomended value to downsample')
-
         form.addParam('ctfDownFactor', FloatParam, default=1.,
-                      label='Manual CTF Downsampling factor',
-                      condition='not AutoDownsampling',    #'not recalculate',
+                      label='CTF Downsampling factor',
+                      condition='not recalculate',
                       help='Set to 1 for no downsampling. Non-integer downsample '
                            'factors are possible. This downsampling is only used '
                            'for estimating the CTF and it does not affect any '
@@ -120,7 +117,7 @@ class ProtCTFMicrographs(ProtMicrographs):
         line.addParam('maxDefocus', FloatParam, default=4.,
                       label='Max')
 
-        form.addParam('windowSize', IntParam, default=512,
+        form.addParam('windowSize', IntParam, default=256,
                       expertLevel=LEVEL_ADVANCED,
                       label='Window size', condition='not recalculate',
                       help='The PSD is estimated from small patches of this '
@@ -340,6 +337,7 @@ class ProtCTFMicrographs(ProtMicrographs):
         # Get pointer to input micrographs
         self.inputMics = self.getInputMicrographs()
         acq = self.inputMics.getAcquisition()
+
         self._params = {'voltage': acq.getVoltage(),
                         'sphericalAberration': acq.getSphericalAberration(),
                         'magnification': acq.getMagnification(),
@@ -653,3 +651,60 @@ class ProtCTFMicrographs(ProtMicrographs):
 
 class ProtPreprocessMicrographs(ProtMicrographs):
     pass
+
+
+class ProtMicrographsDefocusSubset(ProtMicrographs):
+    """ Create a subset of Micrographs based on defocus.
+    """
+    _label = 'mics defocus subset'
+
+    # -------------------------- DEFINE param functions ------------------------
+    def _defineParams(self, form):
+        form.addSection(label='Input')
+        form.addParam('inputMicrographs', PointerParam,
+                      pointerClass='SetOfMicrographs',
+                      label='Input micrographs', important=True,
+                      help='Select the input micrographs. ')
+
+        form.addParam('ctfRelations', RelationParam,
+                      relationName=RELATION_CTF,
+                      attributeName='getInputMicrographs',
+                      label='CTF estimation',
+                      help='Choose some CTF estimation related to the '
+                           'input micrographs.')
+
+        form.addParam('numberOfMics', IntParam,
+                      label='Number of micrographs in subset',
+                      help="Select how many micrographs do you "
+                           "want in the subset. ")
+
+    # -------------------------- INSERT steps functions -----------------------
+    def _insertAllSteps(self):
+        self._insertFunctionStep('createOutputStep',
+                                 self.getInputMicrographs().getObjId(),
+                                 self.getInputCtfs().getObjId(),
+                                 self.numberOfMics.get())
+
+    # -------------------------- STEPS functions ------------------------------
+    def createOutputStep(self, micsId, ctfIds, n):
+        from pyworkflow.em.convert import getSubsetByDefocus
+
+        inputMics = self.getInputMicrographs()
+        micList = getSubsetByDefocus(self.getInputCtfs(), inputMics, n)
+
+        outputMics = self._createSetOfMicrographs()
+        outputMics.copyInfo(inputMics)
+
+        for mic in micList:
+            outputMics.append(mic)
+
+        self._defineOutputs(outputMicrographs=outputMics)
+        self._defineTransformRelation(self.inputMicrographs, outputMics)
+
+    def getInputMicrographs(self):
+        return self.inputMicrographs.get()
+
+    def getInputCtfs(self):
+        return self.ctfRelations.get()
+
+

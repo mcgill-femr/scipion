@@ -36,6 +36,7 @@ from pyworkflow.object import ObjectWrap, String, Integer
 import pyworkflow.utils as pwutils
 import pyworkflow.em as em
 import pyworkflow.em.metadata as md
+from metadata import Table
 from .constants import V1_3, V1_4, V2_0, V2_1, V3_0
 
 # This dictionary will be used to map
@@ -153,6 +154,10 @@ def getVersion():
         if v in path:
             return v
     return ''
+
+
+def isVersion1():
+    return getVersion().startswith("1.")
 
 
 def isVersion2():
@@ -982,6 +987,7 @@ _rlnCoordinateY
     return f
 
 
+
 def writeSetOfCoordinates(posDir, coordSet, getStarFileFunc, scale=1):
     """ Convert a SetOfCoordinates to Relion star files.
     Params:
@@ -1072,3 +1078,15 @@ def writeMicCoordinates(mic, coordList, outputFn, getPosFunc=None):
                        coord._rlnAnglePsi))
 
     f.close()
+
+
+def getVolumesFromPostprocess(postStar):
+    """ Return the filenames of half1, half2 and mask from
+    a given postproces.star file.
+    """
+    table = Table(fileName=postStar, tableName='general')
+    row = table[0]
+    return (row.rlnUnfilteredMapHalf1,
+            row.rlnUnfilteredMapHalf2,
+            row.rlnMaskName)
+
