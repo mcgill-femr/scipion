@@ -86,7 +86,15 @@ class ProtReconstruct3D(Prot3D):
     pass
 
 class ProtRefine3D(Prot3D):
-    pass
+    def getFinalVolumes(self):
+        """ This method can be implemented in subclasses that perform
+        a gold-standard refienment and generate a final volume and two
+        half-maps. This method should return a list with the filename
+        of: [final_volume, final_half1, final_half2].
+        An empty list will be returned by default which means that
+        it is not implemented or the volumes are not produced yet.
+        """
+        return []
 
 
 class ProtClassify3D(Prot3D):

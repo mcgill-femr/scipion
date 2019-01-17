@@ -424,3 +424,14 @@ class XmippProtProjMatch(ProtRefine3D, ProtClassify3D):
 
         return partSet
 
+    def getFinalVolumes(self):
+        """ Implemented from base class to return final volumes. """
+        iterN = self.getLastIter()
+        self._initialize()
+        return [self._getFileName('reconstructedFileNamesIters',
+                                  iter=iterN, ref=1),
+                self._getFileName('reconstructedFileNamesItersSplit1',
+                                  iter=iterN, ref=1),
+                self._getFileName('reconstructedFileNamesItersSplit2',
+                                  iter=iterN, ref=1)]
+
