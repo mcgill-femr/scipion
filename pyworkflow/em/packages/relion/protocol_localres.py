@@ -86,6 +86,16 @@ class ProtRelionLocalRes(ProtRelionPostprocess):
                             'your map, you may end up interpreting '
                             'noise for signal!')
 
+        form.addParam('calibratedPixelSize', FloatParam, default=0,
+                      label = 'Calibrated pixel size (A)',
+                      help = "Provide the final, calibrated pixel size in "
+                             "Angstroms. If 0, the input pixel size will be used. "
+                             "This value may be different from the pixel-size "
+                             "used thus far, e.g. when you have recalibrated "
+                             "the pixel size using the fit to a PDB model. "
+                             "The X-axis of the output FSC plot will use this "
+                             "calibrated value.")
+
         form.addSection(label='LocalRes')
         form.addParam('Msg', LabelParam,
                       label='Select Advanced level if you want to adjust the '
@@ -153,9 +163,12 @@ class ProtRelionLocalRes(ProtRelionPostprocess):
         else:
             inputFn = self._getInputPath("relion")
 
+        cps = self.calibratedPixelSize.get()
+        angpix = cps if cps > 0 else volume.getSamplingRate()
+
         self.paramDict = {'--i': inputFn,
                           '--o': self._getExtraPath('relion'),
-                          '--angpix': volume.getSamplingRate(),
+                          '--angpix': angpix,
                           '--adhoc_bfac': self.bfactor.get(),
                           '--locres': '',
                           # Expert options

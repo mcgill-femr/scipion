@@ -129,7 +129,8 @@ class ProtRelionCreateMask3D(ProtCreateMask3D):
         argsDict = {'--i ': self.inputVolFn,
                     '--ini_threshold ': self.threshold.get(),
                     '--extend_inimask ': self.extend.get(),
-                    '--width_soft_edge ': self.edge.get()
+                    '--width_soft_edge ': self.edge.get(),
+                    '--angpix ': self.inputVolume.get().getSamplingRate()
                     }
         if NOT_VERSION1 and self.initialLowPassFilterA.get() != -1:
             argsDict['--lowpass '] = self.initialLowPassFilterA.get()
@@ -178,11 +179,8 @@ class ProtRelionCreateMask3D(ProtCreateMask3D):
             % self.threshold.get(),
             "*Mask processing*",
             "   Extend by %d pixels" % self.extend,
-            "   Apply soft edge of %d pixels" % self.edge,
-            "   Logical operation: %s" % self.getEnumText('operation')
-        ]
-        if self.doCompare:
-            messages.append()
+            "   Apply soft edge of %d pixels" % self.edge]
+
         if self.doInvert:
             messages.append("   Inverted")
 

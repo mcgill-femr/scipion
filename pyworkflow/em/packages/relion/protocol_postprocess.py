@@ -152,7 +152,7 @@ class ProtRelionPostprocess(ProtAnalysis3D):
                            'drops below this value\n'
                            'Relion param: *--randomize_at_fsc*')
         
-        form.addParallelSection(threads=0, mpi=0)
+        form.addParallelSection(threads=0, mpi=1)
     
     # -------------------------- INSERT steps functions ------------------------
     def _insertAllSteps(self):
