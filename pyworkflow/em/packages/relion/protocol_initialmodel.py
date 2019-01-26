@@ -94,7 +94,18 @@ class ProtRelionInitialModel(ProtInitialVolume, ProtRelionBase):
                       important=True,
                       label="Input particles",
                       help='Select the input images from the project.')
-
+        form.addParam('maskDiameterA', IntParam, default=-1,
+                      condition='not doContinue',
+                      label='Particle mask diameter (A)',
+                      help='The experimental images will be masked with a '
+                           'soft circular mask with this <diameter>. '
+                           'Make sure this diameter is not set too small '
+                           'because that may mask away part of the signal! If '
+                           'set to a value larger than the image size no '
+                           'masking will be performed.\n\n'
+                           'The same diameter will also be used for a '
+                           'spherical mask of the reference structures if no '
+                           'user-provided mask is specified.')
         form.addParam('continueRun', PointerParam,
                       pointerClass=self.getClassName(),
                       condition='doContinue', allowsNull=True,
