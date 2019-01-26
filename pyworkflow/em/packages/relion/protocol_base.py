@@ -399,8 +399,11 @@ class ProtRelionBase(EMProtocol):
                            'it will be expanded until number of particles '
                            'per defocus group is reached')
         
-        form.addSection(label='Optimisation')
         if self.IS_CLASSIFY:
+            # In our organization of the parameters, Optimisation tab only
+            # make sense when in a classification case
+            form.addSection(label='Optimisation')
+
             form.addParam('numberOfClasses', IntParam, default=3,
                           condition='not doContinue and isClassify',
                           label='Number of classes:',
@@ -499,7 +502,6 @@ class ProtRelionBase(EMProtocol):
                                    'a cisTEM implementation by Niko Grigorieff'
                                    ' et al.')
 
-        if self.IS_CLASSIFY:
             form.addParam('limitResolEStep', FloatParam, default=-1,
                           label='Limit resolution E-step to (A)',
                           condition="not doContinue",
@@ -518,8 +520,7 @@ class ProtRelionBase(EMProtocol):
                                'in the range of 7-12 Angstroms have proven '
                                'useful.')
         
-        # Change the Sampling section name depending if classify or refine 3D
-        if self.IS_CLASSIFY:
+            # Change the Sampling section name depending if classify or refine 3D
             form.addSection('Sampling')
         else:
             form.addSection('Auto-Sampling')
@@ -1052,9 +1053,6 @@ class ProtRelionBase(EMProtocol):
                 args['--sym'] = self.symmetryGroup.get()
             if self.IS_V3:
                 args['--pad'] = 1 if self.skipPadding else 2
-
-        if isVersion1():  # FIXME: Deprecate versions priors to 2.0
-            args['--memory_per_thread'] = self.memoryPreThreads.get()
 
         refArg = self._getRefArg()
         if refArg:
