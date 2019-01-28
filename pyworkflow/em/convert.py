@@ -38,7 +38,7 @@ from constants import *
 
 class ImageHandler(object):
     """ Class to provide several Image manipulation utilities. """
-    # TODO: remove dependency from Xmipp
+        # TODO: remove dependency from Xmipp
     DT_DEFAULT = xmipp.DT_DEFAULT
     DT_UNKNOWN = xmipp.DT_UNKNOWN
     DT_UCHAR = xmipp.DT_UCHAR

@@ -160,7 +160,7 @@ class ProtRelionSubtract(ProtOperateParticles):
 
         params += ' --ang %s  --o %s ' % (
             self._getFileName('input_star'),
-            self._getFileName('output'))
+            self._getFileName('output', id=self.getObjId()))
 
         try:
             self.runJob('relion_project', params)
@@ -176,7 +176,7 @@ class ProtRelionSubtract(ProtOperateParticles):
     def createOutputStep(self):
         imgSet = self._getInputParticles()
         outImgSet = self._createSetOfParticles()
-        outImgsFn = self._getFileName('output_star')
+        outImgsFn = self._getFileName('output_star', id=self.getObjId())
          
         outImgSet.copyInfo(imgSet)
         outImgSet.setAlignmentProj()

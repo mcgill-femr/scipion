@@ -875,7 +875,7 @@ def convertBinaryFiles(imgSet, outputDir, extension='mrcs'):
         
     if mapFunc is not None:
         for fn in imgSet.getFiles():
-            newFn = mapFunc(fn) # convert or link 
+            newFn = mapFunc(fn) # convert or link
             filesDict[fn] = newFn # map new filename
             print "   %s -> %s" % (newFn, fn)
 
