@@ -29,7 +29,7 @@ This sub-package contains Relion protocols and tools.
 
 from bibtex import _bibtex # Load bibtex dict with references
 _logo = "relion_logo.png"
-_references = ['Scheres2012a', 'Scheres2012b', 'Chen2012']
+_references = ['Scheres2012a', 'Scheres2012b', 'Kimanius2016', 'Zivanov2018']
 
 from convert import *
 from protocol_create_mask3d import ProtRelionCreateMask3D
@@ -49,6 +49,7 @@ from protocol_localres import ProtRelionLocalRes
 from protocol_autopick import ProtRelionAutopickFom, ProtRelionAutopick
 from protocol_autopick_v2 import ProtRelion2Autopick
 from protocol_extract_particles import ProtRelionExtractParticles
+from protocol_extract_particles_movies import ProtRelionExtractMovieParticles
 
 from protocol_export_ctf import ProtRelionExportCtf
 from protocol_center_averages import ProtRelionCenterAverages

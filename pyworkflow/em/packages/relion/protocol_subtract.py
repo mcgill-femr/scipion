@@ -53,13 +53,12 @@ class ProtRelionSubtract(ProtOperateParticles):
         """ Centralize how files are called. """
         myDict = {
                   'input_star': self._getPath('input_particles.star'),
-                  'output': self._getExtraPath('output_particles_%(id)06d'),
-                  'output_star': self._getExtraPath('output_particles_%(id)06d.star'),
-                  'volume_masked': self._getTmpPath('volume_masked.mrc'),
+                  'output': self._getExtraPath('output_particles'),
+                  'output_star': self._getExtraPath('output_particles.star')
                   }
         self._updateFilenamesDict(myDict)
     
-    #--------------------------- DEFINE param functions ------------------------
+    # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
         form.addParam('inputParticles', PointerParam,
@@ -68,7 +67,8 @@ class ProtRelionSubtract(ProtOperateParticles):
                       label="Input particles", important=True,
                       help='Select the experimental particles.')
         form.addParam('inputVolume', PointerParam, pointerClass='Volume',
-                      label="Input volume",
+                      label="Input map to be projected",
+                      important=True,
                       help='Provide the input volume that will be used to '
                            'calculate projections, which will be subtracted '
                            'from the experimental particles. Make sure this '
@@ -78,7 +78,8 @@ class ProtRelionSubtract(ProtOperateParticles):
                            'greyscale is the same as in the experimental '
                            'particles.')
         form.addParam('refMask', PointerParam, pointerClass='VolumeMask',
-                      label='Reference mask (optional)', allowsNull=True,
+                      label='Mask to be applied to this map',
+                      allowsNull=True,
                       help="Provide a soft mask where the protein density "
                            "you wish to subtract from the experimental "
                            "particles is white (1) and the rest of the "
@@ -119,7 +120,7 @@ class ProtRelionSubtract(ProtOperateParticles):
         
         form.addParallelSection(threads=0, mpi=0)
     
-    #--------------------------- INSERT steps functions ------------------------
+    # -------------------------- INSERT steps functions -----------------------
     def _insertAllSteps(self):
         self._initialize()
         
@@ -127,39 +128,28 @@ class ProtRelionSubtract(ProtOperateParticles):
         partSetId = imgSet.getObjId()
         
         self._insertFunctionStep('convertInputStep', partSetId)
-        if self.refMask.get() is not None:
-            self._insertFunctionStep('applyMaskStep')
-        self._insertFunctionStep('removeStep')
+        self._insertFunctionStep('subtractStep')
         self._insertFunctionStep('createOutputStep')
     
-    #--------------------------- STEPS functions -------------------------------
+    # -------------------------- STEPS functions ------------------------------
     def convertInputStep(self, particlesId):
-        """ Write the input images as a Xmipp metadata file. 
-        particlesId: is only need to detect changes in
-        input particles and cause restart from here.
+        """  Write the input images as a Relion star file.
         """
         imgSet = self.inputParticles.get()
         writeSetOfParticles(imgSet, self._getFileName('input_star'),
                             self._getExtraPath())
-    
-    def applyMaskStep(self):
-        import pyworkflow.em.packages.xmipp3 as xmipp3
-        from pyworkflow.em.packages.xmipp3.convert import getImageLocation
-        
-        params = ' -i %s --mult %s -o %s' % (getImageLocation(self.inputVolume.get()),
-                                             getImageLocation(self.refMask.get()),
-                                             self._getFileName('volume_masked'))
-        self.runJob('xmipp_image_operate', params, env=xmipp3.getEnviron())
-    
-    def removeStep(self):
+
+    def subtractStep(self):
         volume = self.inputVolume.get()
-        if self.refMask.get() is not None:
-            volFn = self._getFileName('volume_masked')
-        else:
-            volFn = convertBinaryVol(volume, self._getExtraPath())
+        volFn = convertBinaryVol(volume, self._getExtraPath())
         
         params = ' --i %s --subtract_exp --angpix %0.3f' % (volFn,
                                                             volume.getSamplingRate())
+
+        if self.refMask.get() is not None:
+            maskFn = convertBinaryVol(self.refMask.get(), self._getExtraPath())
+            params += ' --mask %s' % maskFn
+
         if self._getInputParticles().isPhaseFlipped():
             params += ' --ctf_phase_flip'
 
@@ -174,8 +164,9 @@ class ProtRelionSubtract(ProtOperateParticles):
 
         try:
             self.runJob('relion_project', params)
-        except Exception, ex:
-            fn = self._getFileName('output_star', id=self.getObjId())
+
+        except Exception as ex:
+            fn = self._getFileName('output_star')
             if not os.path.exists(fn):
                 sys.stderr.write('The file %s was not produced\n' % fn)
                 raise ex
@@ -195,7 +186,7 @@ class ProtRelionSubtract(ProtOperateParticles):
         self._defineOutputs(outputParticles=outImgSet)
         self._defineTransformRelation(imgSet, outImgSet)
     
-    #--------------------------- INFO functions --------------------------------
+    # -------------------------- INFO functions -------------------------------
     def _validate(self):
         """ Should be overwritten in subclasses to
         return summary message for NORMAL EXECUTION. 
@@ -226,7 +217,7 @@ class ProtRelionSubtract(ProtOperateParticles):
 
         return summary
     
-    #--------------------------- UTILS functions -------------------------------
+    # -------------------------- UTILS functions ------------------------------
     def _updateItem(self, item, row):
         newFn = row.getValue(md.RLN_IMAGE_NAME)
         newLoc = relionToLocation(newFn)
