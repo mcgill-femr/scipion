@@ -32,8 +32,8 @@ from pyworkflow.em.packages.xmipp3.constants import SAME_AS_PICKING
 from pyworkflow.em.packages.grigoriefflab import *
 from pyworkflow.em.packages.relion import *
 from pyworkflow.em.packages.relion.protocol_autopick_v2 import *
+from pyworkflow.em.packages.relion.protocol_autopick_v3 import *
 from test_workflow import TestWorkflow
-
 
 
 class TestWorkflowRelionPick(TestWorkflow):
@@ -43,19 +43,26 @@ class TestWorkflowRelionPick(TestWorkflow):
         cls.ds = DataSet.getDataSet('relion_tutorial')
 
     def _launchPick(self, pickProt, validate=True):
-        """ Simple wrapper to launch a pickig protocol.
+        """ Simple wrapper to launch a picking protocol.
         If validate=True, the output will be validated to exist and
         with non-zero elements.
         """
         self.launchProtocol(pickProt)
 
         if validate:
+            # We have changed the name of the output to 'outputCoordinatesSubset'
+            # when optimizing the wizard, so we need to consider this here
+            # for testing the output is not None
+            if hasattr(pickProt, 'outputCoordinatesSubset'):
+                outputName = 'outputCoordinatesSubset'
+            else:
+                outputName = 'outputCoordinates'
             # Check the output coordinates is not None and has some items
-            outputCoords = getattr(pickProt, 'outputCoordinates', None)
+            outputCoords = getattr(pickProt, outputName, None)
             self.assertIsNotNone(outputCoords)
             self.assertTrue(outputCoords.getSize() > 0,
-                            msg="Output set is empty for protocol '%s'" %
-                            pickProt.getRunName())
+                            msg="Output set (%s) is empty for protocol '%s'" %
+                                (outputName, pickProt.getRunName()))
 
     def _runPickWorkflow(self):
         #First, import a set of micrographs
@@ -156,6 +163,42 @@ class TestWorkflowRelionPick(TestWorkflow):
         protPick4.gpusToUse.set('0:0:0:0')
         self._launchPick(protPick4)
 
+    def test_ribo_LoG(self):
+        if not isVersion3():
+            print("LoG picker requires Relion 3.0 or greater. Skipping test...")
+            return
+
+        # First, import a set of micrographs
+        print "Importing a set of micrographs..."
+        protImport = self.newProtocol(ProtImportMicrographs,
+                                      filesPath=self.ds.getFile('micrographs'),
+                                      filesPattern='*.mrc',
+                                      samplingRateMode=1,
+                                      magnification=79096,
+                                      scannedPixelSize=56, voltage=300,
+                                      sphericalAberration=2.0)
+        protImport.setObjLabel('import 20 mics')
+        self.launchProtocol(protImport)
+        self.assertIsNotNone(protImport.outputMicrographs,
+                             "There was a problem with the import")
+
+        print "Preprocessing the micrographs..."
+        protCropMics = self.newProtocol(XmippProtPreprocessMicrographs,
+                                        doCrop=True, cropPixels=25)
+        protCropMics.inputMicrographs.set(protImport.outputMicrographs)
+        protCropMics.setObjLabel('crop 50px')
+        self.launchProtocol(protCropMics)
+        self.assertIsNotNone(protCropMics.outputMicrographs,
+                             "There was a problem with the downsampling")
+
+        protPick = self.newProtocol(ProtRelionAutopickLoG,
+                                    objLabel='autopick LoG',
+                                    boxSize=60,
+                                    minDiameter=30,
+                                    maxDiameter=50)
+        protPick.inputMicrographs.set(protCropMics.outputMicrographs)
+        self._launchPick(protPick)
+
 
 class TestWorkflowRelionExtract(TestWorkflowRelionPick):
     @classmethod
@@ -172,17 +215,19 @@ class TestWorkflowRelionExtract(TestWorkflowRelionPick):
         outputParts = getattr(prot, 'outputParticles', None)
 
         self.assertIsNotNone(outputParts)
-        self.assertEqual(outputParts.getSize(), size)
+        # Maybe number of particles changes between different versions
+        # of Relion, so let's give a delta
+        self.assertAlmostEqual(outputParts.getSize(), size, delta=10)
 
         first = outputParts.getFirstItem()
-        ctfModel = first.getCTF()
+        ctf = first.getCTF()
 
-        ctfModelExpected = self.protCTF.outputCTF.getFirstItem()
+        ctfGold = self.protCTF.outputCTF.getFirstItem()
         
         self.assertEqual(first.getDim(), (dim, dim, 1))
         self.assertAlmostEqual(first.getSamplingRate(), sampling, delta=0.001)
-        self.assertAlmostEqual(ctfModel.getDefocusU(), ctfModelExpected.getDefocusU())
-        self.assertAlmostEqual(ctfModel.getDefocusV(), ctfModelExpected.getDefocusV())
+        self.assertAlmostEqual(ctf.getDefocusU(), ctfGold.getDefocusU())
+        self.assertAlmostEqual(ctf.getDefocusV(), ctfGold.getDefocusV())
 
     def test_ribo(self):
         """ Reimplement this test to run several extract cases. """

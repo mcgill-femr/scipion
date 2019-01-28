@@ -68,7 +68,7 @@ CTF_DICT = OrderedDict([
        ("_defocusU", xmipp.MDL_CTF_DEFOCUSU),
        ("_defocusV", xmipp.MDL_CTF_DEFOCUSV),
        ("_defocusAngle", xmipp.MDL_CTF_DEFOCUS_ANGLE),
-       ("_phaseShift", xmipp.MDL_CTF_PHASE_SHIFT),
+       # ("_phaseShift", xmipp.MDL_CTF_PHASE_SHIFT),
        ("_resolution", xmipp.MDL_CTF_CRIT_MAXFREQ),
        ("_fitQuality", xmipp.MDL_CTF_CRIT_FITTINGSCORE)
        ])
@@ -531,6 +531,12 @@ def rowToCoordinate(coordRow):
 
 def _rowToParticle(partRow, particleClass, **kwargs):
     """ Create a Particle from a row of a metadata. """
+    # Since postprocessImage is intended to be after the object is
+    # setup, we need to intercept it here and call it at the end
+    postprocessImageRow = kwargs.get('postprocessImageRow', None)
+    if postprocessImageRow:
+        del kwargs['postprocessImageRow']
+
     img = rowToImage(partRow, xmipp.MDL_IMAGE, particleClass, **kwargs)
     img.setCoordinate(rowToCoordinate(partRow))
     # copy micId if available
@@ -548,7 +554,11 @@ def _rowToParticle(partRow, particleClass, **kwargs):
 #        else:
 #            print "WARNING: No micname"
     except Exception as e:
-        print "Warning:", e.message
+        print("Warning:", e.message)
+
+    if postprocessImageRow:
+        postprocessImageRow(img, partRow)
+
     return img
 
 
@@ -642,6 +652,8 @@ def rowToCtfModel(ctfRow):
         # Case for metadata coming with Xmipp resolution label
         # Populate Scipion CTF from metadata row (using mapping dictionary
         # plus extra labels
+        if ctfRow.hasLabel(md.MDL_CTF_PHASE_SHIFT):
+            ctfModel.setPhaseShift(ctfRow.getValue(md.MDL_CTF_PHASE_SHIFT, 0))
         if ctfRow.containsLabel(xmipp.label2Str(xmipp.MDL_CTF_CRIT_MAXFREQ)):
             rowToObject(ctfRow, ctfModel, CTF_DICT,
                         extraLabels=CTF_EXTRA_LABELS)
@@ -653,7 +665,7 @@ def rowToCtfModel(ctfRow):
         ctfModel.standardize()
         # Set psd file names
         setPsdFiles(ctfModel, ctfRow)
-        ctfModel.setPhaseShift(0.0)  # for consistency with ctfModel
+        # ctfModel.setPhaseShift(0.0)  # for consistency with ctfModel
 
     else:
         ctfModel = None
@@ -1395,7 +1407,8 @@ def rowToAlignment(alignmentRow, alignType):
             angles[2] = alignmentRow.getValue(xmipp.MDL_ANGLE_PSI, 0.)
             if flip:
                 angles[1] = angles[1]+180  # tilt + 180
-                angles[2] = 180 - angles[2]  # 180 - psi
+#                 angles[2] = 180 - angles[2]  # 180 - psi, COSS: this is mirroring Y
+                angles[2] = - angles[2]  # - psi, COSS: this is mirroring X
                 shifts[0] = -shifts[0]  # -x
         else:
             psi = alignmentRow.getValue(xmipp.MDL_ANGLE_PSI, 0.)

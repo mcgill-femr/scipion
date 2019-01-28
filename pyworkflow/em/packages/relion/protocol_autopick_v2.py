@@ -37,8 +37,8 @@ import pyworkflow.em.metadata as md
 from pyworkflow.em import getSubsetByDefocus
 
 from protocol_base import ProtRelionBase
-from convert import (writeSetOfMicrographs, writeReferences,
-                     readSetOfCoordinates, isVersion2, micrographToRow)
+from convert import (writeSetOfMicrographs, writeReferences, isVersion2,
+                     readSetOfCoordinates, isVersion3, micrographToRow)
 
 
 REF_AVERAGES = 0
@@ -76,7 +76,7 @@ class ProtRelion2Autopick(ProtParticlePickingAuto, ProtRelionBase):
 
     @classmethod
     def isDisabled(cls):
-        return not isVersion2()
+        return not (isVersion2() or isVersion3())
 
     # -------------------------- DEFINE param functions ------------------------
     def _defineParams(self, form):
@@ -144,7 +144,7 @@ class ProtRelion2Autopick(ProtParticlePickingAuto, ProtRelionBase):
                       help='You may select "Gaussian blobs" to be used as '
                            'references. The preferred way to autopick is '
                            'by providing 2D references images that were '
-                           'by 2D classification. \n'
+                           'obtained by 2D classification. \n'
                            'The Gaussian blob references may be useful to '
                            'kickstart a new data set.')
 
@@ -154,13 +154,22 @@ class ProtRelion2Autopick(ProtParticlePickingAuto, ProtRelionBase):
                       help='The peak value of the Gaussian blob. '
                            'Weaker data will need lower values.')
 
+        pointerClassStr = 'SetOfAverages'
+        # In Relion 3 it is also possible to pass a volume as reference for
+        # autopicking
+        if isVersion3():
+            pointerClassStr += ",Volume"
+
         group.addParam('inputReferences', params.PointerParam,
                       pointerClass='SetOfAverages',
                       condition=refCondition,
                       label='Input references', important=True,
                       help='Input references (SetOfAverages) for auto-pick. \n\n'
                            'Note that the absolute greyscale needs to be correct, \n'
-                           'so only use images with proper normalization.')
+                           'so only use images with proper normalization. '
+                           'From Relion 3.0 it is also possible to provide a '
+                           '3D volume which projections will be used as '
+                           'references.')
 
         group.addParam('particleDiameter', params.IntParam, default=-1,
                       label='Mask diameter (A)',
@@ -369,6 +378,20 @@ class ProtRelion2Autopick(ProtParticlePickingAuto, ProtRelionBase):
             writeReferences(self.getInputReferences(),
                             self._getPath('input_references'), useBasename=True)
 
+        # FIXME: (JMRT-20180523) The following code does not seems to work
+        # here it has been worked around by changing the name of the wizard
+        # output but this seems to reflect a deeper problem of deleting
+        # already existing output objects in a protocol. Maybe when updating
+        # from run.db to project.sqlite?
+
+        # Clean up if previously created the outputMicrographs and Coordinates
+        # in the wizard - optimization run
+        # if self.hasAttribute('outputMicrographs'):
+        #     self._deleteChild('outputMicrographs', self.outputMicrographs)
+        # if self.hasAttribute('outputCoordinates'):
+        #     self._deleteChild('outputCoordinates', self.outputCoordinates)
+        # self._store()
+
     def getAutopickParams(self):
         # Return the autopicking parameters except for the interative ones:
         # - threshold
@@ -474,21 +497,23 @@ class ProtRelion2Autopick(ProtParticlePickingAuto, ProtRelionBase):
 
     def createOutputStep(self):
         micSet = self.getInputMicrographs()
+        outputCoordinatesName = 'outputCoordinates'
+        outputSuffix = ''
 
         # If in optimization phase, let's create a subset of the micrographs
         if self.isRunOptimize():
-            micSubSet = self._createSetOfMicrographs()
+            outputSuffix = '_subset'
+            outputCoordinatesName = 'outputCoordinatesSubset'
+            micSubSet = self._createSetOfMicrographs(suffix=outputSuffix)
             micSubSet.copyInfo(micSet)
-            for mic in self.getMicrographList():
+            # Use previously written star file for reading the subset of micrographs,
+            for row in md.iterRows(self._getPath('input_micrographs.star')):
+                mic = micSet[row.getValue('rlnImageId')]
                 micSubSet.append(mic)
-            self._defineOutputs(outputMicrographs=micSubSet)
+            self._defineOutputs(outputMicrographsSubset=micSubSet)
             self._defineTransformRelation(self.getInputMicrographsPointer(),
                                           micSubSet)
             micSet = micSubSet
-        else:
-            # Clean up if previously created the outputMicrographs
-            if self.hasAttribute('outputMicrographs'):
-                self._deleteChild('outputMicrographs', self.outputMicrographs)
 
         coordSet = self._createSetOfCoordinates(micSet)
         template = self._getExtraPath("%s_autopick.star")
@@ -496,7 +521,7 @@ class ProtRelion2Autopick(ProtParticlePickingAuto, ProtRelionBase):
                      for mic in micSet]
         readSetOfCoordinates(coordSet, starFiles, micSet)
 
-        self._defineOutputs(outputCoordinates=coordSet)
+        self._defineOutputs(**{outputCoordinatesName: coordSet})
         self._defineSourceRelation(self.getInputMicrographsPointer(),
                                    coordSet)
 
@@ -690,7 +715,6 @@ class ProtRelion2Autopick(ProtParticlePickingAuto, ProtRelionBase):
         #     img.setCTF(self.ctfDict[img.getMicName()])
 
     def _postprocessMicrographRow(self, img, imgRow):
-        print "Writing md to: ", self._getMicStarFile(img)
         imgRow.writeToFile(self._getMicStarFile(img))
 
     def _getMicStarFile(self, mic):

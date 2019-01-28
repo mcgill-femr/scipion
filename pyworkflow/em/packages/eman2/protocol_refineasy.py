@@ -480,3 +480,15 @@ resolution.
                                         self._getBaseName('angles', iter=iterN)),
                                         direc=self._getExtraPath())
             proc.wait()
+
+    def getFinalVolumes(self):
+        """ Implemented from base class to return final volumes. """
+        self._createFilenameTemplates()
+        numRun = self._getRun()
+        self._createIterTemplates(numRun)
+        iterN = self._lastIter()
+        return [self._getFileName("mapFull", run=numRun, iter=iterN),
+                self._getFileName("mapEvenUnmasked", run=numRun),
+                self._getFileName("mapOddUnmasked", run=numRun)]
+
+

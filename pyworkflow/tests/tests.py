@@ -11,7 +11,7 @@ from pyworkflow.utils.path import cleanPath, makePath
 from pyworkflow.manager import Manager
 from pyworkflow.utils.utils import envVarOn, redStr, greenStr
 from pyworkflow.object import Object, Float
-from pyworkflow.protocol import MODE_RESTART
+from pyworkflow.protocol import MODE_RESTART, getProtocolFromDb
 
 TESTS_INPUT = os.environ['SCIPION_TESTS']
 TESTS_OUTPUT = join(os.environ['SCIPION_USER_DATA'], 'Tests')
@@ -38,7 +38,7 @@ class DataSet:
 
     _datasetDict = {} # store all created datasets
 
-    def __init__(self, name, folder, files):
+    def __init__(self, name, folder, files, url=None):
         """ 
         Params:
             
@@ -48,6 +48,7 @@ class DataSet:
         self.folder = folder
         self.path = join(TESTS_INPUT, folder)
         self.filesDict = files
+        self.url = url
         
     def getFile(self, key):
         if key in self.filesDict:
@@ -60,14 +61,18 @@ class DataSet:
     @classmethod
     def getDataSet(cls, name):
         """
-        This method is called every time the dataset want to be retreived
+        This method is called every time the dataset want to be retrieved
         """
         assert name in cls._datasetDict, "Dataset: %s dataset doesn't exist." % name
-        folder = cls._datasetDict[name].folder
+
+        ds = cls._datasetDict[name]
+        folder = ds.folder
+        url = '' if ds.url is None else ' -u ' + ds.url
+
         if not envVarOn('SCIPION_TEST_NOSYNC'):
             scipion = "%s %s/scipion" % (os.environ['SCIPION_PYTHON'],
                                          os.environ['SCIPION_HOME'])
-            command = scipion + " testdata --download " + folder
+            command = scipion + " testdata --download " + folder + url
             print ">>>> " + command
             os.system(command)
         return cls._datasetDict[name]
@@ -89,12 +94,28 @@ class BaseTest(unittest.TestCase):
         return relpath(filename, basedir)
     
     @classmethod
-    def launchProtocol(cls, prot):
-        """ Launch a given protocol using cls.proj and the
-        flag wait=True.
+    def launchProtocol(cls, prot, **kwargs):
+        """ Launch a given protocol using cls.proj.
+        Accepted **kwargs:
+            wait: if True the function will return after the protocol runs.
+                If not specified, then if waitForOutput is passed, wait is
+                false.
+            waitForOutputs: a list of expected outputs, ignored if wait=True
         """
+        wait = kwargs.get('wait', None)
+        waitForOutputs = kwargs.get('waitForOutput', [])
+
+        if wait is None:
+            wait = not waitForOutputs
+
         if getattr(prot, '_run', True):
-            cls.proj.launchProtocol(prot, wait=True)
+            cls.proj.launchProtocol(prot, wait=wait)
+            if not wait and waitForOutputs:
+                while True:
+                    time.sleep(10)
+                    prot = cls.updateProtocol(prot)
+                    if all(prot.hasAttribute(o) for o in waitForOutputs):
+                        return prot
         
         if prot.isFailed():
             print "\n>>> ERROR running protocol %s" % prot.getRunName()
@@ -104,6 +125,21 @@ class BaseTest(unittest.TestCase):
         if not prot.isFinished():
             print "\n>>> ERROR running protocol %s" % prot.getRunName()
             raise Exception("ERROR: Protocol not finished")
+
+        return prot
+
+    @classmethod
+    def updateProtocol(cls, prot):
+        """ Method used for streaming when we need to update
+        the protocol to check if there are new outputs.
+        """
+        prot2 = getProtocolFromDb(prot.getProject().path,
+                                  prot.getDbPath(),
+                                  prot.getObjId())
+        # Close DB connections
+        prot2.getProject().closeMapper()
+        prot2.closeMappers()
+        return prot2
     
     @classmethod    
     def saveProtocol(cls, prot):
@@ -169,12 +205,16 @@ def setupTestProject(cls):
         proj = Manager().loadProject(projName)
     else:
         proj = Manager().createProject(projName) # Now it will be loaded if exists
+
     
     cls.outputPath = proj.path
+    # Create project does not change the working directory anymore
+    os.chdir(cls.outputPath)
     cls.projName = projName
     cls.proj = proj
-        
-        
+
+
+
 #class for tests
 class Complex(Object):
     

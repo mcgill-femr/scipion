@@ -41,8 +41,8 @@ except ImportError:
     from configparser import ConfigParser, ParsingError  # Python 3
 
 
-__version__ = ''
-__nickname__ = ''
+__version__ = 'v1.2.2-rc'
+__nickname__ = 'Constantino'
 __releasedate__ = ''
 
 
@@ -635,7 +635,6 @@ Valid modes are:
   help install manager project stats tests testdata viewer webserver printenv run
 Run "%s help" for a full description.\n""" % (sys.argv[1], sys.argv[0]))
     sys.exit(1)
-
 
 
 if __name__ == '__main__':

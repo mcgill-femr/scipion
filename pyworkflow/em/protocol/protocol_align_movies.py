@@ -52,7 +52,7 @@ class ProtAlignMovies(ProtProcessMovies):
     or the cropping options (region of interest)
     """
 
-    #--------------------------- DEFINE param functions ------------------------
+    # -------------------------- DEFINE param functions -----------------------
     def _defineParams(self, form):
         ProtProcessMovies._defineParams(self, form)
         self._defineAlignmentParams(form)
@@ -105,7 +105,6 @@ class ProtAlignMovies(ProtProcessMovies):
                       help="Save Aligned movie")
 
     # --------------------------- STEPS functions ----------------------------
-
     # FIXME: Methods will change when using the streaming for the output
     def createOutputStep(self):
         # validate that we have some output movies
@@ -190,9 +189,9 @@ class ProtAlignMovies(ProtProcessMovies):
                 if newMovie.getAlignment().getShifts()[0]:
                     movieSet.append(newMovie)
                 else:
-                    print(yellowStr("WARNING: Movie %s has empty alignment data, can't add it to "
-                                    "output set." % movie.getFileName()))
-
+                    print(yellowStr("WARNING: Movie %s has empty alignment "
+                                    "data, can't add it to output set."
+                                    % movie.getFileName()))
 
             self._updateOutputSet('outputMovies', movieSet, streamMode)
 
@@ -205,7 +204,6 @@ class ProtAlignMovies(ProtProcessMovies):
                 if not saveMovie:
                     movieSet.setDim(self.inputMovies.get().getDim())
                 self._defineTransformRelation(self.inputMovies, movieSet)
-
 
         def _updateOutputMicSet(sqliteFn, getOutputMicName, outputName):
             """ Updated the output micrographs set with new items found. """
@@ -221,8 +219,8 @@ class ProtAlignMovies(ProtProcessMovies):
                 extraMicFn = self._getExtraPath(getOutputMicName(movie))
                 mic.setFileName(extraMicFn)
                 if not os.path.exists(extraMicFn):
-                    print(yellowStr("WARNING: Micrograph %s was not generated, can't add it to "
-                                    "output set." % extraMicFn))
+                    print(yellowStr("WARNING: Micrograph %s was not generated, "
+                                    "can't add it to output set." % extraMicFn))
                     doneFailed.append(movie)
                     continue
                 self._preprocessOutputMicrograph(mic, movie)
@@ -255,14 +253,15 @@ class ProtAlignMovies(ProtProcessMovies):
                 outputStep.setStatus(cons.STATUS_NEW)
 
     # --------------------------- INFO functions ------------------------------
-
     def _validate(self):
         errors = []
 
-        if (self.cropDimX > 0 and self.cropDimY <= 0 or
-                        self.cropDimY > 0 and self.cropDimX <= 0):
-            errors.append("If you give cropDimX, you should also give cropDimY"
-                          " and vice versa")
+        # Only validate about cropDimensions if the protocol supports them
+        if (hasattr(self, 'cropDimX') and hasattr(self, 'cropDimY')
+            and (self.cropDimX > 0 and self.cropDimY <= 0
+                 or self.cropDimY > 0 and self.cropDimX <= 0)):
+                errors.append("If you give cropDimX, you should also give "
+                              "cropDimY and vice versa")
 
         # movie = self.inputMovies.get().getFirstItem()
         # # Close movies db because the getFirstItem open it
@@ -314,7 +313,6 @@ class ProtAlignMovies(ProtProcessMovies):
         return errors
 
     # --------------------------- INFO functions -------------------------------
-
     def _summary(self):
         return [self.summaryVar.get('')]
 
@@ -388,7 +386,6 @@ class ProtAlignMovies(ProtProcessMovies):
         return alignedMovie
 
     # ---------- Hook functions that need to be implemented in subclasses ------
-
     def _getBinFactor(self):
         return self.getAttributeValue('binFactor', 1.0)
 
@@ -458,6 +455,12 @@ class ProtAlignMovies(ProtProcessMovies):
         to the output set of micrographs.
         """
         pass
+
+    def _doComputeMicThumbnail(self):
+        """ Should be implemented in sub-classes if want to check
+        the generation of thumbnails.
+        """
+        return False
 
     def _storeSummary(self, movie):
         """ Implement this method if you want to store the summary. """
@@ -667,7 +670,7 @@ class ProtAverageFrames(ProtAlignMovies):
     """
     _label = 'average frames'
 
-    #--------------------------- DEFINE param functions ------------------------
+    # -------------------------- DEFINE param functions -----------------------
     def _defineAlignmentParams(self, form):
         pass
 
@@ -719,18 +722,9 @@ class ProtAverageFrames(ProtAlignMovies):
         return []
 
     def _createOutputMovies(self):
-        """ Returns True if an output set of movies will be generated.
-        The most common case is to always generate output movies,
-        either with alignment only or the binary aligned movie files.
-        Subclasses can override this function to change this behavior.
-        """
         return False
 
     def _createOutputMicrographs(self):
-        """ By default check if the user have selected 'doSaveAveMic'
-        property. Subclasses can override this method to implement different
-        behaviour.
-        """
         return False
 
     def _createOutputWeightedMicrographs(self):

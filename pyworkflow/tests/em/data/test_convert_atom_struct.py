@@ -24,13 +24,15 @@
 # *
 # **************************************************************************
 #
-from pyworkflow.tests import *
+from copy import deepcopy
 from tempfile import NamedTemporaryFile
+
+import numpy
+
 from pyworkflow.em.convert_atom_struct import AtomicStructHandler
 from pyworkflow.em.transformations import euler_matrix, \
     translation_matrix, concatenate_matrices
-from copy import deepcopy
-import numpy
+from pyworkflow.tests import *
 
 
 class TestAtomicStructHandler(unittest.TestCase):
@@ -235,15 +237,29 @@ class TestAtomicStructHandler(unittest.TestCase):
 
         # retrieve "Structure of the human TRPC3
         # both 3Dmap and PDB
+
+
+        doTest = False
+
+        if not doTest:
+
+            print "This test is to be tested manually since it opens chimera afterwards"
+            print "For testing this, edit this file and set doTest = True"
+            return
+
+
         PDBID = '6CUD'
         EMDBID = '7620'
-        if False:  # set to False if you aready have the 3dmap file
+
+        doAll = False
+
+        if False or doAll:  # set to False if you aready have the 3dmap file
             url = 'ftp://ftp.ebi.ac.uk/pub/databases/emdb/structures/EMD-%s/map/emd_%s.map.gz' % \
                   (EMDBID, EMDBID)
             import urllib
             urllib.urlretrieve(url, 'emd_%s.map.gz' % EMDBID)
             os.system("gunzip emd_%s.map.gz" % EMDBID)  # file is gzipped
-        if False:  # set to False if you aready have the PDB file
+        if False or doAll:  # set to False if you aready have the PDB file
             aSH = AtomicStructHandler()
             pdbFileName = aSH.readFromPDBDatabase(PDBID, type='pdb',
                                                   dir=os.getcwd())
@@ -251,7 +267,7 @@ class TestAtomicStructHandler(unittest.TestCase):
             pdbFileName = 'pdb%s.ent' % PDBID.lower()
 
         # get 3D map sampling
-        from pyworkflow.em.convert_header.CCP4.convert import Ccp4Header
+        from pyworkflow.em.headers import Ccp4Header
         header = Ccp4Header("emd_%s.map" % EMDBID, readHeader=True)
         sampling, y, z = header.getSampling()
 
@@ -340,7 +356,7 @@ class TestAtomicStructHandler(unittest.TestCase):
             runChimeraProgram(chimera_get_program(), args)
 
         # shift atomic structure
-        doAll = False
+        doAll = True
         if False or doAll:
             shift = [20., 0., 0.]
             angles = [0., 0., 0.]
