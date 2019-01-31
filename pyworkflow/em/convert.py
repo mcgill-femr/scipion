@@ -398,6 +398,9 @@ class ImageHandler(object):
             outputFile: the filename of the output either image or volume
             newDim: scale the output Mask to a new dimension if not None
         """
+        if inputFile.endswith('.mrc'):
+            inputFile += ':mrc'
+
         ioStr = '-i %s -o %s' % (inputFile, outputFile)
 
         if newDim:
