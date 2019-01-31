@@ -912,7 +912,7 @@ def convertBinaryVol(vol, outputDir):
     return fn
 
 
-def convertMask(img, outputDir):
+def convertMask(img, outputDir, newDim=None):
     """ Convert binary mask to a format read by Relion and truncate the
     values between 0-1 values, due to Relion only support masks with this
     values (0-1).
@@ -922,12 +922,11 @@ def convertMask(img, outputDir):
     Return:
         new file name of the mask.
     """
-    
     ih = em.ImageHandler()
     imgFn = getImageLocation(img.getLocation())
     newFn = join(outputDir, pwutils.replaceBaseExt(imgFn, 'mrc'))
     
-    ih.truncateMask(imgFn, newFn)
+    ih.truncateMask(imgFn, newFn, newDim=newDim)
     
     return newFn
 
