@@ -402,7 +402,7 @@ class ImageHandler(object):
 
         if newDim:
             self.__runXmippProgram('xmipp_image_resize',
-                                   '%s --dim %d' % (ioStr, outputFile))
+                                   '%s --dim %d' % (ioStr, newDim))
             ioStr = '-i %s' % outputFile
         self.__runXmippProgram('xmipp_transform_threshold',
                                '%s --select below 0 --substitute '
