@@ -292,14 +292,6 @@ class ProtRelionBase(EMProtocol):
                                'yield higher-resolution maps, especially '
                                'when the mask contains only a relatively '
                                'small volume inside the box.')
-        # TODO: Check if referenceMask is used in 2D classification protocol in Relion
-        # form.addParam('referenceMask', PointerParam, pointerClass='Mask',
-        #               label='Reference mask (optional)', allowsNull=True,
-        #               expertLevel=LEVEL_ADVANCED,
-        #               help='User-provided mask for the references ('
-        #                    'default is to use spherical mask with '
-        #                    'particle_diameter)')
-
             form.addParam('isMapAbsoluteGreyScale', BooleanParam, default=False,
                            label="Is initial 3D map on absolute greyscale?",
                            help='The probabilities are based on squared differences,'
