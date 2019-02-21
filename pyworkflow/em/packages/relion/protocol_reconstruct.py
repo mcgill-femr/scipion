@@ -29,6 +29,8 @@ from pyworkflow.protocol.params import (PointerParam, FloatParam,
 from pyworkflow.em.data import Volume 
 from pyworkflow.em.protocol import ProtReconstruct3D
 from pyworkflow.em.constants import ALIGN_PROJ
+from .convert import isVersion2
+
 
 class ProtRelionReconstruct(ProtReconstruct3D):
     """    
@@ -124,7 +126,10 @@ class ProtRelionReconstruct(ProtReconstruct3D):
         params += ' --angpix %0.3f' % imgSet.getSamplingRate()
         params += ' --maxres %0.3f' % self.maxRes.get()
         params += ' --pad %0.3f' % self.pad.get()
-        params += ' --j %d' % self.numberOfThreads.get()
+
+        if self.numberOfTheads > 1:
+            threadsArg = 'j' if isVersion2() else 'jomp'
+            params += ' --%s %d' % (threadsArg, self.numberOfThreads)
         
         #TODO Test that the CTF part is working
         if self.doCTF:
