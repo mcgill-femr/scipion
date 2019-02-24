@@ -52,7 +52,7 @@ Protocols SPA = [
 			{"tag": "protocol", "value": "XmippParticlePickingAutomatic",   "text": "default"},
 			{"tag": "protocol", "value": "XmippProtAssignmentTiltPair",   "text": "default"},
 			{"tag": "protocol", "value": "ProtRelion2Autopick",   "text": "default"},
-			{"tag": "protocol", "value": "ProtRelionAutopickLoG",   "text": "default"}
+			{"tag": "protocol", "value": "ProtRelionAutopickLoG",   "text": "default"},
 			{"tag": "protocol", "value": "BsoftProtParticlePicking",   "text": "default"},
 			{"tag": "protocol", "value": "DogPickerProtPicking",   "text": "default"},
 		    {"tag": "protocol", "value": "ProtGemPicker", "text": "default"},
