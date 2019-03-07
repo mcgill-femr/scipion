@@ -272,7 +272,7 @@ class ProtRelionMotioncor(ProtAlignMovies):
     # --------------------------- UTILS functions -----------------------------
     def _getProgram(self, program='relion_run_motioncorr'):
         """ Get the program name depending on the MPI use or not. """
-        return program + '_mpi' if self.numberOfMpi > 1 else ''
+        return program + ('_mpi' if self.numberOfMpi > 1 else '')
 
     def writeInputStar(self, starFn, *images):
         """ Easy way to write a simple star file with a single micrographs.
