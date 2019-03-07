@@ -245,7 +245,8 @@ leads to objective and high-quality results.
 
     def getFinalVolumes(self):
         """ Implemented from base class to return the final and half-maps
-        filenames. """
+        filenames.
+        """
         self._createFilenameTemplates()
         return [self._getFileName('finalvolume', ref3d=1),
                 self._getFileName('final_half1_volume', ref3d=1),
