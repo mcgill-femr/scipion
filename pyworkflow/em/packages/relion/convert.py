@@ -156,9 +156,9 @@ def getEnviron():
 
 
 def getVersion():
-    path = os.environ['RELION_HOME']
+    path = os.path.basename(os.environ['RELION_HOME'])
     for v in getSupportedVersions():
-        if v in path:
+        if 'relion-%s' % v in path:
             return v
     return ''
 
