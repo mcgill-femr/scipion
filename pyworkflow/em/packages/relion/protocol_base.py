@@ -137,6 +137,7 @@ class ProtRelionBase(EMProtocol):
     def _defineConstants(self):
         self.IS_3D = not self.IS_2D
         self.IS_V3 = isVersion3()
+        self.IS_V2 = isVersion2()
 
     def _defineParams(self, form):
         self._defineConstants()
@@ -863,11 +864,16 @@ class ProtRelionBase(EMProtocol):
             alignToPrior = hasAlign and getattr(self, 'alignmentAsPriors', False)
             fillRandomSubset = hasAlign and getattr(self, 'fillRandomSubset', False)
 
+            relion3Labels = [md.RLN_PARTICLE_RANDOM_SUBSET,
+                             md.RLN_IMAGE_BEAMTILT_X,
+                             md.RLN_IMAGE_BEAMTILT_Y]
+
             writeSetOfParticles(imgSet, imgStar, self._getExtraPath(),
                                 alignType=alignType,
                                 postprocessImageRow=self._postprocessParticleRow,
-                                fillRandomSubset=fillRandomSubset)
-            
+                                fillRandomSubset=fillRandomSubset,
+                                extraLabels=relion3Labels)
+
             if alignToPrior:
                 mdParts = md.MetaData(imgStar)
                 self._copyAlignAsPriors(mdParts, alignType)
@@ -935,8 +941,6 @@ class ProtRelionBase(EMProtocol):
     # -------------------------- INFO functions -------------------------------
     def _validate(self):
         errors = []
-        self.validatePackageVersion('RELION_HOME', errors)
-
         if self.doContinue:
             continueProtocol = self.continueRun.get()
             if (continueProtocol is not None and
@@ -944,7 +948,7 @@ class ProtRelionBase(EMProtocol):
                 errors.append('In Scipion you must create a new Relion run')
                 errors.append('and select the continue option rather than')
                 errors.append('select continue from the same run.')
-                errors.append('') # add a new line
+                errors.append('')
             errors += self._validateContinue()
         else:
             if self._getInputParticles().isOddX():
@@ -1139,8 +1143,7 @@ class ProtRelionBase(EMProtocol):
                 solventMask = convertMask(self.solventMask.get(), tmp, newDim)
                 args['--solvent_mask2'] = solventMask
 
-            if (not isVersion1() and self.referenceMask.hasValue()
-                and self.solventFscMask):
+            if self.referenceMask.hasValue() and self.solventFscMask:
                 args['--solvent_correct_fsc'] = ''
 
     def _setSubsetArgs(self, args):

@@ -156,9 +156,9 @@ def getEnviron():
 
 
 def getVersion():
-    path = os.environ['RELION_HOME']
+    path = os.path.basename(os.environ['RELION_HOME'])
     for v in getSupportedVersions():
-        if v in path:
+        if 'relion-%s' % v in path:
             return v
     return ''
 
@@ -523,6 +523,9 @@ def particleToRow(part, partRow, **kwargs):
 
     if kwargs.get('fillRandomSubset') and part.hasAttribute('_rlnRandomSubset'):
         partRow.setValue(md.RLN_PARTICLE_RANDOM_SUBSET, int(part._rlnRandomSubset.get()))
+        if part.hasAttribute('_rlnBeamTiltX'):
+            partRow.setValue('rlnBeamTiltX', float(part._rlnBeamTiltX.get()))
+            partRow.setValue('rlnBeamTiltY', float(part._rlnBeamTiltY.get()))
 
     imageToRow(part, partRow, md.RLN_IMAGE_NAME, **kwargs)
 
