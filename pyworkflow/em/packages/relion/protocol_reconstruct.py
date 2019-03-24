@@ -126,7 +126,7 @@ class ProtRelionReconstruct(ProtReconstruct3D):
         params += ' --maxres %0.3f' % self.maxRes.get()
         params += ' --pad %0.3f' % self.pad.get()
 
-        if self.numberOfTheads > 1 and isVersion2():
+        if self.numberOfThreads > 1 and isVersion2():
             params += ' --j %d' % self.numberOfThreads
         
         #TODO Test that the CTF part is working
