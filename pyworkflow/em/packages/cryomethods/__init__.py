@@ -34,6 +34,8 @@ _references = []
 import os
 from convert import getSupportedVersions, getVersion, getEnviron
 from protocol_volume_selector import ProtInitialVolumeSelector
+from protocol_directional_pruning import ProtDirectionalPruning
+
 
 # Wizards
 from wizard import (TargetFilterWizard, InitialPassFilterWizard,

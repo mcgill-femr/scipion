@@ -27,10 +27,10 @@ from pyworkflow.tests import BaseTest, setupTestProject, DataSet
 from pyworkflow.em.protocol import (ProtImportParticles, ProtImportVolumes,
                                     ProtSubSet)
 from pyworkflow.em import ProtUserSubSet
+from pyworkflow.em.packages.cryomethods import ProtDirectionalPruning
 
-
-from pyworkflow.em.packages.xmipp3 import XmippProtDirectionalPruning, \
-    XmippProtSplitvolume
+#from pyworkflow.em.packages.xmipp3 import XmippProtDirectionalPruning, \
+   # XmippProtSplitvolume
 
 
 class TestDirectionalClasses(BaseTest):
@@ -91,7 +91,7 @@ class TestDirectionalClasses(BaseTest):
         self.launchProtocol(protSubset)
 
         # We use a coarse angular sampling of 20 to speed-up test
-        protSolid = self.newProtocol(XmippProtDirectionalPruning,
+        protSolid = self.newProtocol(ProtDirectionalPruning,
                                 objLabel='directional classes 1',
                                 angularSampling=20,
                                 angularDistance=25,
@@ -103,11 +103,12 @@ class TestDirectionalClasses(BaseTest):
         self.launchProtocol(protSolid)
         self.checkOutput(protSolid, 'outputParticles')
 
-        protSolid1 = self.newProtocol(XmippProtDirectionalPruning,
+        protSolid1 = self.newProtocol(ProtDirectionalPruning,
                                 objLabel='directional classes 1',
                                 classMethod=1,
                                 angularSampling=20,
                                 angularDistance=25,
+
                                 numberOfMpi=4
                                 )
 
@@ -115,6 +116,19 @@ class TestDirectionalClasses(BaseTest):
         protSolid1.inputParticles.set(protSubset.outputParticles)
         self.launchProtocol(protSolid1)
         self.checkOutput(protSolid1, 'outputParticles')
+
+        protSolid2 = self.newProtocol(ProtDirectionalPruning,
+                                      objLabel='directional classes 1',
+                                      classMethod=2,
+                                      numberOfIterations=5,
+                                      regularisationParamT=2,
+                                      numberOfMpi=4
+                                      )
+
+        protSolid2.inputVolume.set(protImportVol.outputVolume)
+        protSolid2.inputParticles.set(protSubset.outputParticles)
+        self.launchProtocol(protSolid2)
+        self.checkOutput(protSolid2, 'outputParticles')
 
         # protSolid = self.newProtocol(XmippProtDirectionalPruning,
         #                         objLabel='directional classes 2',
