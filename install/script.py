@@ -464,6 +464,9 @@ env.addPackage('localrec', version='1.1.0',
 env.addPackage('localrec', version='1.2.0',
                tar='localrec-1.2.0.tgz')
 
+env.addPackage('localrec', version='1.2.1',
+               tar='localrec-1.2.1.tgz')
+
 env.addPackage('locscale', version='0.1',
                tar='locscale-0.1.tgz')
 
