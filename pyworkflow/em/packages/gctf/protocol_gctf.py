@@ -290,8 +290,6 @@ class ProtGctf(em.ProtCTFMicrographs):
         ctffitFile = self._getCtfFitOutPath(micDir)
         pwutils.moveFile(micFnCtf, psdFile)
         pwutils.moveFile(micFnCtfFit, ctffitFile)
-        pwutils.cleanPath(self.getProject().getPath('micrographs_all_gctf.star'))
-
         # Let's notify that this micrograph has been processed
         # just creating an empty file at the end (after success or failure)
         open(doneFile, 'w')
