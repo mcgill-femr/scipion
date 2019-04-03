@@ -91,7 +91,7 @@ class ProtRelionExtractParticles(em.ProtExtractParticles, ProtRelionBase):
 
         form.addParam('backDiameter', params.IntParam, default=-1,
                       condition='doNormalize',
-                      label='Diameter background circle (px)',
+                      label='Diameter background circle before scaling (px)',
                       help='Particles will be normalized to a mean value of '
                            'zero and a standard-deviation of one for all '
                            'pixels in the background area. The background area '
@@ -223,17 +223,11 @@ class ProtRelionExtractParticles(em.ProtExtractParticles, ProtRelionBase):
             msg += self.methodsVar.get('')
             methodsMsgs.append(msg)
 
-            if self.doRemoveDust:
-                methodsMsgs.append("Removed dust over a threshold of %s."
-                                   % self.thresholdDust)
             if self.doInvert:
                 methodsMsgs.append("Inverted contrast on images.")
             if self._doDownsample():
                 methodsMsgs.append("Particles downsampled by a factor of %0.2f."
                                    % self.downFactor)
-            if self.doNormalize:
-                methodsMsgs.append("Normalization: %s."
-                                   % self.getEnumText('normType'))
 
         return methodsMsgs
 
@@ -270,6 +264,7 @@ class ProtRelionExtractParticles(em.ProtExtractParticles, ProtRelionBase):
         params += ' --coord_suffix .coords.star'
         params += ' --part_dir "." --extract '
         params += ' --extract_size %d' % self.boxSize
+        params += ' --set_angpix %f' % self._getNewSampling()
 
         if self.backDiameter <= 0:
             diameter = self.boxSize.get() * 0.75

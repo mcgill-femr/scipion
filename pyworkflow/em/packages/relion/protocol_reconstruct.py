@@ -1,8 +1,8 @@
 # **************************************************************************
 # *
-# * Authors:     J.M. De la Rosa Trevin (jmdelarosa@cnb.csic.es)
+# * Authors:     J.M. De la Rosa Trevin (delarosatrevin@scilifelab.se) [1]
 # *
-# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
+# * [1] SciLifeLab, Stockholm University
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -29,6 +29,8 @@ from pyworkflow.protocol.params import (PointerParam, FloatParam,
 from pyworkflow.em.data import Volume 
 from pyworkflow.em.protocol import ProtReconstruct3D
 from pyworkflow.em.constants import ALIGN_PROJ
+from .convert import isVersion2
+
 
 class ProtRelionReconstruct(ProtReconstruct3D):
     """    
@@ -37,9 +39,8 @@ class ProtRelionReconstruct(ProtReconstruct3D):
     and used as direction projections to reconstruct.
     """
     _label = 'reconstruct'
-    ##doContinue = False
-    
-    #--------------------------- DEFINE param functions --------------------------------------------   
+
+    # --------------- DEFINE param functions ----------------------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
 
@@ -78,7 +79,8 @@ class ProtRelionReconstruct(ProtReconstruct3D):
             --fom_weighting (false) : Weight particles according to their figure-of-merit (_rlnParticleFigureOfMerit)
                            --fsc () : FSC-curve for regularized reconstruction
                       """)
-        form.addSection('CTF')#, condition='doCTF')
+
+        form.addSection('CTF')
         form.addParam('doCTF', BooleanParam, default=False,
                        label='Apply CTF correction?',
                        help='Param *--ctf* in Relion.')
@@ -96,10 +98,9 @@ class ProtRelionReconstruct(ProtReconstruct3D):
         line.addParam('beamTiltX', FloatParam, default='0.0', label='X ')
         line.addParam('beamTiltY', FloatParam, default='0.0', label='Y ')            
         
-        form.addParallelSection(threads=2, mpi=0) 
-        #TODO: Add an option to allow the user to decide if copy binary files or not        
-            
-    #--------------------------- INSERT steps functions --------------------------------------------  
+        form.addParallelSection(threads=1, mpi=1)
+
+    # ----------------------- INSERT steps functions --------------------------
 
     def _insertAllSteps(self): 
         ##self._initialize()
@@ -124,7 +125,9 @@ class ProtRelionReconstruct(ProtReconstruct3D):
         params += ' --angpix %0.3f' % imgSet.getSamplingRate()
         params += ' --maxres %0.3f' % self.maxRes.get()
         params += ' --pad %0.3f' % self.pad.get()
-        params += ' --j %d' % self.numberOfThreads.get()
+
+        if self.numberOfThreads > 1 and isVersion2():
+            params += ' --j %d' % self.numberOfThreads
         
         #TODO Test that the CTF part is working
         if self.doCTF:
@@ -144,7 +147,7 @@ class ProtRelionReconstruct(ProtReconstruct3D):
 
         self._insertFunctionStep('reconstructStep', params)
 
-    #--------------------------- STEPS functions --------------------------------------------
+    # --------------------------- STEPS functions -----------------------------
     def reconstructStep(self, params):
         """ Create the input file in STAR format as expected by Relion.
         If the input particles comes from Relion, just link the file. 
@@ -158,7 +161,6 @@ class ProtRelionReconstruct(ProtReconstruct3D):
             'output_volume': self._getPath('output_volume.vol')
             }
         self._updateFilenamesDict(myDict)
-
 
     def convertInputStep(self):
         """ Create the input file in STAR format as expected by Relion.
@@ -180,7 +182,7 @@ class ProtRelionReconstruct(ProtReconstruct3D):
         self._defineOutputs(outputVolume=volume)
         self._defineSourceRelation(self.inputParticles, volume)
     
-    #--------------------------- INFO functions -------------------------------------------- 
+    # --------------------------- INFO functions -----------------------------
     def _validate(self):
         """ Should be overwritten in subclasses to
         return summary message for NORMAL EXECUTION. 
@@ -195,4 +197,4 @@ class ProtRelionReconstruct(ProtReconstruct3D):
         """
         return []
     
-    #--------------------------- UTILS functions --------------------------------------------
+    # --------------------------- UTILS functions -----------------------------

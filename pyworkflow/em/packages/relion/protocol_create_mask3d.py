@@ -27,10 +27,11 @@
 # **************************************************************************
 from pyworkflow import VERSION_1_1
 from pyworkflow.em import ProtCreateMask3D, VolumeMask
-from convert import convertBinaryVol, isVersion1
+from convert import convertBinaryVol, isVersion1, isVersion3
 import pyworkflow.protocol.params as params
 
 NOT_VERSION1 = not isVersion1()
+IS_V3 = isVersion3()
 
 AND = 0
 OR = 1
@@ -109,6 +110,9 @@ class ProtRelionCreateMask3D(ProtCreateMask3D):
                       label='Invert final mask',
                       help='Invert the final mask')
 
+        if IS_V3:
+            form.addParallelSection(threads=4, mpi=0)
+
     # --------------------------- INSERT steps functions ------------------------
     def _insertAllSteps(self):
         self.maskFile = self._getExtraPath('mask.mrc')
@@ -129,7 +133,8 @@ class ProtRelionCreateMask3D(ProtCreateMask3D):
         argsDict = {'--i ': self.inputVolFn,
                     '--ini_threshold ': self.threshold.get(),
                     '--extend_inimask ': self.extend.get(),
-                    '--width_soft_edge ': self.edge.get()
+                    '--width_soft_edge ': self.edge.get(),
+                    '--angpix ': self.inputVolume.get().getSamplingRate()
                     }
         if NOT_VERSION1 and self.initialLowPassFilterA.get() != -1:
             argsDict['--lowpass '] = self.initialLowPassFilterA.get()
@@ -145,6 +150,9 @@ class ProtRelionCreateMask3D(ProtCreateMask3D):
 
         if self.doInvert:
             args += ' --invert'
+
+        if IS_V3 and self.numberOfThreads > 1:
+            args += ' --j %d' % self.numberOfThreads
 
         self.runJob("relion_mask_create", args)
 
@@ -178,11 +186,8 @@ class ProtRelionCreateMask3D(ProtCreateMask3D):
             % self.threshold.get(),
             "*Mask processing*",
             "   Extend by %d pixels" % self.extend,
-            "   Apply soft edge of %d pixels" % self.edge,
-            "   Logical operation: %s" % self.getEnumText('operation')
-        ]
-        if self.doCompare:
-            messages.append()
+            "   Apply soft edge of %d pixels" % self.edge]
+
         if self.doInvert:
             messages.append("   Inverted")
 

@@ -27,12 +27,13 @@
 """
 This sub-package contains cryoMethods protocols and tools.
 """
+import os
 
 # from bibtex import _bibtex # Load bibtex dict with references
 _logo = "cryomethods_logo.png"
 _references = []
-import os
 from convert import getSupportedVersions, getVersion, getEnviron
+from protocol_auto_classifier import ProtAutoClassifier
 from protocol_volume_selector import ProtInitialVolumeSelector
 
 # Wizards

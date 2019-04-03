@@ -152,7 +152,7 @@ class ProtRelionPostprocess(ProtAnalysis3D):
                            'drops below this value\n'
                            'Relion param: *--randomize_at_fsc*')
         
-        form.addParallelSection(threads=0, mpi=0)
+        form.addParallelSection(threads=0, mpi=1)
     
     # -------------------------- INSERT steps functions ------------------------
     def _insertAllSteps(self):
@@ -206,7 +206,9 @@ class ProtRelionPostprocess(ProtAnalysis3D):
             errors.append("Missing MTF-file '%s'" % mtfFile)
 
         protRef = self.protRefine.get()
-        if not protRef.getFinalVolumes():
+        getFinalVolumes = getattr(protRef, 'getFinalVolumes', None)
+
+        if not callable(getFinalVolumes):
             errors.append('The input refinement protocol should implemented '
                           'getFinalVolumes function to return the final map'
                           'and half1 and half1 paths. ')

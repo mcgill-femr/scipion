@@ -45,53 +45,48 @@ Protocols SPA = [
 	]}
 	]},
 	{"tag": "section", "text": "Particles", "children": [
-	{"tag": "protocol_group", "text": "Picking", "openItem": "False", "children": [
-	{"tag": "protocol", "value": "EmanProtBoxing",   "text": "default"},
-	{"tag": "protocol", "value": "SparxGaussianProtPicking",   "text": "default"},
-	{"tag": "protocol", "value": "XmippProtParticlePicking",   "text": "default"},
-	{"tag": "protocol", "value": "XmippParticlePickingAutomatic",   "text": "default"},
-	{"tag": "protocol", "value": "XmippProtAssignmentTiltPair",   "text": "default"},
-	{"tag": "protocol", "value": "ProtRelionAutopickFom",   "text": "default"},
-	{"tag": "protocol", "value": "ProtRelionAutopick",   "text": "default"},
-	{"tag": "protocol", "value": "ProtRelion2Autopick",   "text": "default"},
-	{"tag": "protocol", "value": "BsoftProtParticlePicking",   "text": "default"},
-	{"tag": "protocol", "value": "DogPickerProtPicking",   "text": "default"},
-	{"tag": "protocol", "value": "ProtGemPicker", "text": "default"},
-	{"tag": "protocol", "value": "ProtGautomatch", "text": "default"},
-	{"tag": "protocol", "value": "XmippProtConsensusPicking",   "text": "default"},
-	{"tag": "protocol", "value": "ProtExtractCoords",   "text": "default"},
-	{"tag": "protocol", "value": "XmippProtParticlePickingPairs",  "text": "default"},
-	{"tag": "protocol", "value": "ProtLocalizedRecons", "text": "default"},
-	{"tag": "protocol", "value": "XmippProtReAlignClasses", "text": "default"}
-	]},
-	{"tag": "protocol_group", "text": "Extract", "openItem": "False", "children": [
-	{"tag": "protocol", "value": "XmippProtExtractParticles",   "text": "default"},
-	{"tag": "protocol", "value": "ProtRelionExtractParticles",   "text": "default"},
-	{"tag": "protocol", "value": "XmippProtScreenParticles", "text": "default"},
-	{"tag": "section", "text": "more", "openItem": "False", "children": [
-	{"tag": "protocol", "value": "XmippProtExtractMovieParticles", "text": "default"},
-	{"tag": "protocol", "value": "XmippProtExtractParticlesPairs", "text": "default"},
-	{"tag": "protocol", "value": "ProtRelionSortParticles", "text": "default"},
-	{"tag": "protocol", "value": "ProtLocalizedExtraction",  "text": "default"}
-	]}
-	]},
-	{"tag": "protocol_group", "text": "Preprocess", "openItem": "False", "children": [
-	{"tag": "protocol", "value": "XmippProtCropResizeParticles",   "text": "default"},
-	{"tag": "protocol", "value": "XmippProtCTFCorrectWiener2D",    "text": "default"},
-	{"tag": "protocol", "value": "XmippProtPreprocessParticles",   "text": "default"},
-	{"tag": "protocol", "value": "XmippProtEliminateEmptyParticles",  "text": "default"},
-	{"tag": "protocol", "value": "ProtRelionPreprocessParticles",  "text": "default"}
-	]},
-	{"tag": "protocol_group", "text": "Filter", "openItem": "False", "children": [
-	{"tag": "protocol", "value": "XmippProtFilterParticles",   "text": "default"},
-	{"tag": "protocol", "value": "XmippProtDenoiseParticles",  "text": "default"},
-	{"tag": "protocol", "value": "SpiderProtFilter",           "text": "default"}
-	]},
-	{"tag": "protocol_group", "text": "Mask", "openItem": "False", "children": [
-	{"tag": "protocol", "value": "XmippProtCreateMask2D",   "text": "default"},
-	{"tag": "protocol", "value": "XmippProtMaskParticles",  "text": "default"},
-	{"tag": "protocol", "value": "SpiderProtCustomMask",    "text": "default"}
-	]}
+		{"tag": "protocol_group", "text": "Picking", "openItem": "False", "children": [
+			{"tag": "protocol", "value": "EmanProtBoxing",   "text": "default"},
+			{"tag": "protocol", "value": "SparxGaussianProtPicking",   "text": "default"},
+			{"tag": "protocol", "value": "XmippProtParticlePicking",   "text": "default"},
+			{"tag": "protocol", "value": "XmippParticlePickingAutomatic",   "text": "default"},
+			{"tag": "protocol", "value": "XmippProtAssignmentTiltPair",   "text": "default"},
+			{"tag": "protocol", "value": "ProtRelion2Autopick",   "text": "default"},
+			{"tag": "protocol", "value": "ProtRelionAutopickLoG",   "text": "default"},
+			{"tag": "protocol", "value": "BsoftProtParticlePicking",   "text": "default"},
+			{"tag": "protocol", "value": "DogPickerProtPicking",   "text": "default"},
+		    {"tag": "protocol", "value": "ProtGemPicker", "text": "default"},
+		    {"tag": "protocol", "value": "ProtGautomatch", "text": "default"},
+			{"tag": "protocol", "value": "XmippProtConsensusPicking",   "text": "default"},
+			{"tag": "protocol", "value": "ProtExtractCoords",   "text": "default"}
+		]},
+		{"tag": "protocol_group", "text": "Extract", "openItem": "False", "children": [
+			{"tag": "protocol", "value": "XmippProtExtractParticles",   "text": "default"},
+			{"tag": "protocol", "value": "ProtRelionExtractParticles",   "text": "default"},
+			{"tag": "section", "text": "more", "openItem": "False", "children": [
+				{"tag": "protocol", "value": "XmippProtExtractMovieParticles", "text": "default"},
+				{"tag": "protocol", "value": "XmippProtExtractParticlesPairs", "text": "default"},
+				{"tag": "protocol", "value": "XmippProtScreenParticles", "text": "default"},
+                {"tag": "protocol", "value": "ProtRelionSortParticles", "text": "default"}
+			]}
+		]},
+		{"tag": "protocol_group", "text": "Preprocess", "openItem": "False", "children": [
+			{"tag": "protocol", "value": "XmippProtCropResizeParticles",   "text": "default"},
+			{"tag": "protocol", "value": "XmippProtCTFCorrectWiener2D",    "text": "default"},
+			{"tag": "protocol", "value": "XmippProtPreprocessParticles",   "text": "default"},
+			{"tag": "protocol", "value": "ProtRelionPreprocessParticles",  "text": "default"}
+		]},
+		{"tag": "protocol_group", "text": "Filter", "openItem": "False", "children": [
+			{"tag": "protocol", "value": "XmippProtFilterParticles",   "text": "default"},
+			{"tag": "protocol", "value": "XmippProtDenoiseParticles",  "text": "default"},
+			{"tag": "protocol", "value": "SpiderProtFilter",           "text": "default"}
+		]},
+		{"tag": "protocol_group", "text": "Mask", "openItem": "False", "children": [
+			{"tag": "protocol", "value": "XmippProtCreateMask2D",   "text": "default"},
+			{"tag": "protocol", "value": "XmippProtMaskParticles",  "text": "default"},
+			{"tag": "protocol", "value": "SpiderProtCustomMask",    "text": "default"}
+		]}
+
 	]},
 	{"tag": "section", "text": "2D", "children": [
 	{"tag": "protocol_group", "text": "Align", "openItem": "False", "children": [

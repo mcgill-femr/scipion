@@ -29,28 +29,18 @@ from os.path import relpath
 
 from pyworkflow.protocol.constants import STATUS_FINISHED, STEPS_SERIAL
 from pyworkflow.em.protocol import ProtExtractMovieParticles
-from pyworkflow.em.constants import ALIGN_PROJ
 from pyworkflow.utils.properties import Message
-from pyworkflow import VERSION_1_2
-import pyworkflow.protocol.params as params
 import pyworkflow.em as em
 import pyworkflow.em.metadata as md
 import pyworkflow.utils as pwutils
 
-from convert import (writeSetOfMovies, isVersion2,
-                     writeSetOfParticles, locationToRelion)
-from protocol_base import ProtRelionBase
+from convert import writeSetOfMovies, writeSetOfParticles, locationToRelion
 
 
 class ProtRelionExtractMovieParticles(ProtExtractMovieParticles,
                                       ProtRelionBase):
     """Protocol to extract particles from a set of coordinates"""
     _label = 'movie particles extraction'
-    _lastUpdateVersion = VERSION_1_2
-
-    @classmethod
-    def isDisabled(cls):
-        return not isVersion2()
 
     def __init__(self, **kwargs):
         ProtExtractMovieParticles.__init__(self, **kwargs)
@@ -98,7 +88,7 @@ class ProtRelionExtractMovieParticles(ProtExtractMovieParticles,
                                  'means that you will use until the '
                                  'last frame of the movie.')
         line.addParam('frame0', params.IntParam, label='First')
-        line.addParam('frameN',  params.IntParam, label='Last')
+        line.addParam('frameN', params.IntParam, label='Last')
 
         form.addParam('avgFrames', params.IntParam, default=1,
                       label='Average every so many frames',
@@ -235,7 +225,7 @@ class ProtRelionExtractMovieParticles(ProtExtractMovieParticles,
             # the order in which Relion is generating the movie-particles per stack
             # it start part 1, 2, N of frame 1, then 1, 2..N of frame 2 and so on.
             # If this way changes in the future, the following code could break.
-            # For the sake of performace, I will take the risk now.
+            # For the sake of performance, I will take the risk now.
             count = 0
             avgFrames = self.avgFrames.get()
 
@@ -293,11 +283,10 @@ class ProtRelionExtractMovieParticles(ProtExtractMovieParticles,
         self._defineSourceRelation(self.inputMovies, movieParticles)
         self._defineSourceRelation(self.inputParticles, movieParticles)
 
-            # -------------------------- INFO functions -------------------------------
+        # -------------------------- INFO functions -------------------------------
+
     def _validate(self):
         errors = []
-        
-        self.validatePackageVersion('RELION_HOME', errors)
         if self.doNormalize and self.backDiameter > self.boxSize:
             errors.append("Background diameter for normalization should "
                           "be equal or less than the box size.")
@@ -305,8 +294,7 @@ class ProtRelionExtractMovieParticles(ProtExtractMovieParticles,
         # check if movie frame shifts are all zeros
         movie = self.getInputMovies().getFirstItem()
         iniFrame, lastFrame, _ = movie.getFramesRange()
-        shiftsAligned = [0] * (lastFrame-iniFrame+1)
-
+        shiftsAligned = [0] * (lastFrame - iniFrame + 1)
         if movie.hasAlignment():
             shiftX, shiftY = movie.getAlignment().getShifts()
             if not (shiftX == shiftY == shiftsAligned):
@@ -314,25 +302,24 @@ class ProtRelionExtractMovieParticles(ProtExtractMovieParticles,
                               'should be already aligned.')
 
         return errors
-    
     def _citations(self):
         return ['Scheres2012b']
-        
+
     def _summary(self):
         summary = []
         summary.append("Particle box size: %d" % self.boxSize)
-        
+
         if not hasattr(self, 'outputParticles'):
-            summary.append("Output images not ready yet.") 
+            summary.append("Output images not ready yet.")
         else:
             summary.append("Movie particles extracted: %d" %
                            self.outputParticles.getSize())
             if self.avgFrames > 1:
                 summary.append("Averaged every %d frames." %
                                self.avgFrames.get())
-            
+
         return summary
-    
+
     def _methods(self):
         methodsMsgs = []
 
@@ -358,7 +345,7 @@ class ProtRelionExtractMovieParticles(ProtExtractMovieParticles,
         params += ' --part_dir %s' % self._getFileName('outputDir')
         params += ' --extract --extract_movies --movie_name movie'
         params += ' --avg_movie_frames %d' % self.avgFrames.get()
-        params += ' --first_movie_frame %d --last_movie_frame %d' %\
+        params += ' --first_movie_frame %d --last_movie_frame %d' % \
                   (self.frame0.get(), self.frameN.get())
         params += ' --extract_size %d' % self.boxSize
 
@@ -367,7 +354,7 @@ class ProtRelionExtractMovieParticles(ProtExtractMovieParticles,
         else:
             diameter = self.backDiameter.get()
 
-        params += ' --bg_radius %d' % int(diameter/2)
+        params += ' --bg_radius %d' % int(diameter / 2)
 
         if self.doInvert:
             params += ' --invert_contrast'
