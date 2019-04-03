@@ -37,7 +37,7 @@ from pyworkflow.utils.path import (createLink, cleanPath, copyFile,
                                    replaceBaseExt, getExt, removeExt)
 import pyworkflow.em as em
 import pyworkflow.em.metadata as md
-from pyworkflow.em.packages.relion.constants import V2_0, V2_1
+from pyworkflow.em.packages.relion.constants import V2_0, V2_1, V3_0
 
 # This dictionary will be used to map
 # between CTFModel properties and Xmipp labels
@@ -130,10 +130,12 @@ def getEnviron():
     environ = Environ(os.environ)
 
     relionHome = os.environ[RELION_HOME]
+    xmippHome = os.environ['XMIPP_HOME']
     
-    binPath = join(relionHome, 'bin')
-    libPath = join(relionHome, 'lib') + ":" + join(relionHome, 'lib64')
-    
+    binPath = join(relionHome, 'bin') + ":" + join(xmippHome, 'bin')
+    libRelionPath = join(relionHome, 'lib') + ":" + join(relionHome, 'lib64')
+    libPath = libRelionPath + ":" + join(xmippHome, 'lib')
+
     if not binPath in environ['PATH']:
         environ.update({'PATH': binPath,
                         'LD_LIBRARY_PATH': libPath,
@@ -158,8 +160,12 @@ def isVersion2():
     return getVersion().startswith("2.")
 
 
+def isVersion3():
+    return getVersion().startswith("3.")
+
+
 def getSupportedVersions():
-    return [V2_0, V2_1]
+    return [V2_0, V2_1, V3_0]
 
 
 def locationToRelion(index, filename):
@@ -555,7 +561,7 @@ def rowToParticle(partRow, **kwargs):
     
     # copy particleId if available from row to particle
     if partRow.hasLabel(md.RLN_PARTICLE_RANDOM_SUBSET):
-        img._rln_halfId = Integer(partRow.getValue(md.RLN_PARTICLE_RANDOM_SUBSET))
+        img._rlnRandomSubset = Integer(partRow.getValue(md.RLN_PARTICLE_RANDOM_SUBSET))
     
     # Provide a hook to be used if something is needed to be 
     # done for special cases before converting image to row

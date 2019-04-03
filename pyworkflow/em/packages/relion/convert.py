@@ -309,7 +309,7 @@ def ctfModelToRow(ctfModel, ctfRow):
         ctfRow.setValue(md.RLN_CTF_PHASESHIFT, phaseShift)
 
     objectToRow(ctfModel, ctfRow, CTF_DICT, extraLabels=CTF_EXTRA_LABELS)
-    
+
 
 def rowToCtfModel(ctfRow):
     """ Create a CTFModel from a row of a meta """
@@ -323,7 +323,7 @@ def rowToCtfModel(ctfRow):
         setPsdFiles(ctfModel, ctfRow)
     else:
         ctfModel = None
-        
+
     return ctfModel
 
 
@@ -373,7 +373,7 @@ def alignmentToRow(alignment, alignmentRow, alignType):
 
     alignmentRow.setValue(md.RLN_ORIENT_ORIGIN_X, shifts[0])
     alignmentRow.setValue(md.RLN_ORIENT_ORIGIN_Y, shifts[1])
-    
+
     if is2D:
         angle = angles[0] + angles[2]
         alignmentRow.setValue(md.RLN_ORIENT_PSI, -angle)
@@ -577,8 +577,12 @@ def rowToParticle(partRow, particleClass=em.Particle, **kwargs):
     # copy particleId if available from row to particle
     if partRow.hasLabel(md.RLN_PARTICLE_ID):
         img._rlnParticleId = Integer(partRow.getValue(md.RLN_PARTICLE_ID))
-    
-    # Provide a hook to be used if something is needed to be 
+
+    # copy particleId if available from row to particle
+    if partRow.hasLabel(md.RLN_PARTICLE_RANDOM_SUBSET):
+        img._rlnRandomSubset = Integer(partRow.getValue(md.RLN_PARTICLE_RANDOM_SUBSET))
+
+    # Provide a hook to be used if something is needed to be
     # done for special cases before converting image to row
     postprocessImageRow = kwargs.get('postprocessImageRow', None)
     if postprocessImageRow:
@@ -640,7 +644,6 @@ def writeSetOfParticles(imgSet, starFile,
     if outputDir is not None:
         filesDict = convertBinaryFiles(imgSet, outputDir)
         kwargs['filesDict'] = filesDict
-
     partMd = md.MetaData()
     setOfImagesToMd(imgSet, partMd, particleToRow, **kwargs)
     
@@ -709,6 +712,11 @@ def micrographToRow(mic, micRow, **kwargs):
     """ Set labels values from Micrograph mic to md row. """
     imageToRow(mic, micRow, imgLabel=md.RLN_MICROGRAPH_NAME, **kwargs)
 
+
+def movieToRow(movie, movieRow, **kwargs):
+    """ Set labels values from movie to md row. """
+    imageToRow(movie, movieRow, imgLabel=md.RLN_MICROGRAPH_MOVIE_NAME, **kwargs)
+
     
 def writeSetOfMicrographs(micSet, starFile, **kwargs):
     """ If 'outputDir' is in kwargs, the micrographs are
@@ -720,12 +728,8 @@ def writeSetOfMicrographs(micSet, starFile, **kwargs):
     micMd.write('%s@%s' % (blockName, starFile))
 
 
-def movieToRow(movie, movieRow, **kwargs):
     """ Set labels values from Movie to md row. """
     imageToRow(movie, movieRow, imgLabel=md.RLN_MICROGRAPH_MOVIE_NAME, **kwargs)
-
-
-def writeSetOfMovies(movieSet, starFile, **kwargs):
     movieMd = md.MetaData()
     setOfImagesToMd(movieSet, movieMd, movieToRow, **kwargs)
     blockName = kwargs.get('blockName', '')
@@ -973,14 +977,6 @@ def readCoordinates(mic, fileName, coordsSet):
         coord.setY(coord.getY())
         coord.setMicrograph(mic)
         coordsSet.append(coord)
-
-
-def writeSetOfCoordinates(coordSet, outputDir):
-    pass
-
-
-def writeCoordinates(mic, fileName):
-    pass
 
 
 def openStar(fn, extraLabels=False):

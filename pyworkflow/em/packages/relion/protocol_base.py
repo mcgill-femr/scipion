@@ -661,7 +661,7 @@ class ProtRelionBase(EMProtocol):
         
         form.addSection('Compute')
         self._defineComputeParams(form)
-        
+
         joinHalves = ("--low_resol_join_halves 40 (only not continue mode)"
                       if not self.IS_CLASSIFY else "")
 
@@ -681,9 +681,9 @@ class ProtRelionBase(EMProtocol):
                            "--dont_combine_weights_via_disc\n"
                            "--verb 1\n"
                            "--pad 2\n" + joinHalves)
-        
+
         form.addParallelSection(threads=1, mpi=3)
-    
+
     def addSymmetry(self, container):
         container.addParam('symmetryGroup', StringParam, default='c1',
                            label="Symmetry",

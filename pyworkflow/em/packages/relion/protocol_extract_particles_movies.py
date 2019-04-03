@@ -30,13 +30,11 @@ from os.path import relpath
 from pyworkflow.protocol.constants import STATUS_FINISHED, STEPS_SERIAL
 from pyworkflow.em.protocol import ProtExtractMovieParticles
 from pyworkflow.utils.properties import Message
-import pyworkflow.protocol.params as params
 import pyworkflow.em as em
 import pyworkflow.em.metadata as md
 import pyworkflow.utils as pwutils
 
 from convert import writeSetOfMovies, writeSetOfParticles, locationToRelion
-from protocol_base import ProtRelionBase
 
 
 class ProtRelionExtractMovieParticles(ProtExtractMovieParticles,
@@ -297,7 +295,6 @@ class ProtRelionExtractMovieParticles(ProtExtractMovieParticles,
         movie = self.getInputMovies().getFirstItem()
         iniFrame, lastFrame, _ = movie.getFramesRange()
         shiftsAligned = [0] * (lastFrame - iniFrame + 1)
-
         if movie.hasAlignment():
             shiftX, shiftY = movie.getAlignment().getShifts()
             if not (shiftX == shiftY == shiftsAligned):
@@ -305,7 +302,6 @@ class ProtRelionExtractMovieParticles(ProtExtractMovieParticles,
                               'should be already aligned.')
 
         return errors
-
     def _citations(self):
         return ['Scheres2012b']
 
