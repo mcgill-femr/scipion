@@ -23,7 +23,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+"""
+This module contains the protocol for 3d refinement with Relion.
+"""
 import pyworkflow.em as em
 import pyworkflow.em.metadata as md
 from pyworkflow.em.data import Volume, FSC
@@ -93,36 +95,7 @@ leads to objective and high-quality results.
 
     # -------------------------- STEPS functions ------------------------------
     def createOutputStep(self):
-        
-        if not self.realignMovieFrames:
-            imgSet = self._getInputParticles()
-            vol = Volume()
-            vol.setFileName(self._getExtraPath('relion_class001.mrc'))
-            vol.setSamplingRate(imgSet.getSamplingRate())
-            half1 = self._getFileName("final_half1_volume", ref3d=1)
-            half2 = self._getFileName("final_half2_volume", ref3d=1)
-            vol.setHalfMaps([half1, half2])
-            
-            outImgSet = self._createSetOfParticles()
-            outImgSet.copyInfo(imgSet)
-            self._fillDataFromIter(outImgSet, self._lastIter())
-
-            self._defineOutputs(outputVolume=vol)
-            self._defineSourceRelation(self.inputParticles, vol)
-            self._defineOutputs(outputParticles=outImgSet)
-            self._defineTransformRelation(self.inputParticles, outImgSet)
-
-            fsc = FSC(objLabel=self.getRunName())
-            blockName = 'model_class_%d@' % 1
-            fn = blockName + self._getExtraPath("relion_model.star")
-            mData = md.MetaData(fn)
-            fsc.loadFromMd(mData,
-                           md.RLN_RESOLUTION,
-                           md.RLN_MLMODEL_FSC_HALVES_REF)
-            self._defineOutputs(outputFSC=fsc)
-            self._defineSourceRelation(vol, fsc)
-
-        else:
+        if not self.IS_V3 and self.realignMovieFrames:
             movieSet = self.inputMovieParticles.get()
             if self.movieIncludeRotSearch:
                 vol = Volume()
@@ -150,6 +123,33 @@ leads to objective and high-quality results.
             self._defineOutputs(outputParticles=outMovieSet)
             self._defineTransformRelation(self.inputParticles, outMovieSet)
             self._defineTransformRelation(self.inputMovieParticles, outMovieSet)
+        else:
+            imgSet = self._getInputParticles()
+            vol = Volume()
+            vol.setFileName(self._getExtraPath('relion_class001.mrc'))
+            vol.setSamplingRate(imgSet.getSamplingRate())
+            half1 = self._getFileName("final_half1_volume", ref3d=1)
+            half2 = self._getFileName("final_half2_volume", ref3d=1)
+            vol.setHalfMaps([half1, half2])
+
+            outImgSet = self._createSetOfParticles()
+            outImgSet.copyInfo(imgSet)
+            self._fillDataFromIter(outImgSet, self._lastIter())
+
+            self._defineOutputs(outputVolume=vol)
+            self._defineSourceRelation(self.inputParticles, vol)
+            self._defineOutputs(outputParticles=outImgSet)
+            self._defineTransformRelation(self.inputParticles, outImgSet)
+
+            fsc = FSC(objLabel=self.getRunName())
+            blockName = 'model_class_%d@' % 1
+            fn = blockName + self._getExtraPath("relion_model.star")
+            mData = md.MetaData(fn)
+            fsc.loadFromMd(mData,
+                           md.RLN_RESOLUTION,
+                           md.RLN_MLMODEL_FSC_HALVES_REF)
+            self._defineOutputs(outputFSC=fsc)
+            self._defineSourceRelation(vol, fsc)
 
     # -------------------------- INFO functions -------------------------------
     def _validateNormal(self):
@@ -157,16 +157,15 @@ leads to objective and high-quality results.
         return summary message for NORMAL EXECUTION. 
         """
         errors = []
-        # We we scale the input volume to have the same size as the particles...
+        # JMRT: We scale the input volume and mask if need to
+        # have the same size as the particles, so we do not longer need
+        # to validate for dimensions matching
         # so no need to validate the following
-        # self._validateDim(self._getInputParticles(), self.referenceVolume.get(),
-        #                   errors, 'Input particles', 'Reference volume')
 
-        if isVersion2() and self.IS_3D:
+        if self.IS_3D:
             if self.solventFscMask and not self.referenceMask.get():
                 errors.append('When using solvent-corrected FSCs, '
                               'please provide a reference mask.')
-
         return errors
     
     def _validateContinue(self):
@@ -235,7 +234,7 @@ leads to objective and high-quality results.
                          updateItemCallback=self._createItemMatrix,
                          itemDataIterator=md.iterRows(outImgsFn,
                                                       sortByLabel=md.RLN_IMAGE_ID))
-    
+
     def _createItemMatrix(self, particle, row):
         createItemMatrix(particle, row, align=ALIGN_PROJ)
         setRelionAttributes(particle, row, md.RLN_PARTICLE_RANDOM_SUBSET)
@@ -245,7 +244,8 @@ leads to objective and high-quality results.
 
     def getFinalVolumes(self):
         """ Implemented from base class to return the final and half-maps
-        filenames. """
+        filenames.
+        """
         self._createFilenameTemplates()
         return [self._getFileName('finalvolume', ref3d=1),
                 self._getFileName('final_half1_volume', ref3d=1),

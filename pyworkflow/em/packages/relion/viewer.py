@@ -1709,10 +1709,10 @@ class RelionLocalResViewer(ProtocolViewer):
         fnVol = os.path.abspath(self.protocol._getFileName('outputVolume'))
 
         fhCmd.write("background solid white\n")
-        
+
         fhCmd.write("open %s\n" % fnVol)
         fhCmd.write("open %s\n" % (imageFile))
-        
+
         sampRate = self.protocol.outputVolume.getSamplingRate()
         fhCmd.write("volume #0 voxelSize %s\n" % (str(sampRate)))
         fhCmd.write("volume #1 voxelSize %s\n" % (str(sampRate)))

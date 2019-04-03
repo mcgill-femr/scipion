@@ -111,7 +111,7 @@ def getVersion():
 
 
 def getSupportedVersions():
-    return ['1.1.0', '1.2.0']
+    return ['1.1.0', '1.2.0', '1.2.1']
 
 
 def getSupportedRelionVersions():

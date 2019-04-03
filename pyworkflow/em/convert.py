@@ -349,7 +349,7 @@ class ImageHandler(object):
         self._img.inplaceMultiply(-1)
         # Write to output
         self._img.write(self._convertToLocation(outputObj))
-    
+
     def __runXmippProgram(self, program, args):
         """ Internal shortcut function to launch a Xmipp program. """
         import pyworkflow.em.packages.xmipp3 as xmipp3
@@ -389,19 +389,31 @@ class ImageHandler(object):
                                '-i %s -o %s --type gaussian %f %f'
                                % (inputFile, outputFile, std, avg))
 
-    def truncateMask(self, inputFile, outputFile):
-        """ Forces the values of a mask to be between 0 and 1
+    def truncateMask(self, inputFile, outputFile, newDim=None):
+        """ Forces the values of a mask to be between 0 and 1.
+        Additionally, the output mask can be scaled to a new dimension.
+
         Params:
             inputFile: the filename of the input either image or volume
             outputFile: the filename of the output either image or volume
+            newDim: scale the output Mask to a new dimension if not None
         """
+        if inputFile.endswith('.mrc'):
+            inputFile += ':mrc'
+
+        ioStr = '-i %s -o %s' % (inputFile, outputFile)
+
+        if newDim:
+            self.__runXmippProgram('xmipp_image_resize',
+                                   '%s --dim %d' % (ioStr, newDim))
+            ioStr = '-i %s' % outputFile
         self.__runXmippProgram('xmipp_transform_threshold',
-                               '-i %s -o %s --select below 0 --substitute '
-                               'value 0' % (inputFile, outputFile))
+                               '%s --select below 0 --substitute '
+                               'value 0' % ioStr)
         
         self.__runXmippProgram('xmipp_transform_threshold',
                                '-i %s --select above 1 --substitute '
-                               'value 1' % (outputFile))
+                               'value 1' % outputFile)
     
     def isImageFile(self, imgFn):
         """ Check if imgFn has an image extension. The function
@@ -451,6 +463,13 @@ class ImageHandler(object):
         
         return fn
 
+    @classmethod
+    def removeFileType(cls, fileName):
+        # Remove filename format specification such as :mrc, :mrcs or :ems
+        if ':' in fileName:
+            fileName = fileName.split(':')[0]
+        return fileName
+
     def scaleFourier(self, inputFn, outputFn, scaleFactor):
         """ Scale an image by cropping in Fourier space. """
         # TODO: Avoid using xmipp program for this
@@ -462,12 +481,14 @@ class ImageHandler(object):
 DT_FLOAT = ImageHandler.DT_FLOAT
 
 
+#TODO: use biopython and move this fuction to convert_Atom_struct
 def downloadPdb(pdbId, pdbFile, log=None):
     pdbGz = pdbFile + ".gz"
     result = (__downloadPdb(pdbId, pdbGz, log) and 
               __unzipPdb(pdbGz, pdbFile, log))
     return result
     
+#TODO: use biopython and move this fuction to convert_Atom_struct
 def __downloadPdb(pdbId, pdbGz, log):
     import ftplib
     """Download a pdb file given its id. """
@@ -475,9 +496,9 @@ def __downloadPdb(pdbId, pdbGz, log):
         log.info("File to download and unzip: %s" % pdbGz)
     
     pdborgHostname = "ftp.wwpdb.org"
-    pdborgDirectory = "/pub/pdb/data/structures/all/pdb/"
-    prefix = "pdb"
-    suffix = ".ent.gz"
+    pdborgDirectory = "/pub/pdb/data/structures/all/mmCIF/"
+    prefix = ""  # use pdb for PDB and null for mmcif
+    suffix = ".cif.gz"
     success = True
     # Log into serverhttp://www.rcsb.org/pdb/files/2MP1.pdb.gz
     ftp = ftplib.FTP()

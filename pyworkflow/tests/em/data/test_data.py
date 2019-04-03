@@ -11,7 +11,6 @@ import pyworkflow.em.metadata as md
 from pyworkflow.em.convert import ImageHandler, DT_FLOAT
 
 
-
 class TestFSC(unittest.TestCase):
     
     _labels = [SMALL, WEEKLY]
@@ -73,6 +72,23 @@ class TestImage(unittest.TestCase):
         self.assertEqual(volStk, vol1.getFileName())
 
         self.assertEqual('all_volumes.stk', vol1.getBaseName())
+
+    def testOrigin(self):
+        fn = self.mic1
+        mic = Micrograph()
+        mic.setFileName(fn)
+        mic.setSamplingRate(1.)
+
+        referenceT = Transform()
+        referenceT.setShifts(-4608.,-4720.,1)
+        mreferenceT = referenceT.getMatrix()
+
+        t = mic.getOrigin(True)
+        mt = t.getMatrix()
+        for i in range(4):
+            for j in range(4):
+                self.assertAlmostEquals(mt[i][j],mreferenceT[i][j],delta=0.5)
+
 
 
 class TestImageHandler(unittest.TestCase):
@@ -144,7 +160,6 @@ class TestImageHandler(unittest.TestCase):
         # Clean up tmp files
         pwutils.cleanPath(outFn)
 
-
     def test_readCompressedTIF(self):
         """ Check we can read tif files
         """
@@ -195,6 +210,21 @@ class TestImageHandler(unittest.TestCase):
             print "Not cleaning output movie: ", outFn
         else:
             pwutils.cleanPath(outFn)
+
+    def test_truncateMask(self):
+        ih = ImageHandler()
+
+        maskFn = self.dataset.getFile('masks/mask.vol')
+        outFn = join('/tmp', 'mask.vol')
+
+        ih.truncateMask(maskFn, outFn, newDim=128)
+        EXPECTED_SIZE = (128, 128, 128, 1)
+
+        self.assertTrue(os.path.exists(outFn))
+        self.assertTrue(pwutils.getFileSize(outFn) > 0)
+        self.assertEqual(ih.getDimensions(outFn), EXPECTED_SIZE)
+
+        pwutils.cleanPath(outFn)
 
 
 class TestSetOfMicrographs(BaseTest):
