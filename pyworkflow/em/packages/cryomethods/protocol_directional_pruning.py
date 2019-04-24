@@ -496,9 +496,11 @@ class ProtDirectionalPruning(ProtAnalysis3D):
         mdData=xmipp.MetaData()
         mdClassesClass=xmipp.MetaData()
         mdBlocks=xmipp.MetaData()
+        mdCount=xmipp.MetaData()
+        mdClassCount=xmipp.MetaData()
 
         fnClassParticles = self._getPath('input_particles.xmd')
-        fnClassParticles2 = self._getPath('output_particles_pruned.xmd')
+        fnPrunedParticles = self._getPath('output_particles_pruned.xmd')
         mdClassesParticles.read(fnClassParticles)
 
         fnNeighbours = self._getExtraPath("neighbours.xmd")
@@ -537,14 +539,58 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                                         "-i %s_alignment.xmd --apply_transform" %
                                         fnAlignRoot, numberOfMpi=1)
 
+
                             # Construct output metadata
                             if exists(fnOut):
+
+                                fnClassCount= join(fnDir, "level_%02d//class_classes.xmd"%Nlevels)
+                                print(fnClassCount)
+                                mdCount.read(fnClassCount)
+                                CC=[]
+                                out=[]
+
+
                                 for i in range(self.directionalClasses.get()):
+
+
+                                    CC.append(
+                                        mdCount.getValue(xmipp.MDL_CLASS_COUNT,
+                                                           i + 1))
+
                                     objId = mdOut.addObject()
                                     mdOut.setValue(xmipp.MDL_REF, int(imgNo),
                                                    objId)
                                     mdOut.setValue(xmipp.MDL_IMAGE,
-                                                   "%d@%s"%(i+1,fnOut),objId)
+                                                   "%d@%s" % (i + 1, fnOut),
+                                                   objId)
+
+                                n = sum(CC)
+                                out = np.true_divide(CC ,n)
+                                lowest = out < self.thresholdValue.get()
+                                itemIdInput=[]
+                                for objId in mdClassesParticles:
+
+                                    itemIdInput.append(
+                                        mdClassesParticles.getValue(
+                                            xmipp.MDL_ITEM_ID, objId))
+
+                                for indx, block in enumerate(
+                                        xmipp.getBlocksInMetaDataFile(
+                                                fnClassCount)[2:]):
+                                    if lowest[indx]:
+
+                                        fnBlock = '%s@%s' % (block, fnClassCount)
+                                        mdClassCount.read(fnBlock)
+                                        for objId in mdClassCount:
+
+                                            itemIdPart = mdClassCount.getValue(
+                                                xmipp.MDL_ITEM_ID, objId)
+                                            idx = itemIdInput.index(
+                                                itemIdPart) + 1
+                                            mdClassesParticles.setValue(
+                                                xmipp.MDL_ENABLED, -1, idx)
+
+
                         except:
                             print(
                                 "The classification failed, "
@@ -553,12 +599,12 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                                 "However, this classification does not "
                                 "hinder the protocol to continue")
 
-               # fnDirectional = self._getPath("directionalClasses.xmd")
-               # mdOut.write(fnDirectional)
+                            #fnDirectional = self._getPath("directionalClasses.xmd")
+                            #mdOut.write(fnDirectional)
 
-               # self.runJob("xmipp_metadata_utilities", "-i %s --set join %s ref" %
-                #         (fnDirectional, self._getExtraPath("gallery.doc")),
-                 #         numberOfMpi=1)
+                            #self.runJob("xmipp_metadata_utilities", "-i %s --set join %s ref" %
+                            #       (fnDirectional, self._getExtraPath("gallery.doc")),
+                            #         numberOfMpi=1)
 
             elif self.classMethod.get() == self.ML2D:
                 fnOut = join(fnDir,"class_")
@@ -628,11 +674,11 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                         print("However, this classification"
                                "does not hinder the protocol to continue")
 
-                    #fnDirectional = self._getPath("directionalClasses.xmd")
-                    #mdOut.write(fnDirectional)
-                    #self.runJob("xmipp_metadata_utilities", "-i %s --set join %s ref" %
-                     #   (fnDirectional, self._getExtraPath("gallery.doc")),
-                      #     numberOfMpi=1)
+                        #fnDirectional = self._getPath("directionalClasses.xmd")
+                        #mdOut.write(fnDirectional)
+                        #self.runJob("xmipp_metadata_utilities", "-i %s --set join %s ref" %
+                        #   (fnDirectional, self._getExtraPath("gallery.doc")),
+                        #     numberOfMpi=1)
 
 
             else:
@@ -648,123 +694,109 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                 print('fnBlock',fnBlock)
 
                 if getSize(fnBlock) > nop:
-                    readSetOfParticles(fnBlock, relPart)
-                    print(relPart)
+                    try:
+                        readSetOfParticles(fnBlock, relPart)
+                        print(relPart)
+
+                        if self.copyAlignment.get():
+                            alignType = relPart.getAlignment()
+                            alignType != em.ALIGN_NONE
+                        else:
+                            alignType = em.ALIGN_NONE
+
+                        alignToPrior =  getattr(self, 'alignmentAsPriors',
+                                                                True)
+                        fillRandomSubset =  getattr(self, 'fillRandomSubset', False)
+
+                        cryoConv.writeSetOfParticles(relPart,fnRelion,self._getExtraPath(),
+                                                     alignType=alignType,
+                                                     postprocessImageRow=self._postprocessParticleRow,
+                                                     fillRandomSubset=fillRandomSubset)
+
+                        if alignToPrior:
+                            mdParts = md.MetaData(fnRelion)
+                            self._copyAlignAsPriors(mdParts, alignType)
+                            mdParts.write(fnRelion)
+                        if self.doCtfManualGroups:
+                            self._splitInCTFGroups(fnRelion)
+
+                        fnOut = join(fnDir, "class_")
+                        print("SAAAA", fnOut)
+                        args = {}
+                        self._setNormalArgs(args)
+                        args['--i'] = fnRelion
+                        args['--o'] = fnOut
+                        self._setComputeArgs(args)
+
+                        params = ' '.join(['%s %s' % (k, str(v)) for k, v in args.iteritems()])
+
+                        self.runJob(self._getRelionProgram(), params)
+
+                        Rcd=[]
+
+                        it=self.numberOfIterations.get()
+                        if it < 10:
+                           model='_it00%d_'%it
+                        else:
+                            model = '_it0%d_' % it
+
+                        fnModel= (fnOut +model+'model.star')
+
+                        block=md.getBlocksInMetaDataFile(fnModel)[1]
+                        fnBlock = "%s@%s" % (block, fnModel)
+
+                        mdBlocks.read(fnBlock)
+                        fnData = (fnOut + model + 'data.star')
+                        fnClass= (fnOut + model + 'classes.mrcs')
+
+                        for objId in mdBlocks:
+                           ClsDist=mdBlocks.getValue(xmipp.RLN_MLMODEL_PDF_CLASS,objId)
+
+                           Rcd.append(ClsDist)
+                        print(Rcd)
+                        for x in Rcd:
+                            if  x > self.thresholdValue.get():
+                                print(x)
+                                w = Rcd.index(x) + 1
+                                print(w)
+                        ImageId = []
+                        mdData.read(fnData)
+                        itemIdInput = []
+
+                        for objId in mdClassesParticles:
+                            itemIdInput.append(
+                                mdClassesParticles.getValue(xmipp.MDL_ITEM_ID,
+                                                            objId))
+
+                        for objId in mdData:
+                            ClsNr=mdData.getValue(xmipp.RLN_PARTICLE_CLASS,objId)
+                            if w != ClsNr:
+                               ImageId =mdData.getValue(xmipp.RLN_IMAGE_ID,objId)
+                               idx = itemIdInput.index(ImageId)+1
+                               mdClassesParticles.setValue(xmipp.MDL_ENABLED, -1,
+                                                           idx)
 
 
 
-                    if self.copyAlignment.get():
-                        alignType = relPart.getAlignment()
-                        alignType != em.ALIGN_NONE
-                    else:
-                        alignType = em.ALIGN_NONE
+                        if exists(fnOut):
+                            for i in range(self.directionalClasses.get()):
+                                objId = mdOut.addObject()
+                                mdOut.setValue(xmipp.MDL_REF, int(imgNo),
+                                               objId)
+                                mdOut.setValue(xmipp.MDL_IMAGE,
+                                               "%d@%s" % (i + 1, fnClass), objId)
+                    except:
+                        print("The classification failed,"
+                              "probably because of a low number of images.")
+                        print("However, this classification"
+                              "does not hinder the protocol to continue")
+                        #fnDirectional = self._getPath("directionalClasses.xmd")
+                        #mdOut.write(fnDirectional)
+                        #self.runJob("xmipp_metadata_utilities", "-i %s --set join %s ref" %
+                        #           (fnDirectional, self._getExtraPath("gallery.doc")),
+                        #          numberOfMpi=1)
 
-                    alignToPrior =  getattr(self, 'alignmentAsPriors',
-                                                            True)
-                    fillRandomSubset =  getattr(self, 'fillRandomSubset', False)
-
-                    cryoConv.writeSetOfParticles(relPart,fnRelion,self._getExtraPath(),
-                                                 alignType=alignType,
-                                                 postprocessImageRow=self._postprocessParticleRow,
-                                                 fillRandomSubset=fillRandomSubset)
-
-                    if alignToPrior:
-                        mdParts = md.MetaData(fnRelion)
-                        self._copyAlignAsPriors(mdParts, alignType)
-                        mdParts.write(fnRelion)
-                    if self.doCtfManualGroups:
-                        self._splitInCTFGroups(fnRelion)
-
-                    fnOut = join(fnDir, "class_")
-                    print("SAAAA", fnOut)
-                    args = {}
-                    self._setNormalArgs(args)
-                    args['--i'] = fnRelion
-                    args['--o'] = fnOut
-                    self._setComputeArgs(args)
-
-                    params = ' '.join(['%s %s' % (k, str(v)) for k, v in args.iteritems()])
-
-                    self.runJob(self._getRelionProgram(), params)
-
-
-
-                    Rcd=[]
-
-                    it=self.numberOfIterations.get()
-                    if it < 10:
-                       model='_it00%d_'%it
-                    else:
-                        model = '_it0%d_' % it
-
-                    fnModel= (fnOut +model+'model.star')
-
-                    block=md.getBlocksInMetaDataFile(fnModel)[1]
-                    fnBlock = "%s@%s" % (block, fnModel)
-
-                    mdBlocks.read(fnBlock)
-                    fnData = (fnOut + model + 'data.star')
-                    fnClass= (fnOut + model + 'classes.mrcs')
-
-
-
-
-                    for objId in mdBlocks:
-                       ClsDist=mdBlocks.getValue(xmipp.RLN_MLMODEL_PDF_CLASS,objId)
-
-                       Rcd.append(ClsDist)
-                    print(Rcd)
-                    for x in Rcd:
-                        if  x > self.thresholdValue.get():
-                            print(x)
-                            w = Rcd.index(x) + 1
-                            print(w)
-                    ImageId = []
-                    mdData.read(fnData)
-                    itemIdInput = []
-
-                    for objId in mdClassesParticles:
-                        itemIdInput.append(
-                            mdClassesParticles.getValue(xmipp.MDL_ITEM_ID,
-                                                        objId))
-
-                    for objId in mdData:
-                        ClsNr=mdData.getValue(xmipp.RLN_PARTICLE_CLASS,objId)
-                        if w != ClsNr:
-                           ImageId =mdData.getValue(xmipp.RLN_IMAGE_ID,objId)
-                           #int(ImageId)
-                           idx = itemIdInput.index(ImageId)+1
-                           mdClassesParticles.setValue(xmipp.MDL_ENABLED, -1,
-                                                       idx)
-
-
-
-                    if exists(fnOut):
-                        for i in range(self.directionalClasses.get()):
-                            objId = mdOut.addObject()
-                            mdOut.setValue(xmipp.MDL_REF, int(imgNo),
-                                           objId)
-                            mdOut.setValue(xmipp.MDL_IMAGE,
-                                           "%d@%s" % (i + 1, fnClass), objId)
-
-
-
-
-
-
-
-
-
-
-            #fnDirectional = self._getPath("directionalClasses.xmd")
-            #mdOut.write(fnDirectional)
-            #self.runJob("xmipp_metadata_utilities", "-i %s --set join %s ref" %
-             #           (fnDirectional, self._getExtraPath("gallery.doc")),
-              #          numberOfMpi=1)
-
-
-
-        mdClassesParticles.write(fnClassParticles2)
+        mdClassesParticles.write(fnPrunedParticles)
 
 
 
@@ -773,39 +805,51 @@ class ProtDirectionalPruning(ProtAnalysis3D):
 
     def refineAnglesStep(self):
       if self.classMethod.get() == self.CL2D:
-        fnDirectional = self._getPath("directionalClasses.xmd")
-        newTs = self.targetResolution.get()*0.4
-        self.runJob("xmipp_angular_continuous_assign2","-i %s --ref %s "
-                                                   "--max_resolution %f "
-                                                   "--sampling %f "
-                                                   "--optimizeAngles "
-                                                   "--optimizeShift"% \
-                (fnDirectional,self._getExtraPath("volume.vol"),
-                 self.targetResolution.get(),newTs))
+          pass
+            #fnDirectional = self._getPath("directionalClasses.xmd")
+            #newTs = self.targetResolution.get()*0.4
+            #self.runJob("xmipp_angular_continuous_assign2","-i %s --ref %s "
+            #                                          "--max_resolution %f "
+            #                                         "--sampling %f "
+            #                                        "--optimizeAngles "
+            #                                       "--optimizeShift"% \
+            #   (fnDirectional,self._getExtraPath("volume.vol"),
+            #   self.targetResolution.get(),newTs))
 
 
 
 
 
     def cleanStep(self):
-        pass
-        #cleanPath(self._getExtraPath('scaled_particles.stk'))
-        #cleanPath(self._getExtraPath('scaled_particles.xmd'))
-        #cleanPath(self._getExtraPath('volume.vol'))
-        #cleanPattern(self._getExtraPath("direction_*/level_00"))
+
+        cleanPath(self._getExtraPath('scaled_particles.stk'))
+        cleanPath(self._getExtraPath('scaled_particles.xmd'))
+        cleanPath(self._getExtraPath('volume.vol'))
+        cleanPattern(self._getExtraPath("direction_*/level_00"))
 
     def createOutputStep(self, numeroFeo):
         fnDirectional= self._getPath("directionalClasses.xmd")
+        fnPrunedParticles = self._getPath('output_particles_pruned.xmd')
 
         if exists(fnDirectional):
             imgSetOut = self._createSetOfParticles()
-            imgSetOut.setSamplingRate(self.targetResolution.get())
+            imgSetOut.setSamplingRate(self.targetResolution.get()*0.4)
             imgSetOut.setAlignmentProj()
             readSetOfParticles(fnDirectional,imgSetOut)
             print(fnDirectional)
             self._defineOutputs(outputParticles=imgSetOut)
             self._defineSourceRelation(self.inputParticles,imgSetOut)
             self._defineSourceRelation(self.inputVolume, imgSetOut)
+        else:
+            imgSetOut = self._createSetOfParticles()
+            imgSetOut.setSamplingRate(self.targetResolution.get())
+            imgSetOut.setAlignmentProj()
+            readSetOfParticles(fnPrunedParticles, imgSetOut)
+            print(fnPrunedParticles)
+            self._defineOutputs(outputParticles=imgSetOut)
+            self._defineSourceRelation(self.inputParticles, imgSetOut)
+            self._defineSourceRelation(self.inputVolume, imgSetOut)
+
 
     #--------------------------- INFO functions --------------------------------
     def _validate(self):
