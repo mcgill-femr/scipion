@@ -691,7 +691,7 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                 fnRelion = self._getExtraPath('relion_%s.star'% imgNo)
 
                 fnBlock = "%s@%s" % (block, fnNeighbours)
-                print('fnBlock',fnBlock)
+
 
                 if getSize(fnBlock) > nop:
                     try:
@@ -753,12 +753,12 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                            ClsDist=mdBlocks.getValue(xmipp.RLN_MLMODEL_PDF_CLASS,objId)
 
                            Rcd.append(ClsDist)
-                        print(Rcd)
+
                         for x in Rcd:
                             if  x > self.thresholdValue.get():
-                                print(x)
+
                                 w = Rcd.index(x) + 1
-                                print(w)
+
                         ImageId = []
                         mdData.read(fnData)
                         itemIdInput = []
@@ -821,11 +821,12 @@ class ProtDirectionalPruning(ProtAnalysis3D):
 
 
     def cleanStep(self):
+        pass
 
-        cleanPath(self._getExtraPath('scaled_particles.stk'))
-        cleanPath(self._getExtraPath('scaled_particles.xmd'))
-        cleanPath(self._getExtraPath('volume.vol'))
-        cleanPattern(self._getExtraPath("direction_*/level_00"))
+        #cleanPath(self._getExtraPath('scaled_particles.stk'))
+        #cleanPath(self._getExtraPath('scaled_particles.xmd'))
+        #cleanPath(self._getExtraPath('volume.vol'))
+        #cleanPattern(self._getExtraPath("direction_*/level_00"))
 
     def createOutputStep(self, numeroFeo):
         fnDirectional= self._getPath("directionalClasses.xmd")
@@ -842,7 +843,7 @@ class ProtDirectionalPruning(ProtAnalysis3D):
             self._defineSourceRelation(self.inputVolume, imgSetOut)
         else:
             imgSetOut = self._createSetOfParticles()
-            imgSetOut.setSamplingRate(self.targetResolution.get())
+            imgSetOut.setSamplingRate(self.inputParticles.get().getSamplingRate())
             imgSetOut.setAlignmentProj()
             readSetOfParticles(fnPrunedParticles, imgSetOut)
             print(fnPrunedParticles)
