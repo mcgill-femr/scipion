@@ -41,7 +41,8 @@ import math
 import numpy as np
 import pyworkflow.em as em
 import pyworkflow.em.metadata as md
-from collections import OrderedDict
+
+import pyworkflow.object as pwobj
 
 class ProtDirectionalPruning(ProtAnalysis3D):
     """    
@@ -53,6 +54,9 @@ class ProtDirectionalPruning(ProtAnalysis3D):
     CL2D = 0
     ML2D = 1
     RL2D = 2
+
+
+
 
     def __init__(self, *args, **kwargs):
         ProtAnalysis3D.__init__(self, *args, **kwargs)
@@ -76,6 +80,7 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                            '/Xmipp/index.php/Conventions_%26_'
                            'File_formats#Symmetry]] page for a description of '
                            'the symmetry format accepted by Xmipp')
+        form.addSection(label='Pruning')
         form.addParam('targetResolution', FloatParam, default=10,
                       label='Target resolution (A)', expertLevel=LEVEL_ADVANCED)
         form.addParam('angularSampling', FloatParam, default=5,
@@ -88,10 +93,7 @@ class ProtDirectionalPruning(ProtAnalysis3D):
         form.addParam('maxShift', FloatParam, default=15,
                       label='Maximum shift', expertLevel=LEVEL_ADVANCED,
                       help="In pixels")
-        form.addParam('refineAngles', BooleanParam, default=True,
-                      label='Refine angles', expertLevel=LEVEL_ADVANCED,
-                      help="Refine the angles of the classes using a"
-                           " continuous angular assignment")
+
         form.addParam('directionalClasses', IntParam, default=2,
                       label='Number of directional classes',
                       expertLevel=LEVEL_ADVANCED)
@@ -104,6 +106,12 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                       label='Number of CL2D iterations',
                       condition="classMethod==0" ,
                       expertLevel=LEVEL_ADVANCED)
+        form.addParam('refineAngles', BooleanParam, default=True,
+                      label='Refine angles',
+                      condition="classMethod==0",
+                      expertLevel=LEVEL_ADVANCED,
+                      help="Refine the angles of the classes using a"
+                           " continuous angular assignment")
 
         form.addParam('maxIters', IntParam, default=100,
                       expertLevel=LEVEL_ADVANCED,
@@ -121,7 +129,21 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                       label='Number of Particles',
                       help='minimum number of particles required to do 2D'
                            'Classification')
-
+        form.addParam('numberOfIterations', IntParam, default=25,
+                      label='Number of iterations',
+                      condition='classMethod==2',
+                      help='Number of iterations to be performed. Note '
+                           'that the current implementation does NOT '
+                           'comprise a convergence criterium. Therefore, '
+                           'the calculations will need to be stopped '
+                           'by the user if further iterations do not yield '
+                           'improvements in resolution or classes. '
+                           'If continue option is True, you going to do '
+                           'this number of new iterations (e.g. if '
+                           '*Continue from iteration* is set 3 and this '
+                           'param is set 25, the final iteration of the '
+                           'protocol will be the 28th.')
+        form.addSection(label='Optimisation')
         form.addParam('regularisationParamT', IntParam,
                       default=2,
                       label='Regularisation parameter T',
@@ -140,23 +162,49 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                            'Too small values yield too-low resolution '
                            'structures; too high values result in '
                            'over-estimated resolutions and overfitting.')
-        form.addParam('numberOfIterations', IntParam, default=25,
-                      label='Number of iterations',
+        form.addParam('copyAlignment', BooleanParam, default=True,
+                      label='Consider previous alignment?',
                       condition='classMethod==2',
-                      help='Number of iterations to be performed. Note '
-                           'that the current implementation does NOT '
-                           'comprise a convergence criterium. Therefore, '
-                           'the calculations will need to be stopped '
-                           'by the user if further iterations do not yield '
-                           'improvements in resolution or classes. '
-                           'If continue option is True, you going to do '
-                           'this number of new iterations (e.g. if '
-                           '*Continue from iteration* is set 3 and this '
-                           'param is set 25, the final iteration of the '
-                           'protocol will be the 28th.')
+
+                      help='If set to Yes, then alignment information from'
+                           ' input particles will be considered.')
+        form.addParam('alignmentAsPriors', BooleanParam, default=False,
+                      condition='classMethod==2',
+
+                      expertLevel=LEVEL_ADVANCED,
+                      label='Consider alignment as priors?',
+                      help='If set to Yes, then alignment information from '
+                           'input particles will be considered as PRIORS. This '
+                           'option is mandatory if you want to do local '
+                           'searches')
+        form.addParam('fillRandomSubset', BooleanParam, default=False,
+                      condition='classMethod==2',
+
+                      expertLevel=LEVEL_ADVANCED,
+                      label='Consider random subset value?',
+                      help='If set to Yes, then random subset value '
+                           'of input particles will be put into the'
+                           'star file that is generated.')
+        form.addParam('maskDiameterA', IntParam, default=-1,
+                      condition='classMethod==2',
+                      label='Particle mask diameter (A)',
+                      help='The experimental images will be masked with a '
+                           'soft circular mask with this <diameter>. '
+                           'Make sure this diameter is not set too small '
+                           'because that may mask away part of the signal! If '
+                           'set to a value larger than the image size no '
+                           'masking will be performed.\n\n'
+                           'The same diameter will also be used for a '
+                           'spherical mask of the reference structures if no '
+                           'user-provided mask is specified.')
+        form.addSection(label='Sampling')
+        form.addParam('doImageAlignment', BooleanParam, default=True,
+                      label='Perform Image Alignment?',
+                      condition='classMethod==2',
+                      )
         form.addParam('inplaneAngularSamplingDeg', FloatParam, default=5,
                       label='In-plane angular sampling (deg)',
-                      condition='classMethod==2',
+                      condition='classMethod==2 and doImageAlignment',
 
                       help='The sampling rate for the in-plane rotation '
                            'angle (psi) in degrees.\n'
@@ -169,7 +217,7 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                            'automatically after that.')
         form.addParam('offsetSearchRangePix', FloatParam, default=5,
 
-                      condition='classMethod==2',
+                      condition='classMethod==2 and doImageAlignment',
                       label='Offset search range (pix)',
                       help='Probabilities will be calculated only for '
                            'translations in a circle with this radius (in '
@@ -179,13 +227,14 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                            'iteration.')
         form.addParam('offsetSearchStepPix', FloatParam, default=1.0,
 
-                      condition='classMethod==2',
+                      condition='classMethod==2 and doImageAlignment',
                       label='Offset search step (pix)',
                       help='Translations will be sampled with this step-size '
                            '(in pixels). Translational sampling is also done '
                            'using the adaptive approach. Therefore, if '
                            'adaptive=1, the translations will first be '
                            'evaluated on a 2x coarser grid.')
+        form.addSection(label='Compute')
         form.addParam('allParticlesRam', BooleanParam, default=False,
                       label='Pre-read all particles into RAM?',
                       condition='classMethod==2',
@@ -211,7 +260,7 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                            'iterations.')
         form.addParam('scratchDir', PathParam,
 
-                      condition='classMethod==2',
+                      condition='classMethod==2 and not allParticlesRam',
                       label='Copy particles to scratch directory: ',
                       help='If a directory is provided here, then the job '
                            'will create a sub-directory in it called '
@@ -250,7 +299,7 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                            'acceleration.')
         form.addParam('gpusToUse', StringParam, default='',
                       label='Which GPUs to use:',
-                      condition='classMethod==2',
+                      condition='classMethod==2 and doGpu',
                       help='This argument is not necessary. If left empty, '
                            'the job itself will try to allocate available '
                            'GPU resources. You can override the default '
@@ -287,6 +336,7 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                                'particularly metadata handling of disk '
                                'access, is a problem. It has a modest cost of '
                                'increased RAM usage.')
+        form.addSection(label='CTF')
         form.addParam('continueMsg', LabelParam, default=True,
 
                       condition='classMethod==2',
@@ -343,58 +393,22 @@ class ProtDirectionalPruning(ProtAnalysis3D):
         form.addParam('defocusRange', FloatParam, default=1000,
                       label='defocus range for group creation (in Angstroms)',
 
-                      condition='classMethod==2',
+                      condition='classMethod==2 and doCtfManualGroups',
                       help='Particles will be grouped by defocus.'
                            'This parameter is the bin for an histogram.'
                            'All particles assigned to a bin form a group')
         form.addParam('numParticles', FloatParam, default=10,
                       label='minimum size for defocus group',
 
-                      condition='classMethod==2',
+                      condition='classMethod==2 and doCtfManualGroups',
                       help='If defocus group is smaller than this value, '
                            'it will be expanded until number of particles '
                            'per defocus group is reached')
-        form.addParam('doImageAlignment', BooleanParam, default=True,
-                      label='Perform Image Alignment?',
-                      condition='classMethod==2',
-                      )
-        form.addParam('copyAlignment', BooleanParam, default=True,
-                      label='Consider previous alignment?',
-                      condition='classMethod==2',
 
-                      help='If set to Yes, then alignment information from'
-                           ' input particles will be considered.')
-        form.addParam('alignmentAsPriors', BooleanParam, default=False,
-                      condition='classMethod==2',
 
-                      expertLevel=LEVEL_ADVANCED,
-                      label='Consider alignment as priors?',
-                      help='If set to Yes, then alignment information from '
-                           'input particles will be considered as PRIORS. This '
-                           'option is mandatory if you want to do local '
-                           'searches')
-        form.addParam('fillRandomSubset', BooleanParam, default=False,
-                      condition='classMethod==2',
 
-                      expertLevel=LEVEL_ADVANCED,
-                      label='Consider random subset value?',
-                      help='If set to Yes, then random subset value '
-                           'of input particles will be put into the'
-                           'star file that is generated.')
-        form.addParam('maskDiameterA', IntParam, default=-1,
-                      condition='classMethod==2',
-                      label='Particle mask diameter (A)',
-                      help='The experimental images will be masked with a '
-                           'soft circular mask with this <diameter>. '
-                           'Make sure this diameter is not set too small '
-                           'because that may mask away part of the signal! If '
-                           'set to a value larger than the image size no '
-                           'masking will be performed.\n\n'
-                           'The same diameter will also be used for a '
-                           'spherical mask of the reference structures if no '
-                           'user-provided mask is specified.')
 
-        form.addParallelSection(threads=0, mpi=8)
+        form.addParallelSection(threads=1, mpi=3)
 
 
 
@@ -502,6 +516,7 @@ class ProtDirectionalPruning(ProtAnalysis3D):
         fnClassParticles = self._getPath('input_particles.xmd')
         fnPrunedParticles = self._getPath('output_particles_pruned.xmd')
         mdClassesParticles.read(fnClassParticles)
+
 
         fnNeighbours = self._getExtraPath("neighbours.xmd")
         fnGallery = self._getExtraPath("gallery.stk")
@@ -693,10 +708,12 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                 fnBlock = "%s@%s" % (block, fnNeighbours)
 
 
+
+
                 if getSize(fnBlock) > nop:
                     try:
                         readSetOfParticles(fnBlock, relPart)
-                        print(relPart)
+
 
                         if self.copyAlignment.get():
                             alignType = relPart.getAlignment()
@@ -803,6 +820,10 @@ class ProtDirectionalPruning(ProtAnalysis3D):
 
 
 
+
+
+
+
     def refineAnglesStep(self):
       if self.classMethod.get() == self.CL2D:
           pass
@@ -832,6 +853,8 @@ class ProtDirectionalPruning(ProtAnalysis3D):
         fnDirectional= self._getPath("directionalClasses.xmd")
         fnPrunedParticles = self._getPath('output_particles_pruned.xmd')
 
+
+
         if exists(fnDirectional):
             imgSetOut = self._createSetOfParticles()
             imgSetOut.setSamplingRate(self.targetResolution.get()*0.4)
@@ -843,10 +866,13 @@ class ProtDirectionalPruning(ProtAnalysis3D):
             self._defineSourceRelation(self.inputVolume, imgSetOut)
         else:
             imgSetOut = self._createSetOfParticles()
-            imgSetOut.setSamplingRate(self.inputParticles.get().getSamplingRate())
-            imgSetOut.setAlignmentProj()
-            readSetOfParticles(fnPrunedParticles, imgSetOut)
-            print(fnPrunedParticles)
+            imgSetOut.copyInfo(self.inputParticles.get())
+            self._fillDataFromIter(imgSetOut)
+            #imgSetOut.setSamplingRate(self.inputParticles.get().getSamplingRate())
+
+            #imgSetOut.setAlignmentProj()
+            #readSetOfParticles(fnPrunedParticles, imgSetOut)
+
             self._defineOutputs(outputParticles=imgSetOut)
             self._defineSourceRelation(self.inputParticles, imgSetOut)
             self._defineSourceRelation(self.inputVolume, imgSetOut)
@@ -976,3 +1002,10 @@ class ProtDirectionalPruning(ProtAnalysis3D):
         splitInCTFGroups(fnRelion,
                          self.defocusRange.get(),
                          self.numParticles.get())
+
+    def _fillDataFromIter(self, imgSetOut):
+        imgSetOut.setAlignmentProj()
+        fnPrunedParticles = self._getPath('output_particles_pruned.xmd')
+        imgSetOut.copyItems(self._getInputParticles(),
+                            itemDataIterator=md.iterRows(fnPrunedParticles,
+                                                         sortByLabel=md.RLN_IMAGE_ID))
