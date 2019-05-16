@@ -92,7 +92,7 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                            "distance is smaller than this value")
         form.addParam('maxShift', FloatParam, default=15,
                       label='Maximum shift',
-                      condition="classMethod==0",
+
                       expertLevel=LEVEL_ADVANCED,
                       help="In pixels")
 
