@@ -91,7 +91,9 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                       help="In degrees. An image belongs to a group if its "
                            "distance is smaller than this value")
         form.addParam('maxShift', FloatParam, default=15,
-                      label='Maximum shift', expertLevel=LEVEL_ADVANCED,
+                      label='Maximum shift',
+                      condition="classMethod==0",
+                      expertLevel=LEVEL_ADVANCED,
                       help="In pixels")
 
         form.addParam('directionalClasses', IntParam, default=2,
@@ -518,6 +520,7 @@ class ProtDirectionalPruning(ProtAnalysis3D):
         mdClassesParticles.read(fnClassParticles)
 
 
+
         fnNeighbours = self._getExtraPath("neighbours.xmd")
         fnGallery = self._getExtraPath("gallery.stk")
         nop=self.noOfParticles.get()
@@ -795,6 +798,9 @@ class ProtDirectionalPruning(ProtAnalysis3D):
 
 
 
+
+
+
                         if exists(fnOut):
                             for i in range(self.directionalClasses.get()):
                                 objId = mdOut.addObject()
@@ -812,8 +818,11 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                         #self.runJob("xmipp_metadata_utilities", "-i %s --set join %s ref" %
                         #           (fnDirectional, self._getExtraPath("gallery.doc")),
                         #          numberOfMpi=1)
-
+        # print ("Size before remove disabled", mdClassesParticles.size())
+        # mdClassesParticles.removeDisabled()
+        # print ("Size afte remove disabled", mdClassesParticles.size())
         mdClassesParticles.write(fnPrunedParticles)
+
 
 
 
@@ -867,11 +876,12 @@ class ProtDirectionalPruning(ProtAnalysis3D):
         else:
             imgSetOut = self._createSetOfParticles()
             imgSetOut.copyInfo(self.inputParticles.get())
-            self._fillDataFromIter(imgSetOut)
-            #imgSetOut.setSamplingRate(self.inputParticles.get().getSamplingRate())
+
+            imgSetOut.setSamplingRate(self.targetResolution.get()*0.4)
 
             #imgSetOut.setAlignmentProj()
             #readSetOfParticles(fnPrunedParticles, imgSetOut)
+            self._fillDataFromIter(imgSetOut)
 
             self._defineOutputs(outputParticles=imgSetOut)
             self._defineSourceRelation(self.inputParticles, imgSetOut)
@@ -895,12 +905,13 @@ class ProtDirectionalPruning(ProtAnalysis3D):
     #--------------------------- UTILS functions -------------------------------
     def _setNormalArgs(self, args):
         maskDiameter = self.maskDiameterA.get()
+        newTs = self.targetResolution.get() * 0.4
         if maskDiameter <= 0:
           x = self._getInputParticles().getDim()[0]
           maskDiameter = self._getInputParticles().getSamplingRate() * x
 
           args.update({'--particle_diameter': maskDiameter,
-                     '--angpix': self._getInputParticles().getSamplingRate(),
+                     '--angpix': newTs,
                      })
 
         args['--zero_mask'] = ''
@@ -1007,5 +1018,9 @@ class ProtDirectionalPruning(ProtAnalysis3D):
         imgSetOut.setAlignmentProj()
         fnPrunedParticles = self._getPath('output_particles_pruned.xmd')
         imgSetOut.copyItems(self._getInputParticles(),
+                            updateItemCallback= self._callBack,
                             itemDataIterator=md.iterRows(fnPrunedParticles,
                                                          sortByLabel=md.RLN_IMAGE_ID))
+    def _callBack(self, newItem, row):
+        if row.getValue(xmipp.MDL_ENABLED) == -1:
+            setattr(newItem, "_appendItem", False)
