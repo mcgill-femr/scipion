@@ -773,11 +773,12 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                            ClsDist=mdBlocks.getValue(xmipp.RLN_MLMODEL_PDF_CLASS,objId)
 
                            Rcd.append(ClsDist)
-
+                        w=[]
                         for x in Rcd:
-                            if  x > self.thresholdValue.get():
+                            if  x < self.thresholdValue.get():
 
-                                w = Rcd.index(x) + 1
+                                w.append(Rcd.index(x) + 1)
+                        print(w)
 
                         ImageId = []
                         mdData.read(fnData)
@@ -788,13 +789,20 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                                 mdClassesParticles.getValue(xmipp.MDL_ITEM_ID,
                                                             objId))
 
-                        for objId in mdData:
-                            ClsNr=mdData.getValue(xmipp.RLN_PARTICLE_CLASS,objId)
-                            if w != ClsNr:
-                               ImageId =mdData.getValue(xmipp.RLN_IMAGE_ID,objId)
-                               idx = itemIdInput.index(ImageId)+1
-                               mdClassesParticles.setValue(xmipp.MDL_ENABLED, -1,
-                                                           idx)
+
+                        for x in w[:]:
+
+                            for objId in mdData:
+                                ClsNr = mdData.getValue(xmipp.RLN_PARTICLE_CLASS, objId)
+
+                                if x == ClsNr:
+
+                                    ImageId =mdData.getValue(xmipp.RLN_IMAGE_ID,objId)
+
+                                    idx = itemIdInput.index(ImageId)+1
+
+                                    mdClassesParticles.setValue(xmipp.MDL_ENABLED, -1,
+                                                                   idx)
 
 
 
