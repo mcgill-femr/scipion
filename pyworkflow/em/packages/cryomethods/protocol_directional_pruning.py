@@ -874,7 +874,7 @@ class ProtDirectionalPruning(ProtAnalysis3D):
 
         if exists(fnDirectional):
             imgSetOut = self._createSetOfParticles()
-            imgSetOut.setSamplingRate(self.targetResolution.get()*0.4)
+            imgSetOut.setSamplingRate(imgSetOut.getSamplingRate())
             imgSetOut.setAlignmentProj()
             readSetOfParticles(fnDirectional,imgSetOut)
             print(fnDirectional)
@@ -885,7 +885,7 @@ class ProtDirectionalPruning(ProtAnalysis3D):
             imgSetOut = self._createSetOfParticles()
             imgSetOut.copyInfo(self.inputParticles.get())
 
-            imgSetOut.setSamplingRate(self.targetResolution.get()*0.4)
+            imgSetOut.setSamplingRate(imgSetOut.getSamplingRate())
 
             #imgSetOut.setAlignmentProj()
             #readSetOfParticles(fnPrunedParticles, imgSetOut)
