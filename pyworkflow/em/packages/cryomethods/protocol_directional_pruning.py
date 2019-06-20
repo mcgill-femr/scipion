@@ -199,6 +199,9 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                            'The same diameter will also be used for a '
                            'spherical mask of the reference structures if no '
                            'user-provided mask is specified.')
+        form.addParam('referenceClassification' , BooleanParam, default=True,
+                       condition='classMethod==2',
+                       label='Perform reference based classification?')
         form.addSection(label='Sampling')
         form.addParam('doImageAlignment', BooleanParam, default=True,
                       label='Perform Image Alignment?',
@@ -709,6 +712,7 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                 fnRelion = self._getExtraPath('relion_%s.star'% imgNo)
 
                 fnBlock = "%s@%s" % (block, fnNeighbours)
+                fnRef = "%s@%s" % (imgNo, fnGallery)
 
 
 
@@ -746,6 +750,8 @@ class ProtDirectionalPruning(ProtAnalysis3D):
                         self._setNormalArgs(args)
                         args['--i'] = fnRelion
                         args['--o'] = fnOut
+                        if self.referenceClassification.get():
+                            args['--ref']= fnRef
                         self._setComputeArgs(args)
 
                         params = ' '.join(['%s %s' % (k, str(v)) for k, v in args.iteritems()])
